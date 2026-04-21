@@ -301,12 +301,16 @@ pytest tests/test_pipeline_steps.py -v
 <details>
 <summary><b>Q：如何部署到 Linux 服务器？</b></summary>
 
-AetherSwap 的 FastAPI 架构完整支持无头 Linux 环境。直接运行：
+AetherSwap 的 FastAPI 架构完整支持无头 Linux 环境。
 
+直接运行：
 ```bash
-python -m uvicorn app.main:app --host 0.0.0.0 --port 28472
+python -m uvicorn app.api:app --host 0.0.0.0 --port 28472
 ```
-
+或后台运行:
+```bash
+nohup python -m uvicorn app.api:app --host 0.0.0.0 --port 28472 > output.log 2>&1 &
+```
 再通过外部浏览器访问服务器 IP 即可。**强烈建议配置 Nginx 反向代理与访问鉴权，不要将管理面板直接暴露在公网。**
 
 </details>
