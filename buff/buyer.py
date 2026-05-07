@@ -117,7 +117,7 @@ class BuffBuyer:
         except Exception as e:
             logger.exception("检查订单失败: %s", e)
         return False
-    def is_order_waiting_payment(self, order_id: str, game: str = "csgo") -> Optional[bool]:
+    def get_order_payment_state(self, order_id: str, game: str = "csgo") -> Optional[dict]:
         order_id = str(order_id or "").strip()
         if not order_id:
             return None
@@ -125,7 +125,6 @@ class BuffBuyer:
             "game": game,
             "page_num": "1",
             "page_size": "50",
-            "state": "wait_pay",
             "_": str(int(time.time() * 1000)),
         }
         h = {"Referer": f"https://buff.163.com/market/buy_order/history?game={game}"}
@@ -133,7 +132,34 @@ class BuffBuyer:
         if data.get("code") != "OK":
             return None
         items = data.get("data", {}).get("items", []) or []
-        return any(str(item.get("id") or "") == order_id for item in items)
+        for item in items:
+            if str(item.get("id") or "") != order_id:
+                continue
+            state = str(item.get("state") or item.get("status") or "").strip()
+            state_text = str(item.get("state_text") or item.get("status_text") or "").strip()
+            normalized = state.upper()
+            failed_markers = ("FAIL", "CANCEL", "REFUND", "CLOSE")
+            waiting_payment_markers = ("WAIT_PAY", "WAITING_PAY", "PENDING_PAY")
+            if any(marker in normalized for marker in failed_markers) or any(
+                marker in state_text for marker in ("失败", "退款", "取消", "关闭")
+            ):
+                payment_state = "failed"
+            elif any(marker in normalized for marker in waiting_payment_markers) or "待付款" in state_text:
+                payment_state = "waiting_payment"
+            else:
+                payment_state = "paid"
+            return {
+                "payment_state": payment_state,
+                "state": state,
+                "state_text": state_text,
+                "order": item,
+            }
+        return None
+    def is_order_waiting_payment(self, order_id: str, game: str = "csgo") -> Optional[bool]:
+        state = self.get_order_payment_state(order_id, game)
+        if state is None:
+            return None
+        return state.get("payment_state") == "waiting_payment"
     def wait_order_leave_wait_pay(
         self,
         order_id: str,
@@ -141,21 +167,33 @@ class BuffBuyer:
         timeout_seconds: int = 90,
         interval_seconds: int = 3,
         log_fn=None,
+        is_stop_requested=None,
     ) -> bool:
         deadline = time.time() + max(1, int(timeout_seconds or 90))
         interval = max(1, int(interval_seconds or 3))
         while time.time() < deadline:
-            waiting = self.is_order_waiting_payment(order_id, game)
-            if waiting is False:
+            if is_stop_requested and is_stop_requested():
                 if log_fn:
-                    log_fn(f"[Buff]   → 订单 {order_id} 已离开待付款列表，继续后续流程", "info")
+                    log_fn(f"[Buff]   → 用户已请求停止，结束订单 {order_id} 付款状态确认", "warn")
+                return False
+            state = self.get_order_payment_state(order_id, game)
+            if state and state.get("payment_state") == "paid":
+                state_text = state.get("state_text") or state.get("state") or "已付款"
+                if log_fn:
+                    log_fn(f"[Buff]   → 订单 {order_id} 已离开待付款状态 ({state_text})，继续后续流程", "info")
                 return True
-            if waiting is None:
+            if state and state.get("payment_state") == "failed":
+                state_text = state.get("state_text") or state.get("state") or "失败"
+                if log_fn:
+                    log_fn(f"[Buff]   → 订单 {order_id} 状态为 {state_text}，不会写入待收货记录", "warn")
+                return False
+            if state is None:
                 if log_fn:
                     log_fn(f"[Buff]   → 暂无法确认订单 {order_id} 付款状态，继续等待", "warn")
             else:
+                state_text = state.get("state_text") or state.get("state") or "待付款"
                 if log_fn:
-                    log_fn(f"[Buff]   → 订单 {order_id} 仍为待付款，等待 Buff 状态更新", "info")
+                    log_fn(f"[Buff]   → 订单 {order_id} 仍为待付款 ({state_text})，等待 Buff 状态更新", "info")
             jittered_sleep(interval, 0)
         if log_fn:
             log_fn(f"[Buff]   → 订单 {order_id} 在等待窗口内仍未确认已付款", "warn")

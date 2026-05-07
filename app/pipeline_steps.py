@@ -755,6 +755,7 @@ def _do_wait_payment_and_append(
             timeout_seconds=90,
             interval_seconds=3,
             log_fn=log_fn,
+            is_stop_requested=is_stop_requested,
         )
         if not paid_confirmed:
             if log_fn:

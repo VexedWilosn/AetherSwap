@@ -54,6 +54,7 @@ class BuffClient:
         timeout_seconds: int = 90,
         interval_seconds: int = 3,
         log_fn=None,
+        is_stop_requested=None,
     ) -> bool:
         return self._buyer.wait_order_leave_wait_pay(
             order_id,
@@ -61,6 +62,7 @@ class BuffClient:
             timeout_seconds=timeout_seconds,
             interval_seconds=interval_seconds,
             log_fn=log_fn,
+            is_stop_requested=is_stop_requested,
         )
     @with_retry(max_attempts=buff_retry_attempts, fatal_exceptions=(BuffAuthExpired,))
     def lock_and_get_pay_url(
