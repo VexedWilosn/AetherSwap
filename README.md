@@ -5,7 +5,7 @@
 
 <p><strong>全自动、零代码配置的 Steam 低价余额助手</strong><br>跨区购买 · 行情分析 · 数据复盘 · 全可视化控制台</p>
 
-[![Version](https://img.shields.io/badge/version-v0.1.0--beta-orange)](https://github.com)
+[![Version](https://img.shields.io/badge/version-v1.0.0--docker-orange)](https://github.com)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](LICENSE)

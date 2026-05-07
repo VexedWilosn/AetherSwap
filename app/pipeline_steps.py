@@ -17,6 +17,46 @@ from buff.buyer import BuffAuthExpired
 
 STEAM_FEE_FACTOR = 1.15  # Steam take rate for calculating net proceeds
 
+
+def _kick_receive_after_payment() -> None:
+    """Start a short, non-blocking receive pass after payment confirmation."""
+    def _run() -> None:
+        from app.config_loader import get_buff_credentials, get_steam_credentials
+        from app.inventory_cs2 import scan_cs2_inventory
+        from app.receive_flow import try_receive_once
+        from app.state import get_purchases, log, set_inventory, set_receive_status, update_purchase, update_purchase_by_id
+
+        def receive_log(msg: str, level: str = "info") -> None:
+            log(msg, level, category="receive")
+            set_receive_status("running" if level != "warn" else "warning", msg)
+
+        # Sellers may need a few seconds to create the Steam offer after being
+        # prompted, so make a short burst of attempts without blocking checkout.
+        for delay in (3, 10, 20):
+            time.sleep(delay)
+            try:
+                received = try_receive_once(
+                    get_purchases,
+                    update_purchase,
+                    lambda: (get_buff_credentials() or {}).get("cookies", ""),
+                    get_steam_credentials,
+                    scan_inventory=scan_cs2_inventory,
+                    update_purchase_by_id=update_purchase_by_id,
+                    log_fn=receive_log,
+                )
+                if received > 0:
+                    ok_inv, inv_items, inv_err = scan_cs2_inventory()
+                    if ok_inv:
+                        set_inventory(inv_items)
+                    else:
+                        receive_log(f"付款后库存刷新失败: {inv_err or '未知错误'}", "warn")
+                    set_receive_status("received", f"付款后收货成功，处理 {received} 个报价")
+                    return
+            except Exception as e:
+                receive_log(f"付款后收货尝试异常: {type(e).__name__}: {e}", "warn")
+
+    threading.Thread(target=_run, daemon=True, name="receive-after-payment").start()
+
 def _fetch_steam_sell_data(market_hash_name: str, config: dict, app_id: int = 730) -> Optional[Dict[str, Any]]:
     from app.config_loader import get_steam_credentials
     from steam.session import create_market_session
@@ -558,11 +598,13 @@ def _do_payment_notify_and_wait(
     Returns True if user confirmed, False on cancel/timeout/stop.
     """
     name = item.get("name", "")
+    payment_id = f"{order_id or name or 'payment'}-{int(time.time() * 1000)}"
     set_pending_payment({
         "pay_url": pay_url,
         "pay_type": pay_type,
         "name": name,
         "order_id": order_id,
+        "payment_id": payment_id,
     })
     if on_entering_payment:
         on_entering_payment()
@@ -602,7 +644,7 @@ def _do_payment_notify_and_wait(
     if email_user and email_pass:
         def _email_waiter() -> None:
             res = wait_email_command(config, timeout_seconds=timeout_sec, is_stop_requested=is_stop_requested, log_fn=log_fn)
-            confirm_payment(res == "success")
+            confirm_payment(res == "success", payment_id=payment_id)
         t = threading.Thread(target=_email_waiter, daemon=True)
         t.start()
         ok = wait_payment_confirm()
@@ -674,6 +716,7 @@ def _do_batch_wait_finalize_and_append(
         except Exception:
             if log_fn:
                 log_fn("[Buff]   → 提醒卖家发货请求异常，可稍后在订单页手动催发货", "warn")
+    _kick_receive_after_payment()
     return total
 def _do_wait_payment_and_append(
     buff_client: Any,
@@ -703,6 +746,20 @@ def _do_wait_payment_and_append(
     )
     if is_stop_requested() or not ok:
         return None
+    if order_id:
+        if log_fn:
+            log_fn(f"[Buff]   → 正在确认订单 {order_id} 是否已离开待付款状态…", "info")
+        paid_confirmed = buff_client.wait_order_leave_wait_pay(
+            order_id,
+            game_buff,
+            timeout_seconds=90,
+            interval_seconds=3,
+            log_fn=log_fn,
+        )
+        if not paid_confirmed:
+            if log_fn:
+                log_fn("[Buff]   → 未能从 Buff 确认订单已付款，暂不写入待收货记录", "warn")
+            return None
     if market_price is None:
         mhn = (item.get("steam_market_name") or item.get("name") or "").strip()
         market_price = _fetch_smart_market_price(mhn, config, app_id=730)
@@ -722,6 +779,7 @@ def _do_wait_payment_and_append(
     except Exception:
         if log_fn:
             log_fn("[Buff]   → 提醒卖家发货请求异常，可稍后在订单页手动催发货", "warn")
+    _kick_receive_after_payment()
     return unit_price * num
 def lock_and_confirm_payment(
     buff_client: Any,

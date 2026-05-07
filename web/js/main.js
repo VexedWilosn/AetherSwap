@@ -32,8 +32,17 @@ function tabSwitch(name) {
 
 let lastStatus = "idle";
 let _lastLyricText = "";
+let _lastReceiveText = "";
 // 是否已配置账号的缓存标志（避免 popup 在未配置时误弹出）
 let _hasAnyAccount = false;
+function humanizeError(msg) {
+  const text = String(msg || "");
+  if (!text) return "";
+  if (text.includes("steamLoginSecure")) return "Steam Cookie 缺少 steamLoginSecure，请手动重新登录 Steam。";
+  if (text.includes("SSLEOFError") || text.includes("HTTPSConnectionPool")) return "Steam 网络连接失败，请检查加速器、代理或稍后重试。";
+  if (text.includes("Max retries exceeded")) return "网络请求重试耗尽，请检查代理/加速器。";
+  return text;
+}
 
 function pushLyricLine(text, subText) {
   if (text === _lastLyricText) return;
@@ -109,6 +118,13 @@ async function refreshStatus() {
     const nextItem = d.next_progress_item || "";
     const subText = stepDesc && nextItem ? `${stepDesc}：${nextItem}` : nextItem;
     pushLyricLine(newText, subText);
+    if (d.receive && d.receive.message) {
+      const receiveText = `收货：${d.receive.message}`;
+      if (receiveText !== _lastReceiveText) {
+        _lastReceiveText = receiveText;
+        pushLyricLine(receiveText);
+      }
+    }
     const pill = el("status-pill");
     if (pill) {
       pill.classList.remove("status-idle", "status-running", "status-stopped", "status-error");
@@ -143,7 +159,10 @@ async function refreshStatus() {
       }
       const t = el("pay-type");
       if (t) t.textContent = p.name ? "订单: " + p.name : "";
+      const ps = el("pay-status");
+      if (ps) ps.textContent = p.order_id ? "订单号: " + p.order_id : "";
       box.dataset.payUrl = p.pay_url;
+      box.dataset.paymentId = p.payment_id || "";
       const qrWrap = el("pay-qrcode-wrap");
       const qrBox = el("pay-qrcode");
       if (p.pay_type === "wechat" && qrWrap && qrBox && typeof QRCode !== "undefined") {
@@ -161,6 +180,7 @@ async function refreshStatus() {
     } else {
       box.classList.add("hidden");
       box.dataset.payUrl = "";
+      box.dataset.paymentId = "";
       const qrWrap = el("pay-qrcode-wrap");
       const qrBox = el("pay-qrcode");
       if (qrWrap) qrWrap.classList.add("hidden");
@@ -232,6 +252,17 @@ async function refreshInventory(forceRefresh = true) {
       return;
     }
     const items = d.items || [];
+    const note = el("inv-cache-note");
+    if (note) {
+      if (d.cached) {
+        note.textContent = d.message || "当前显示缓存库存";
+        note.classList.add("text-bad");
+      } else {
+        const ts = d.inventory_meta && d.inventory_meta.updated_at ? new Date(d.inventory_meta.updated_at * 1000) : null;
+        note.textContent = ts && !isNaN(ts.getTime()) ? "实时刷新于 " + ts.toLocaleTimeString() : "";
+        note.classList.remove("text-bad");
+      }
+    }
     const tbody = document.querySelector("#inv-table tbody");
     if (!tbody) return;
     let totalValue = 0;
@@ -283,7 +314,7 @@ async function refreshInventory(forceRefresh = true) {
     const taxEl = el("inv-tax-value");
     if (taxEl) taxEl.textContent = (totalValue / 1.15).toFixed(2);
   } catch (e) {
-    toast("刷新库存失败", e.message || "请检查 Steam Cookie");
+    toast("刷新库存失败", humanizeError(e.message) || "请检查 Steam Cookie");
   } finally {
     inventoryRefreshInFlight = false;
   }
@@ -483,6 +514,32 @@ function bindEvents() {
       .catch((e) => toast("保存失败", e.message || "请稍后再试"))
   );
   el("btn-refresh-inventory")?.addEventListener("click", () => refreshInventory(true));
+  el("btn-receive-now")?.addEventListener("click", async () => {
+    const btn = el("btn-receive-now");
+    const old = btn?.textContent;
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "收货中…";
+    }
+    try {
+      const r = await fetchJson(API + "/receive_now", { method: "POST" });
+      if (r.ok) {
+        toast("收货完成", r.received ? `处理 ${r.received} 个报价` : "没有新的待处理报价");
+        refreshTransactions();
+        refreshInventory(true);
+        refreshStatus();
+      } else {
+        toast("收货失败", humanizeError(r.error) || "请看运行日志");
+      }
+    } catch (e) {
+      toast("收货失败", humanizeError(e.message) || "请求异常");
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = old || "立即收货";
+      }
+    }
+  });
   el("btn-refresh-sales")?.addEventListener("click", () => refreshTransactions());
   el("btn-add-account")?.addEventListener("click", () => openAccountForm());
   el("accounts-search")?.addEventListener("input", (e) => {

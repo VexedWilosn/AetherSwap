@@ -124,10 +124,10 @@ function renderAccountDetail(acc, currentId) {
         const btnOpen = el("relogin-btn-open");
         if (btnOpen) btnOpen.click();
       } else {
-        toast("验证未通过", r.message || "请检查账号密码");
+        toast("验证未通过", typeof humanizeError === "function" ? humanizeError(r.message) : (r.message || "请检查账号密码"));
       }
     } catch (err) {
-      toast("验证失败", err.message || "");
+      toast("验证失败", typeof humanizeError === "function" ? humanizeError(err.message) : (err.message || ""));
     } finally {
       btn.disabled = false;
       btn.textContent = origText || "验证";

@@ -293,7 +293,14 @@ async function stopPipeline() {
 }
 async function confirmPayment(ok) {
   try {
-    await fetchJson(API + "/confirm_payment", { method: "POST", body: JSON.stringify({ ok }) });
+    const box = el("pending-payment");
+    const payment_id = box?.dataset.paymentId || undefined;
+    const r = await fetchJson(API + "/confirm_payment", { method: "POST", body: JSON.stringify({ ok, payment_id }) });
+    if (r && r.stale) {
+      toast("确认已过期", "该支付确认不属于当前订单");
+      refreshStatus();
+      return;
+    }
     el("pending-payment")?.classList.add("hidden");
     toast(ok ? "已确认付款" : "已标记为失败");
     refreshStatus();

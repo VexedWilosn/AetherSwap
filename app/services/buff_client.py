@@ -47,6 +47,21 @@ class BuffClient:
         return self._buyer.get_goods_steam_price_cny(search_name, game)
     def ask_seller_to_send(self, bill_order_id_or_ids: Union[str, List[str]], game: str = "csgo") -> bool:
         return self._buyer.ask_seller_to_send(bill_order_id_or_ids, game)
+    def wait_order_leave_wait_pay(
+        self,
+        order_id: str,
+        game: str = "csgo",
+        timeout_seconds: int = 90,
+        interval_seconds: int = 3,
+        log_fn=None,
+    ) -> bool:
+        return self._buyer.wait_order_leave_wait_pay(
+            order_id,
+            game=game,
+            timeout_seconds=timeout_seconds,
+            interval_seconds=interval_seconds,
+            log_fn=log_fn,
+        )
     @with_retry(max_attempts=buff_retry_attempts, fatal_exceptions=(BuffAuthExpired,))
     def lock_and_get_pay_url(
         self,

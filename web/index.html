@@ -441,6 +441,7 @@
           </div>
           <div class="control-actions">
             <button id="btn-quit" class="btn btn-danger-outline" style="margin-right: 12px;">退出程序</button>
+            <button id="btn-receive-now" class="btn btn-secondary">立即收货</button>
             <button id="btn-stop" class="btn btn-secondary">停止运行</button>
             <button id="btn-start" class="btn btn-primary">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -462,6 +463,7 @@
             <div class="payment-text">
               <h3>等待支付</h3>
               <p id="pay-type">订单待处理</p>
+              <p id="pay-status" class="muted small"></p>
               <div id="pay-qrcode-wrap" class="hidden" style="margin-top:10px;">
                 <div id="pay-qrcode"></div>
               </div>
@@ -1129,6 +1131,7 @@
             <span class="value mono" id="inv-tax-value">0.00</span>
           </div>
           <button id="btn-refresh-inventory" class="btn btn-sm btn-secondary">立即刷新</button>
+          <span id="inv-cache-note" class="muted small"></span>
         </div>
         <div class="table-container">
           <table id="inv-table">

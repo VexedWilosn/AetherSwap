@@ -234,8 +234,6 @@ def receive_worker() -> None:
             cfg = load_app_config_validated()
             interval = max(10, int(cfg.get("pipeline", {}).get("receive_poll_interval_seconds", 30) or 30))
             time.sleep(interval)
-            if not is_steam_background_allowed():
-                continue
             purchases = get_purchases()
             if not any(p.get("pending_receipt") and not p.get("assetid") for p in purchases):
                 continue
@@ -246,8 +244,14 @@ def receive_worker() -> None:
                 get_steam_credentials,
                 scan_inventory=scan_cs2_inventory,
                 update_purchase_by_id=update_purchase_by_id,
+                log_fn=lambda msg, level="info": log(msg, level, category="receive"),
             )
             if n > 0:
+                ok_inv, inv_items, inv_err = scan_cs2_inventory()
+                if ok_inv:
+                    set_inventory(inv_items)
+                else:
+                    log(f"receive_worker: 收货后库存刷新失败: {inv_err or '未知错误'}", "warn", category="receive")
                 log(f"receive_worker: 本轮收取到 {n} 件物品", "info", category="receive")
         except Exception as e:
             log(f"receive_worker 异常 {type(e).__name__}: {e}", "error", category="receive")

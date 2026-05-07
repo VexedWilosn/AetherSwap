@@ -28,9 +28,13 @@ class State:
     _log_seq: int
     _pending_payment: Optional[dict]
     _user_confirmed: Optional[bool]
+    _user_confirmed_payment_id: Optional[str]
+    _payment_seq: int
     _stop_requested: bool
     _plan: List[Any]
     _inventory: List[Any]
+    _inventory_meta: dict
+    _receive_status: dict
     _buff_auth_expired: bool
     _progress_total: int
     _progress_done: int
@@ -45,9 +49,13 @@ class State:
         self._log_seq = 0
         self._pending_payment = None
         self._user_confirmed = None
+        self._user_confirmed_payment_id = None
+        self._payment_seq = 0
         self._stop_requested = False
         self._plan = []
         self._inventory = []
+        self._inventory_meta = {"cached": True, "updated_at": None, "message": ""}
+        self._receive_status = {"stage": "idle", "message": "", "updated_at": None}
         self._buff_auth_expired = False
         self._progress_total = 0
         self._progress_done = 0
@@ -109,6 +117,16 @@ class State:
         _idle_steps = {"", "TIME_LIMIT_WAIT", "NETWORK_OFFLINE", "STEAM_COOLDOWN", "CHECKOUT_PENDING"}
         with self._lock:
             return self._status != "running" or self._step in _idle_steps
+    def set_receive_status(self, stage: str, message: str = "") -> None:
+        with self._lock:
+            self._receive_status = {
+                "stage": stage or "idle",
+                "message": message or "",
+                "updated_at": time.time(),
+            }
+    def get_receive_status(self) -> dict:
+        with self._lock:
+            return dict(self._receive_status)
     def set_buff_auth_expired(self, value: bool) -> None:
         with self._lock:
             self._buff_auth_expired = value
@@ -131,16 +149,23 @@ class State:
             return out
     def set_pending_payment(self, p: Optional[dict]) -> None:
         with self._lock:
+            if p is not None:
+                self._payment_seq += 1
+                p = dict(p)
+                p.setdefault("payment_id", str(self._payment_seq))
             self._pending_payment = p
     def get_pending_payment(self) -> Optional[dict]:
         with self._lock:
             return self._pending_payment
     def wait_payment_confirm(self, timeout_seconds: Optional[float] = None) -> bool:
+        with self._lock:
+            expected_payment_id = (self._pending_payment or {}).get("payment_id")
         with self._confirm:
             self._user_confirmed = None
+            self._user_confirmed_payment_id = None
             deadline = (time.time() + timeout_seconds) if timeout_seconds is not None else None
             while True:
-                if self._user_confirmed is not None:
+                if self._user_confirmed is not None and self._user_confirmed_payment_id == expected_payment_id:
                     return self._user_confirmed is True
                 if self._stop_requested:
                     return False
@@ -153,10 +178,16 @@ class State:
                         return False
                     wait_time = min(1.0, remaining)
                 self._confirm.wait(timeout=wait_time)
-    def confirm_payment(self, ok: bool) -> None:
+    def confirm_payment(self, ok: bool, payment_id: Optional[str] = None) -> bool:
+        with self._lock:
+            current_payment_id = (self._pending_payment or {}).get("payment_id")
+        if payment_id is not None and payment_id != current_payment_id:
+            return False
         with self._confirm:
             self._user_confirmed = ok
+            self._user_confirmed_payment_id = current_payment_id
             self._confirm.notify_all()
+        return True
     def request_stop(self) -> None:
         with self._lock:
             self._stop_requested = True
@@ -174,12 +205,20 @@ class State:
     def get_plan(self) -> list:
         with self._lock:
             return list(self._plan)
-    def set_inventory(self, items: list) -> None:
+    def set_inventory(self, items: list, *, cached: bool = False, message: str = "") -> None:
         with self._lock:
             self._inventory = list(items)
+            self._inventory_meta = {
+                "cached": bool(cached),
+                "updated_at": time.time(),
+                "message": message or "",
+            }
     def get_inventory(self) -> list:
         with self._lock:
             return list(self._inventory)
+    def get_inventory_meta(self) -> dict:
+        with self._lock:
+            return dict(self._inventory_meta)
     def clear_log(self) -> None:
         with self._lock:
             self._log.clear()
@@ -216,6 +255,10 @@ def get_status() -> dict:
     return get_state().get_status()
 def is_steam_background_allowed() -> bool:
     return get_state().is_steam_background_allowed()
+def set_receive_status(stage: str, message: str = "") -> None:
+    get_state().set_receive_status(stage, message)
+def get_receive_status() -> dict:
+    return get_state().get_receive_status()
 def set_buff_auth_expired(value: bool) -> None:
     get_state().set_buff_auth_expired(value)
 def log(msg: str, level: str = "info", category: str = "", flow_id: str = "") -> None:
@@ -228,8 +271,8 @@ def get_pending_payment() -> Optional[dict]:
     return get_state().get_pending_payment()
 def wait_payment_confirm(timeout_seconds: Optional[float] = None) -> bool:
     return get_state().wait_payment_confirm(timeout_seconds=timeout_seconds)
-def confirm_payment(ok: bool) -> None:
-    get_state().confirm_payment(ok)
+def confirm_payment(ok: bool, payment_id: Optional[str] = None) -> bool:
+    return get_state().confirm_payment(ok, payment_id=payment_id)
 def request_stop() -> None:
     get_state().request_stop()
 def clear_stop() -> None:
@@ -268,10 +311,12 @@ def update_purchase_by_id(db_id: int, data: dict) -> bool:
     return get_state().update_purchase_by_id(db_id, data)
 def update_sale(idx: int, data: dict) -> bool:
     return get_state().update_sale(idx, data)
-def set_inventory(items: list) -> None:
-    get_state().set_inventory(items)
+def set_inventory(items: list, *, cached: bool = False, message: str = "") -> None:
+    get_state().set_inventory(items, cached=cached, message=message)
 def get_inventory() -> list:
     return get_state().get_inventory()
+def get_inventory_meta() -> dict:
+    return get_state().get_inventory_meta()
 def clear_log() -> None:
     get_state().clear_log()
 def replace_log(lines: list) -> None:

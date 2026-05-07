@@ -1,3 +1,4 @@
+import threading
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 import requests
@@ -21,6 +22,12 @@ except Exception:
 BUFF_STEAM_TRADE_URL = "https://buff.163.com/api/market/steam_trade"
 STEAM_ACCEPT_REFERER = "https://steamcommunity.com/tradeoffer/{trade_offer_id}/"
 STEAM_ACCEPT_URL = "https://steamcommunity.com/tradeoffer/{trade_offer_id}/accept"
+_receive_lock = threading.Lock()
+
+
+def _log(log_fn: Optional[Callable[[str, str], None]], msg: str, level: str = "info") -> None:
+    if log_fn:
+        log_fn(msg, level)
 def _cookies_str_to_dict(cookie_str: str) -> Dict[str, str]:
     out = {}
     for part in (cookie_str or "").split(";"):
@@ -91,7 +98,11 @@ def fetch_buff_steam_trade(buff_cookies: str) -> Tuple[bool, List[Dict[str, Any]
         return True, pending, ""
     except Exception as e:
         return False, [], str(e)[:120]
-def accept_steam_trade_offer(trade_offer_id: str, steam_cookies: Dict[str, str]) -> bool:
+def accept_steam_trade_offer(
+    trade_offer_id: str,
+    steam_cookies: Dict[str, str],
+    log_fn: Optional[Callable[[str, str], None]] = None,
+) -> bool:
     from utils.proxy_manager import get_proxy_manager
     pm = get_proxy_manager()
     try:
@@ -118,22 +129,32 @@ def accept_steam_trade_offer(trade_offer_id: str, steam_cookies: Dict[str, str])
             return requests.post(url, headers=headers, cookies=steam_cookies, proxies=proxies, data=data, verify=False, timeout=15)
         r = steam_request(3, _call)
         if r.status_code != 200:
+            _log(log_fn, f"Steam 接受报价失败: tradeofferid={trade_offer_id} HTTP {r.status_code}", "warn")
             return False
         raw_text = (r.text or "").strip()
         if not raw_text:
+            _log(log_fn, f"Steam 接受报价失败: tradeofferid={trade_offer_id} 响应为空", "warn")
             return False
         try:
             body = r.json()
         except Exception:
+            _log(log_fn, f"Steam 接受报价失败: tradeofferid={trade_offer_id} 响应不是 JSON: {raw_text[:120]}", "warn")
             return False
         if not isinstance(body, dict):
+            _log(log_fn, f"Steam 接受报价失败: tradeofferid={trade_offer_id} JSON 格式异常", "warn")
             return False
         if body.get("tradeid"):
+            _log(log_fn, f"Steam 报价已接受: tradeofferid={trade_offer_id} tradeid={body.get('tradeid')}", "info")
             return True
         if body.get("strError"):
+            _log(log_fn, f"Steam 接受报价失败: tradeofferid={trade_offer_id} {body.get('strError')}", "warn")
             return False
-        return "tradeid" in body or body.get("success") == 1
-    except Exception:
+        ok = "tradeid" in body or body.get("success") == 1
+        if not ok:
+            _log(log_fn, f"Steam 接受报价未确认成功: tradeofferid={trade_offer_id} body={str(body)[:160]}", "warn")
+        return ok
+    except Exception as e:
+        _log(log_fn, f"Steam 接受报价异常: tradeofferid={trade_offer_id} {type(e).__name__}: {e}", "warn")
         return False
 def _match_purchase_for_item(
     item: dict,
@@ -176,6 +197,7 @@ def try_receive_once(
     get_steam_credentials: Callable[[], dict],
     scan_inventory: Optional[Callable[[], Tuple[bool, List[dict], str]]] = None,
     update_purchase_by_id: Optional[Callable[[int, dict], bool]] = None,
+    log_fn: Optional[Callable[[str, str], None]] = None,
 ) -> int:
     """Accept pending Buff→Steam trade offers and update purchase records.
     Uses ``update_purchase_by_id`` (O(1), keyed on SQLite primary key) when
@@ -184,89 +206,119 @@ def try_receive_once(
     Falls back to positional ``update_purchase`` only if``update_purchase_by_id``
     is not supplied (backward-compatibility).
     """
-    purchases = get_purchases()
-    pending_records: List[dict] = [
-        p for p in purchases
-        if p.get("pending_receipt") and not p.get("assetid") and p.get("_db_id")
-    ]
-    if not pending_records:
+    if not _receive_lock.acquire(blocking=False):
+        _log(log_fn, "收货跳过: 已有收货任务正在执行", "debug")
         return 0
-    buff_cookies = get_buff_cookies()
-    steam_cred = get_steam_credentials()
-    steam_cookies_str = steam_cred.get("cookies") or ""
-    steam_cookies = _cookies_str_to_dict(steam_cookies_str)
-    session_id = (steam_cred.get("session_id") or "").strip()
-    if session_id:
-        steam_cookies["sessionid"] = session_id
-    if not steam_cookies.get("sessionid") or not steam_cookies.get("steamLoginSecure"):
-        return 0
-    ok, pending_tasks, err = fetch_buff_steam_trade(buff_cookies)
-    if not ok or not pending_tasks:
-        return 0
-    pending_tasks = sorted(pending_tasks, key=lambda t: (t.get("created_at") or 0, t.get("tradeofferid") or ""))
-    received = 0
-    def _do_update(db_id: int, positional_idx: int, data: dict) -> bool:
-        """Update a purchase record, preferring _db_id-based O(1) update."""
-        if update_purchase_by_id and db_id:
-            return update_purchase_by_id(db_id, data)
-        return update_purchase(positional_idx, data)
-    for task in pending_tasks:
-        offer_id = task.get("tradeofferid")
-        if not offer_id:
-            continue
-        if not accept_steam_trade_offer(str(offer_id), steam_cookies):
-            continue
-        received += 1
-        if scan_inventory:
-            jittered_sleep(2)
+    try:
         purchases = get_purchases()
-        pending_records = [
+        pending_records: List[dict] = [
             p for p in purchases
             if p.get("pending_receipt") and not p.get("assetid") and p.get("_db_id")
         ]
-        assigned_db_ids: set = set()
-        pairs: List[Tuple[dict, dict]] = []  
-        for it in task.get("items") or []:
-            matched = _match_purchase_for_item(it, pending_records, assigned_db_ids)
-            if matched is not None:
-                assigned_db_ids.add(matched["_db_id"])
-                pairs.append((matched, it))
-        pairs.sort(key=lambda x: (x[0].get("at") or 0, x[0].get("_db_id") or 0))
-        already_used = {str(p.get("assetid")) for p in get_purchases() if p.get("assetid")}
-        inv_by_name: Dict[str, List[dict]] = {}
-        if scan_inventory:
-            ok_inv, inv_list, _ = scan_inventory()
-            if ok_inv and inv_list:
-                for inv_item in inv_list:
-                    aid = str(inv_item.get("assetid") or "")
-                    if not aid or aid in already_used:
-                        continue
-                    mhn = (inv_item.get("market_hash_name") or "").strip()
-                    if mhn:
-                        inv_by_name.setdefault(mhn, []).append(inv_item)
-                for mhn in inv_by_name:
-                    inv_by_name[mhn].sort(key=lambda x: x.get("assetid") or "")
-        for purchase_rec, it in pairs:
-            mhn = (it.get("market_hash_name") or "").strip()
-            our_assetid = None
-            if mhn and inv_by_name.get(mhn):
-                for inv_item in inv_by_name[mhn][:]:
-                    aid = str(inv_item.get("assetid") or "")
-                    if aid in already_used:
-                        continue
-                    our_assetid = aid
-                    already_used.add(aid)
-                    inv_by_name[mhn].remove(inv_item)
-                    break
-            if not our_assetid:
-                our_assetid = (it.get("assetid") or "").strip()
-            if our_assetid:
-                db_id = purchase_rec.get("_db_id") or 0
-                pos_idx = next(
-                    (i for i, p in enumerate(purchases) if p.get("_db_id") == db_id),
-                    -1,
-                )
-                _do_update(db_id, pos_idx, {"assetid": our_assetid, "pending_receipt": False})
-                already_used.add(our_assetid)
-        jittered_sleep(1)
-    return received
+        if not pending_records:
+            _log(log_fn, "收货跳过: 当前没有待收货记录", "debug")
+            return 0
+        buff_cookies = get_buff_cookies()
+        if not buff_cookies:
+            _log(log_fn, "收货跳过: 未配置 Buff Cookie", "warn")
+            return 0
+        steam_cred = get_steam_credentials()
+        steam_cookies_str = steam_cred.get("cookies") or ""
+        steam_cookies = _cookies_str_to_dict(steam_cookies_str)
+        session_id = (steam_cred.get("session_id") or "").strip()
+        if session_id:
+            steam_cookies["sessionid"] = session_id
+        missing = [k for k in ("sessionid", "steamLoginSecure") if not steam_cookies.get(k)]
+        if missing:
+            _log(log_fn, f"收货跳过: Steam Cookie 缺少 {', '.join(missing)}，请重新登录 Steam", "warn")
+            return 0
+        ok, pending_tasks, err = fetch_buff_steam_trade(buff_cookies)
+        if not ok:
+            _log(log_fn, f"收货跳过: BUFF 待收货接口失败: {err or '未知错误'}", "warn")
+            return 0
+        if not pending_tasks:
+            _log(log_fn, "收货等待: BUFF 暂无待处理 Steam 报价", "info")
+            return 0
+        _log(log_fn, f"收货开始: 待收货记录 {len(pending_records)} 条，BUFF 报价 {len(pending_tasks)} 个", "info")
+
+        pending_tasks = sorted(pending_tasks, key=lambda t: (t.get("created_at") or 0, t.get("tradeofferid") or ""))
+        received = 0
+
+        def _do_update(db_id: int, positional_idx: int, data: dict) -> bool:
+            """Update a purchase record, preferring _db_id-based O(1) update."""
+            if update_purchase_by_id and db_id:
+                return update_purchase_by_id(db_id, data)
+            return update_purchase(positional_idx, data)
+
+        for task in pending_tasks:
+            offer_id = task.get("tradeofferid")
+            if not offer_id:
+                _log(log_fn, "收货跳过: BUFF 报价缺少 tradeofferid", "warn")
+                continue
+            if not accept_steam_trade_offer(str(offer_id), steam_cookies, log_fn=log_fn):
+                continue
+            received += 1
+            if scan_inventory:
+                jittered_sleep(2)
+            purchases = get_purchases()
+            pending_records = [
+                p for p in purchases
+                if p.get("pending_receipt") and not p.get("assetid") and p.get("_db_id")
+            ]
+            assigned_db_ids: set = set()
+            pairs: List[Tuple[dict, dict]] = []
+            for it in task.get("items") or []:
+                matched = _match_purchase_for_item(it, pending_records, assigned_db_ids)
+                if matched is not None:
+                    assigned_db_ids.add(matched["_db_id"])
+                    pairs.append((matched, it))
+            if not pairs:
+                _log(log_fn, f"收货提示: 报价 {offer_id} 已接受，但没有匹配到本地待收货记录", "warn")
+            pairs.sort(key=lambda x: (x[0].get("at") or 0, x[0].get("_db_id") or 0))
+            already_used = {str(p.get("assetid")) for p in get_purchases() if p.get("assetid")}
+            inv_by_name: Dict[str, List[dict]] = {}
+            if scan_inventory:
+                ok_inv, inv_list, inv_err = scan_inventory()
+                if ok_inv and inv_list:
+                    for inv_item in inv_list:
+                        aid = str(inv_item.get("assetid") or "")
+                        if not aid or aid in already_used:
+                            continue
+                        mhn = (inv_item.get("market_hash_name") or "").strip()
+                        if mhn:
+                            inv_by_name.setdefault(mhn, []).append(inv_item)
+                    for mhn in inv_by_name:
+                        inv_by_name[mhn].sort(key=lambda x: x.get("assetid") or "")
+                elif not ok_inv:
+                    _log(log_fn, f"收货提示: 报价已接受，但库存扫描失败: {inv_err or '未知错误'}，将使用 BUFF 返回的 assetid 尝试补记录", "warn")
+            for purchase_rec, it in pairs:
+                mhn = (it.get("market_hash_name") or "").strip()
+                our_assetid = None
+                if mhn and inv_by_name.get(mhn):
+                    for inv_item in inv_by_name[mhn][:]:
+                        aid = str(inv_item.get("assetid") or "")
+                        if aid in already_used:
+                            continue
+                        our_assetid = aid
+                        already_used.add(aid)
+                        inv_by_name[mhn].remove(inv_item)
+                        break
+                if not our_assetid:
+                    our_assetid = (it.get("assetid") or "").strip()
+                if our_assetid:
+                    db_id = purchase_rec.get("_db_id") or 0
+                    pos_idx = next(
+                        (i for i, p in enumerate(purchases) if p.get("_db_id") == db_id),
+                        -1,
+                    )
+                    _do_update(db_id, pos_idx, {"assetid": our_assetid, "pending_receipt": False})
+                    _log(log_fn, f"收货记录已更新: db_id={db_id} assetid={our_assetid}", "info")
+                    already_used.add(our_assetid)
+                else:
+                    _log(log_fn, f"收货记录未更新: 未能为 {mhn or it.get('name') or '未知物品'} 找到 assetid", "warn")
+            jittered_sleep(1)
+        if received <= 0:
+            _log(log_fn, "收货结束: 未成功接受任何报价", "info")
+        return received
+    finally:
+        _receive_lock.release()

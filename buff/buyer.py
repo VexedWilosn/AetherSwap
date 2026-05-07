@@ -117,6 +117,49 @@ class BuffBuyer:
         except Exception as e:
             logger.exception("检查订单失败: %s", e)
         return False
+    def is_order_waiting_payment(self, order_id: str, game: str = "csgo") -> Optional[bool]:
+        order_id = str(order_id or "").strip()
+        if not order_id:
+            return None
+        params = {
+            "game": game,
+            "page_num": "1",
+            "page_size": "50",
+            "state": "wait_pay",
+            "_": str(int(time.time() * 1000)),
+        }
+        h = {"Referer": f"https://buff.163.com/market/buy_order/history?game={game}"}
+        data = self._make_request("GET", API_HISTORY, params=params, headers=h)
+        if data.get("code") != "OK":
+            return None
+        items = data.get("data", {}).get("items", []) or []
+        return any(str(item.get("id") or "") == order_id for item in items)
+    def wait_order_leave_wait_pay(
+        self,
+        order_id: str,
+        game: str = "csgo",
+        timeout_seconds: int = 90,
+        interval_seconds: int = 3,
+        log_fn=None,
+    ) -> bool:
+        deadline = time.time() + max(1, int(timeout_seconds or 90))
+        interval = max(1, int(interval_seconds or 3))
+        while time.time() < deadline:
+            waiting = self.is_order_waiting_payment(order_id, game)
+            if waiting is False:
+                if log_fn:
+                    log_fn(f"[Buff]   → 订单 {order_id} 已离开待付款列表，继续后续流程", "info")
+                return True
+            if waiting is None:
+                if log_fn:
+                    log_fn(f"[Buff]   → 暂无法确认订单 {order_id} 付款状态，继续等待", "warn")
+            else:
+                if log_fn:
+                    log_fn(f"[Buff]   → 订单 {order_id} 仍为待付款，等待 Buff 状态更新", "info")
+            jittered_sleep(interval, 0)
+        if log_fn:
+            log_fn(f"[Buff]   → 订单 {order_id} 在等待窗口内仍未确认已付款", "warn")
+        return False
     def get_sell_orders(self, goods_id: int, game: str = "csgo") -> Optional[list]:
         params = {
             "game": str(game),
