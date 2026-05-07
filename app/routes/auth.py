@@ -2,16 +2,18 @@
 import base64
 import hashlib
 import hmac
+import os
 import re
 import struct
 import threading
 import time
 from pathlib import Path
 from typing import Optional
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 from app.state import log, set_buff_auth_expired
 from app.config_loader import (
+    get_buff_credentials,
     get_steam_credentials,
     load_app_config_validated,
     update_buff_creds,
@@ -22,6 +24,8 @@ from app.services.steam_auth import (
     fetch_steam_profile_via_api,
     try_steam_auto_relogin,
 )
+from app.services.browser_profile import release_chromium_profile
+from app.services.playwright_cookies import cookies_to_header, parse_cookie_string_for_url
 router = APIRouter()
 _relogin_lock = threading.Lock()
 _relogin_type = None
@@ -33,6 +37,29 @@ _relogin_wake = threading.Event()
 _relogin_done = threading.Event()
 _relogin_success = False
 _relogin_error = None
+
+
+def _host_without_port(host: str) -> str:
+    host = (host or "").strip()
+    if host.startswith("[") and "]" in host:
+        return host[: host.index("]") + 1]
+    if host.count(":") == 1:
+        return host.rsplit(":", 1)[0]
+    return host
+
+
+def _public_novnc_url(request: Request) -> str:
+    configured = (os.environ.get("AETHERSWAP_NOVNC_URL") or "").strip()
+    if configured and configured.lower() not in {"auto", "derive"}:
+        return configured
+
+    forwarded_proto = (request.headers.get("x-forwarded-proto") or "").split(",")[0].strip()
+    proto = forwarded_proto or request.url.scheme or "http"
+    forwarded_host = (request.headers.get("x-forwarded-host") or "").split(",")[0].strip()
+    host_header = forwarded_host or request.headers.get("host") or "localhost"
+    host = _host_without_port(host_header)
+    port = (os.environ.get("AETHERSWAP_NOVNC_PORT") or os.environ.get("NOVNC_PORT") or "6080").strip()
+    return f"{proto}://{host}:{port}/vnc.html?autoconnect=1"
 class ReloginFinishBody(BaseModel):
     success: bool
 def _relogin_worker(relogin_type: str) -> None:
@@ -46,9 +73,32 @@ def _relogin_worker(relogin_type: str) -> None:
         else:
             profile_dir = Path(__file__).resolve().parent.parent.parent / "config" / "playwright_buff"
         profile_dir.mkdir(parents=True, exist_ok=True)
-        context = p.chromium.launch_persistent_context(str(profile_dir), headless=False)
+        if relogin_type == "buff" and os.environ.get("AETHERSWAP_DOCKER") == "1":
+            stopped = release_chromium_profile(
+                profile_dir,
+                lambda msg: log(f"buff_relogin: {msg}", "warn", category="buff"),
+            )
+            if stopped:
+                log(f"buff_relogin: 已清理 {stopped} 个占用 Buff 浏览器 profile 的旧 Chromium 进程", "info", category="buff")
+        context = p.chromium.launch_persistent_context(
+            str(profile_dir),
+            headless=False,
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+            ],
+        )
         page = context.pages[0] if context.pages else context.new_page()
-        url = "https://store.steampowered.com/login/" if relogin_type == "steam" else "https://buff.163.com/login"
+        if relogin_type == "buff":
+            saved = (get_buff_credentials() or {}).get("cookies", "")
+            saved_cookies = parse_cookie_string_for_url(saved, "https://buff.163.com/")
+            if saved_cookies:
+                try:
+                    context.add_cookies(saved_cookies)
+                except Exception as ce:
+                    log(f"buff_relogin: 注入已保存 Cookie 失败 {ce}", "warn", category="buff")
+        url = "https://store.steampowered.com/login/" if relogin_type == "steam" else "https://buff.163.com/"
         page.goto(url, wait_until="domcontentloaded", timeout=30000)
         if relogin_type == "steam":
             pass
@@ -85,7 +135,8 @@ def _relogin_worker(relogin_type: str) -> None:
                     display_name, avatar_url = fetch_steam_profile_via_api(steam_id or "", cookie_str)
                     update_account(cur["id"], steam_id=steam_id or "", display_name=display_name, avatar_url=avatar_url)
             else:
-                cookie_str = "; ".join(f"{c['name']}={c['value']}" for c in cookies)
+                buff_cookies = context.cookies(["https://buff.163.com/"])
+                cookie_str = cookies_to_header(buff_cookies)
                 update_buff_creds(cookie_str)
                 set_buff_auth_expired(False)
                 from app.state import get_status
@@ -117,8 +168,16 @@ def _relogin_worker(relogin_type: str) -> None:
             _relogin_browser = None
             _relogin_context = None
         _relogin_done.set()
-def _relogin_start(relogin_type: str):
+def _relogin_start(relogin_type: str, request: Request):
     global _relogin_type, _relogin_error, _relogin_success, _relogin_playwright, _relogin_browser, _relogin_context
+    had_existing = False
+    with _relogin_lock:
+        if _relogin_context or _relogin_browser:
+            had_existing = True
+            _relogin_success = False
+            _relogin_wake.set()
+    if had_existing:
+        _relogin_done.wait(timeout=5)
     with _relogin_lock:
         if _relogin_context or _relogin_browser:
             try:
@@ -148,6 +207,11 @@ def _relogin_start(relogin_type: str):
         return {"ok": False, "error": "打开浏览器超时"}
     if _relogin_error:
         return {"ok": False, "error": _relogin_error}
+    if os.environ.get("AETHERSWAP_DOCKER") == "1":
+        novnc_url = _public_novnc_url(request)
+        target = "Steam" if relogin_type == "steam" else "Buff"
+        msg = f"请打开 noVNC 页面完成 {target} 登录: {novnc_url}"
+        return {"ok": True, "message": msg, "novnc_url": novnc_url}
     msg = "请在弹出的浏览器中完成 Steam 登录" if relogin_type == "steam" else "请在弹出的浏览器中完成 Buff 登录"
     return {"ok": True, "message": msg}
 def _relogin_finish(success: bool):
@@ -181,14 +245,14 @@ def _generate_steam_guard_code(shared_secret: str) -> Optional[str]:
         code_int //= 26
     return "".join(out)
 @router.post("/api/auth/steam/relogin_start")
-def api_auth_steam_relogin_start():
-    return _relogin_start("steam")
+def api_auth_steam_relogin_start(request: Request):
+    return _relogin_start("steam", request)
 @router.post("/api/auth/steam/relogin_finish")
 def api_auth_steam_relogin_finish(body: ReloginFinishBody):
     return _relogin_finish(body.success)
 @router.post("/api/auth/buff/relogin_start")
-def api_auth_buff_relogin_start():
-    return _relogin_start("buff")
+def api_auth_buff_relogin_start(request: Request):
+    return _relogin_start("buff", request)
 @router.post("/api/auth/buff/relogin_finish")
 def api_auth_buff_relogin_finish(body: ReloginFinishBody):
     return _relogin_finish(body.success)

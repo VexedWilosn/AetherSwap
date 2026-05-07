@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 from app.state import log, set_buff_auth_expired
 from app.config_loader import get_buff_credentials, update_buff_creds
+from app.services.playwright_cookies import cookies_to_header, parse_cookie_string_for_url
 _buff_auto_relogin_lock = threading.Lock()
 _buff_auto_relogin_last_success = 0.0
 def try_buff_auto_relogin() -> tuple:
@@ -33,15 +34,25 @@ def _try_buff_auto_relogin_impl() -> tuple:
         with sync_playwright() as p:
             context = p.chromium.launch_persistent_context(
                 str(profile_dir), headless=True,
-                args=["--disable-blink-features=AutomationControlled"],
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                ],
             )
+            saved_cookies = parse_cookie_string_for_url(cred.get("cookies", ""), "https://buff.163.com/")
+            if saved_cookies:
+                try:
+                    context.add_cookies(saved_cookies)
+                except Exception as ce:
+                    log(f"buff_relogin: 注入已保存 Cookie 失败 {ce}", "warn", category="buff")
             page = context.pages[0] if context.pages else context.new_page()
             page.goto("https://buff.163.com/", wait_until="domcontentloaded", timeout=30000)
             page.wait_for_timeout(5000)
-            cookies = context.cookies()
+            cookies = context.cookies(["https://buff.163.com/"])
             has_login = any(c.get("name") == "session" for c in cookies)
             if has_login:
-                cookie_str = "; ".join(f"{c['name']}={c['value']}" for c in cookies)
+                cookie_str = cookies_to_header(cookies)
                 update_buff_creds(cookie_str)
                 set_buff_auth_expired(False)
                 log("buff_relogin: Cookie 刷新成功，会话已延长", "info", category="buff")

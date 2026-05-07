@@ -138,6 +138,13 @@ async function openBrowserAndLogin() {
   try {
     const d = await fetchJson(API + "/auth/" + reloginType + "/relogin_start", { method: "POST" });
     if (d.ok) {
+      if (d.novnc_url) {
+        window.open(d.novnc_url, "_blank", "noopener");
+        const msg = el("relogin-message");
+        if (msg) {
+          msg.innerHTML = `容器浏览器已打开。请在 <a href="${escapeHtml(d.novnc_url)}" target="_blank" rel="noopener">noVNC 页面</a> 完成登录，完成后点击下方按钮继续。`;
+        }
+      }
       toast("已打开浏览器", d.message || "");
       const btnOk = el("relogin-btn-ok");
       if (btnOk) btnOk.disabled = false;

@@ -515,7 +515,16 @@ function _showWizard(startAtBuffStep = false) {
         const r = await fetchJson(API + "/auth/buff/relogin_start", { method: "POST" });
         if (r.ok) {
           _buffReloginStarted = true;
-          if (statusEl) statusEl.textContent = "✅ 浏览器已打开，请在其中完成 Buff 登录后点击「已完成登录」。";
+          if (r.novnc_url) {
+            window.open(r.novnc_url, "_blank", "noopener");
+          }
+          if (statusEl) {
+            if (r.novnc_url) {
+              statusEl.innerHTML = `✅ 容器浏览器已打开。请在 <a href="${escapeHtml(r.novnc_url)}" target="_blank" rel="noopener">noVNC 页面</a> 完成 Buff 登录后点击「已完成登录」。`;
+            } else {
+              statusEl.textContent = r.message || "✅ 浏览器已打开，请在其中完成 Buff 登录后点击「已完成登录」。";
+            }
+          }
           if (buffDoneBtn) buffDoneBtn.disabled = false;
         } else {
           if (statusEl) statusEl.textContent = "❌ 打开失败：" + (r.error || "请检查运行环境");

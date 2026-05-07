@@ -1,0 +1,30 @@
+services:
+  aetherswap:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aetherswap
+    restart: unless-stopped
+    ports:
+      - "28472:28472"
+      - "127.0.0.1:6080:6080"
+    volumes:
+      - ./config:/app/config
+      - ./log:/app/log
+      - ./output_cards:/app/output_cards
+      - ./flags:/app/flags
+    environment:
+      TZ: Asia/Shanghai
+      AETHERSWAP_DOCKER: "1"
+      AETHERSWAP_NOVNC_URL: "auto"
+      AETHERSWAP_NOVNC_PORT: "6080"
+      ENABLE_NOVNC: "1"
+      DISPLAY: ":99"
+      SCREEN_GEOMETRY: "1280x800x24"
+    shm_size: "1gb"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:28472/api/status', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
