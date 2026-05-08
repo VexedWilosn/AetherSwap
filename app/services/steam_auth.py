@@ -22,6 +22,7 @@ from app.accounts import (
     get_profile_dir,
     update_account,
 )
+from app.account_sessions import PROVIDER_STEAM, should_retry_session, update_account_session_status
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 def _verify_steam_cookies_valid(cookie_str: str, steam_id: str = "") -> bool:
     """Use an actual HTTP request to verify if Steam cookies are truly valid.
@@ -248,7 +249,7 @@ def _extract_creds_from_cookie_dict(cookie_dict: dict) -> Tuple[str, str, str]:
     return cookie_str, session_id, steam_id
 _auto_relogin_lock = threading.Lock()
 _auto_relogin_last_success = 0.0
-def try_steam_auto_relogin(account_id: str = "") -> tuple:
+def try_steam_auto_relogin(account_id: str = "", force: bool = False) -> tuple:
     global _auto_relogin_last_success
     if not _auto_relogin_lock.acquire(blocking=False):
         log("auto_relogin: 另一个自动登录正在进行，跳过", "info", category="steam")
@@ -256,16 +257,21 @@ def try_steam_auto_relogin(account_id: str = "") -> tuple:
             return True, "auto_ok", "另一个自动登录刚刚完成"
         return False, "busy", "另一个自动登录正在进行"
     try:
-        return _try_steam_auto_relogin_impl(account_id=account_id)
+        return _try_steam_auto_relogin_impl(account_id=account_id, force=force)
     finally:
         _auto_relogin_lock.release()
-def _try_steam_auto_relogin_impl(account_id: str = "") -> tuple:
+def _try_steam_auto_relogin_impl(account_id: str = "", force: bool = False) -> tuple:
     global _auto_relogin_last_success
     cur = get_account(account_id) if account_id else get_current_account()
     if not cur:
         log("auto_relogin: 未设置当前账号", "warn", category="steam")
         return False, "no_account", "未设置当前 Steam 账号，无法自动登录"
     account_id = cur.get("id")
+    if not force:
+        retry_ok, retry_msg = should_retry_session(account_id, PROVIDER_STEAM)
+        if not retry_ok:
+            log(f"auto_relogin: account_id={account_id} {retry_msg}", "info", category="steam")
+            return False, "cooldown", retry_msg
     username = (cur.get("username") or "").strip()
     password = (cur.get("password") or "").strip()
     if not username or not password:
@@ -276,9 +282,11 @@ def _try_steam_auto_relogin_impl(account_id: str = "") -> tuple:
     if existing_cookies and "steamLoginSecure" in existing_cookies:
         log("auto_relogin: 检测到现有 steamLoginSecure cookie，用 HTTP API 验证是否仍有效…", "info", category="steam")
         if _verify_steam_cookies_valid(existing_cookies):
+            update_account_session_status(account_id, PROVIDER_STEAM, status="ok", error=None)
             log("auto_relogin: HTTP 验证通过，Cookie 仍有效，无需重新登录", "info", category="steam")
             _auto_relogin_last_success = time.time()
             return True, "auto_ok", "Cookie 验证有效，无需重新登录"
+        update_account_session_status(account_id, PROVIDER_STEAM, status="expired", error="Cookie 已过期")
         log("auto_relogin: HTTP 验证显示现有 cookie 已过期，继续密码登录", "info", category="steam")
     log("auto_relogin: 开始自动登录…", "info", category="steam")
     cfg = load_app_config_validated()
@@ -309,6 +317,7 @@ def _try_steam_auto_relogin_impl(account_id: str = "") -> tuple:
             notify_manual_intervention_required("Steam", "系统保存的账号或密码不正确，登录被拒绝，请立刻前往修改密码并手动干预登录")
         except Exception:
             pass
+        update_account_session_status(account_id, PROVIDER_STEAM, status="wrong_creds", error="账号或密码错误")
         return False, "wrong_creds", "账号或密码错误"
     if err_code == "need_2fa":
         log("auto_relogin: 需要 2FA 但无 shared_secret 或令牌有误", "warn", category="steam")
@@ -317,11 +326,14 @@ def _try_steam_auto_relogin_impl(account_id: str = "") -> tuple:
             notify_manual_intervention_required("Steam", "账号需要 2FA 验证，但 shared_secret 未配置或格式有误，请前往设置页补充 Steam Guard 密钥")
         except Exception:
             pass
+        update_account_session_status(account_id, PROVIDER_STEAM, status="need_2fa", error="需要二次验证")
         return False, "need_2fa", "需要二次验证且未配置 shared_secret，请配置后重试"
     if err_code == "captcha":
         log("auto_relogin: Steam 要求人机验证（Captcha），自动登录暂时失败", "warn", category="steam")
+        update_account_session_status(account_id, PROVIDER_STEAM, status="captcha", error="Steam 触发人机验证")
         return False, "captcha", "Steam 触发了人机验证，请稍后重试或手动登录"
     log(f"auto_relogin: 登录失败 – {err_code}", "warn", category="steam")
+    update_account_session_status(account_id, PROVIDER_STEAM, status="error", error=err_code or "自动登录失败")
     return False, "error", (err_code or "自动登录失败，请检查网络或手动重登")
 def verify_steam_auto_login(account_id: str) -> dict:
     acc = get_account(account_id)
@@ -354,9 +366,13 @@ def verify_steam_auto_login(account_id: str) -> dict:
                 pass
         return {"ok": True, "status": "auto_ok", "message": "可自动登录"}
     if err_code == "need_2fa":
+        update_account_session_status(account_id, PROVIDER_STEAM, status="need_2fa", error="需要二次验证")
         return {"ok": False, "status": "need_2fa", "message": "需要二次验证，请配置 shared_secret 后重试"}
     if err_code == "wrong_creds":
+        update_account_session_status(account_id, PROVIDER_STEAM, status="wrong_creds", error="账号或密码错误")
         return {"ok": False, "status": "wrong_creds", "message": "账号或密码错误"}
     if err_code == "captcha":
+        update_account_session_status(account_id, PROVIDER_STEAM, status="captcha", error="Steam 触发人机验证")
         return {"ok": False, "status": "captcha", "message": "Steam 触发了人机验证，请稍后重试"}
+    update_account_session_status(account_id, PROVIDER_STEAM, status="error", error=err_code or "验证失败")
     return {"ok": False, "status": "error", "message": err_code or "验证失败"}

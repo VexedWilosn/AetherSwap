@@ -87,6 +87,41 @@ function accountStatusPill(label, tone = "info") {
   return `<span class="account-status-pill is-${escapeHtml(tone)}">${escapeHtml(label)}</span>`;
 }
 
+function formatAccountSessionTime(value) {
+  if (!value) return "—";
+  const raw = typeof value === "number" && value < 100000000000 ? value * 1000 : value;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getSessionStateLabel(session, providerLabel) {
+  const s = session || {};
+  if (!s.configured) return { label: `${providerLabel} 未登录`, tone: "danger", detail: "未保存 Cookie" };
+  const status = (s.status || "ok").toLowerCase();
+  if (status === "ok" || status === "valid") return { label: `${providerLabel} 有效`, tone: "success", detail: "最近验证 " + formatAccountSessionTime(s.last_validated_at) };
+  if (status === "expired") return { label: `${providerLabel} 过期`, tone: "danger", detail: s.error || "需要重新登录" };
+  if (status === "wrong_creds") return { label: "密码错误", tone: "danger", detail: s.error || "请更新账号密码" };
+  if (status === "need_2fa") return { label: "需 2FA", tone: "warning", detail: s.error || "请检查 Steam Guard" };
+  if (status === "captcha") return { label: "需验证", tone: "warning", detail: s.error || "Steam 触发人机验证" };
+  if (status === "cooldown") return { label: "冷却中", tone: "warning", detail: s.error || "等待下次重试" };
+  return { label: `${providerLabel} 异常`, tone: "warning", detail: s.error || status || "状态未知" };
+}
+
+function getSessionRetryDetail(session) {
+  const next = session?.next_retry_at;
+  const failures = Number(session?.failure_count || 0);
+  const parts = [];
+  if (failures > 0) parts.push(`失败 ${failures} 次`);
+  if (next) parts.push(`下次 ${formatAccountSessionTime(next)}`);
+  return parts.join(" · ");
+}
+
 function accountIconSvg(name) {
   const icons = {
     eye: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"></path><circle cx="12" cy="12" r="3"></circle></svg>',
@@ -144,9 +179,10 @@ function getAccountGuardCoverage(accs) {
 }
 
 function getCurrentAccountCookieState(acc, currentId) {
-  if (!acc || acc.id !== currentId) {
-    return { label: "非当前", tone: "muted", hint: "切换为当前账号后再验证 Cookie" };
-  }
+  const session = (acc?.session_status || {}).steam || {};
+  const state = getSessionStateLabel(session, "Steam");
+  if (acc && acc.id !== currentId && !session.configured) return { label: "非当前", tone: "muted", hint: "该账号尚未保存 Steam Cookie" };
+  if (session.configured) return { label: state.label, tone: state.tone, hint: state.detail };
   const cookieValid = accountStatsCache?.account?.cookie_valid;
   if (cookieValid === true) return { label: "Cookie 有效", tone: "success", hint: "当前 Steam Cookie 已保存" };
   if (cookieValid === false) return { label: "Cookie 缺失", tone: "danger", hint: "请验证账号或重新登录 Steam" };
@@ -195,6 +231,12 @@ function renderAccountDetail(acc, currentId) {
   const tradeEnabled = trade.enabled === true;
   const tradePayMethod = trade.pay_method || "";
   const cookieState = getCurrentAccountCookieState(acc, currentId);
+  const enabled = acc.enabled !== false;
+  const steamSession = (acc.session_status || {}).steam || {};
+  const buffSession = (acc.session_status || {}).buff || {};
+  const buffState = getSessionStateLabel(buffSession, "Buff");
+  const steamRetry = getSessionRetryDetail(steamSession);
+  const buffRetry = getSessionRetryDetail(buffSession);
   const profileReady = !!(acc.steam_id && (acc.display_name || acc.avatar_url));
   const guardLabel = accountGuardConfigured ? "账号级令牌" : guardConfigured ? "使用全局令牌" : "令牌未配置";
   const guardTone = guardConfigured ? "success" : "warning";
@@ -216,6 +258,7 @@ function renderAccountDetail(acc, currentId) {
           <div class="account-detail-meta">${escapeHtml(meta)}</div>
           <div class="account-detail-chips">
             ${accountStatusPill(cookieState.label, cookieState.tone)}
+            ${accountStatusPill(enabled ? "已启用" : "已停用", enabled ? "success" : "muted")}
             ${accountStatusPill(guardLabel, guardTone)}
             ${accountStatusPill(tradeLabel, tradeEnabled ? "success" : "muted")}
           </div>
@@ -223,6 +266,7 @@ function renderAccountDetail(acc, currentId) {
       </div>
       <div class="account-detail-actions">
         <button type="button" class="btn btn-secondary btn-sm" id="btn-acc-sync" data-id="${escapeHtml(acc.id)}">同步</button>
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-acc-toggle-enabled" data-id="${escapeHtml(acc.id)}" data-enabled="${enabled ? "1" : "0"}">${enabled ? "停用" : "启用"}</button>
         ${!isCurrent ? `<button type="button" class="btn btn-primary btn-sm" id="btn-acc-set-current" data-id="${escapeHtml(acc.id)}">设为当前</button>` : ""}
         <button type="button" class="btn btn-edit btn-sm" id="btn-acc-edit" data-id="${escapeHtml(acc.id)}">编辑</button>
         <button type="button" class="btn btn-danger-outline btn-sm" id="btn-acc-del" data-id="${escapeHtml(acc.id)}">删除</button>
@@ -238,7 +282,20 @@ function renderAccountDetail(acc, currentId) {
         <div class="account-health-item">
           <span class="account-health-label">登录</span>
           <strong>${escapeHtml(cookieState.label)}</strong>
-          <span>${escapeHtml(cookieState.hint)}</span>
+          <span>${escapeHtml(steamRetry || cookieState.hint)}</span>
+          <div class="account-session-actions">
+            <button type="button" class="account-text-btn" data-session-refresh="steam" data-id="${escapeHtml(acc.id)}">刷新</button>
+            <button type="button" class="account-text-btn is-danger" data-session-clear="steam" data-id="${escapeHtml(acc.id)}" ${steamSession.configured ? "" : "disabled"}>清除</button>
+          </div>
+        </div>
+        <div class="account-health-item">
+          <span class="account-health-label">Buff</span>
+          <strong>${escapeHtml(buffState.label)}</strong>
+          <span>${escapeHtml(buffRetry || buffState.detail)}</span>
+          <div class="account-session-actions">
+            <button type="button" class="account-text-btn" data-session-refresh="buff" data-id="${escapeHtml(acc.id)}">刷新</button>
+            <button type="button" class="account-text-btn is-danger" data-session-clear="buff" data-id="${escapeHtml(acc.id)}" ${buffSession.configured ? "" : "disabled"}>清除</button>
+          </div>
         </div>
         <div class="account-health-item">
           <span class="account-health-label">二次验证</span>
@@ -261,6 +318,7 @@ function renderAccountDetail(acc, currentId) {
           </div>
           <div class="account-info-list">
             <div class="account-info-row"><span>Steam 用户名</span><strong class="mono">${escapeHtml(acc.username || "—")}</strong></div>
+            <div class="account-info-row"><span>自动化状态</span><strong>${escapeHtml(enabled ? "启用" : "停用")}</strong></div>
             <div class="account-info-row"><span>Steam ID</span><strong class="mono">${escapeHtml(acc.steam_id || "—")}</strong></div>
             <div class="account-info-row"><span>Steam 昵称</span><strong>${escapeHtml(acc.display_name || "—")}</strong></div>
             <div class="account-info-row"><span>账号备注</span><strong>${escapeHtml(accountNote || "—")}</strong></div>
@@ -273,7 +331,7 @@ function renderAccountDetail(acc, currentId) {
           <svg class="callout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path d="M12 9v4"></path><path d="M12 17h.01"></path><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
           </svg>
-          <div class="callout-text"><strong>安全提示：</strong>Steam 密码、账号级 shared_secret、identity_secret 和 device_id 会以明文保存在本机 <span class="mono">config/accounts.json</span>；Steam/Buff Cookie 保存在 <span class="mono">config/credentials.json</span>。请勿把这些文件发给他人，建议定期更换密码。</div>
+          <div class="callout-text"><strong>安全提示：</strong>Steam 密码、账号级 shared_secret、identity_secret、device_id 以及 Steam/Buff Cookie 会保存在本机 <span class="mono">config/app.db</span>；兼容备份可能包含旧配置文件。请勿把这些文件发给他人，建议定期更换密码。</div>
         </div>
       </div>
       <div class="account-detail-pane ${accountDetailTab === "guard" ? "active" : ""}" data-account-pane="guard">
@@ -281,11 +339,11 @@ function renderAccountDetail(acc, currentId) {
           <div class="account-workbench-head">
             <div>
               <div class="account-workbench-title">Steam 令牌</div>
-              <div class="account-workbench-desc">维护账号级 shared_secret；账号令牌会以明文保存在本机 config/accounts.json。</div>
+              <div class="account-workbench-desc">维护账号级 shared_secret；账号令牌会保存在本机 config/app.db。</div>
             </div>
             <span class="account-guard-status ${guardConfigured ? "configured" : ""}" id="acct-guard-status-${escapeHtml(acc.id)}">${escapeHtml(guardLabel)}</span>
           </div>
-          <div class="account-config-alert is-warning">请妥善保护 config/accounts.json；其中包含 Steam 密码和账号令牌明文。旧全局令牌兼容配置保存在 config/app_config.json。</div>
+          <div class="account-config-alert is-warning">请妥善保护 config/app.db；其中包含 Steam 密码、账号令牌和账号级 Cookie。旧全局令牌兼容配置保存在 config/app_config.json。</div>
           <div class="account-guard-console">
             <button type="button" class="account-guard-code" id="acct-guard-code-${escapeHtml(acc.id)}" title="点击刷新验证码">
               <span class="guard-code-label">Steam Guard</span>
@@ -432,6 +490,43 @@ function renderAccountDetail(acc, currentId) {
     const id = e.currentTarget?.dataset?.id;
     if (id) await syncAccountBalance(id, e.currentTarget);
   });
+  detail.querySelector("#btn-acc-toggle-enabled")?.addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    const id = btn?.dataset?.id;
+    if (!id) return;
+    const nextEnabled = btn.dataset.enabled !== "1";
+    const done = setButtonLoading(btn, nextEnabled ? "启用中…" : "停用中…");
+    try {
+      const r = await fetchJson(API + "/accounts/" + id, {
+        method: "PUT",
+        body: JSON.stringify({ enabled: nextEnabled }),
+      });
+      if (r.ok) {
+        toast(nextEnabled ? "账号已启用" : "账号已停用");
+        await refreshAccounts();
+      } else {
+        toast("操作失败", r.error || "");
+      }
+    } catch (err) {
+      toast("操作失败", err.message || "");
+    } finally {
+      done();
+    }
+  });
+  detail.querySelectorAll("[data-session-refresh]").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      const provider = e.currentTarget?.dataset?.sessionRefresh;
+      const id = e.currentTarget?.dataset?.id;
+      if (id && provider) await refreshAccountSession(id, provider, e.currentTarget);
+    });
+  });
+  detail.querySelectorAll("[data-session-clear]").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      const provider = e.currentTarget?.dataset?.sessionClear;
+      const id = e.currentTarget?.dataset?.id;
+      if (id && provider) await clearAccountSession(id, provider, e.currentTarget);
+    });
+  });
   detail.querySelector("#btn-acc-del")?.addEventListener("click", async (e) => {
     const id = e.currentTarget?.dataset?.id;
     if (!id) return;
@@ -550,6 +645,48 @@ async function syncAccountBalance(accountId, btn = null) {
     }
   }
 }
+
+async function refreshAccountSession(accountId, provider, btn = null) {
+  const label = provider === "buff" ? "Buff" : "Steam";
+  const done = setButtonLoading(btn, "刷新中…");
+  try {
+    const r = await fetchJson(API + "/accounts/" + encodeURIComponent(accountId) + "/sessions/" + encodeURIComponent(provider) + "/refresh", {
+      method: "POST",
+    });
+    if (r.ok) {
+      toast(`${label} 状态已刷新`);
+    } else {
+      toast(`${label} 刷新失败`, r.error || r.message || "");
+    }
+    await refreshAccounts();
+  } catch (err) {
+    toast(`${label} 刷新失败`, err.message || "");
+  } finally {
+    done();
+  }
+}
+
+async function clearAccountSession(accountId, provider, btn = null) {
+  const label = provider === "buff" ? "Buff" : "Steam";
+  if (!confirm(`确定清除此账号的 ${label} Cookie？`)) return;
+  const done = setButtonLoading(btn, "清除中…");
+  try {
+    const r = await fetchJson(API + "/accounts/" + encodeURIComponent(accountId) + "/sessions/" + encodeURIComponent(provider), {
+      method: "DELETE",
+    });
+    if (r.ok) {
+      toast(`${label} Cookie 已清除`);
+      await refreshAccounts();
+    } else {
+      toast("清除失败", r.error || "");
+    }
+  } catch (err) {
+    toast("清除失败", err.message || "");
+  } finally {
+    done();
+  }
+}
+
 async function openBrowserAndLogin() {
   try {
     const d = await fetchJson(API + "/auth/" + reloginType + "/relogin_start", { method: "POST" });
@@ -646,6 +783,8 @@ function renderAccountsUI(accs, currentId) {
       const guardReady = !!(a.steam_guard_status || {}).resolved_configured;
       const accountGuard = !!(a.steam_guard_status || {}).account_configured;
       const tradeReady = (a.trade_config || {}).enabled === true;
+      const enabled = a.enabled !== false;
+      const steamState = getSessionStateLabel((a.session_status || {}).steam || {}, "Steam");
       const guardLabel = accountGuard ? "账号令牌" : guardReady ? "全局令牌" : "未绑令牌";
       const targetBalance = getAccountTargetBalanceDisplay(a);
       const balanceDisplay = getAccountBalanceDisplay(a);
@@ -663,7 +802,7 @@ function renderAccountsUI(accs, currentId) {
                 ${isCurrent ? '<span class="badge badge-current">当前</span>' : ""}
               </div>
               <div class="account-item-token">
-                ${accountStatusPill(guardLabel, guardReady ? "success" : "warning")}
+                ${accountStatusPill(enabled ? steamState.label : "已停用", enabled ? steamState.tone : "muted")}
               </div>
             </div>
             <div class="account-item-line">
@@ -671,7 +810,10 @@ function renderAccountsUI(accs, currentId) {
               <span class="account-item-dot" aria-hidden="true"></span>
               <span>目标：<strong>${escapeHtml(targetBalance.value)}</strong></span>
             </div>
-            ${tradeReady ? `<div class="account-item-extra">${accountStatusPill("账号级策略", "success")}</div>` : ""}
+            <div class="account-item-extra">
+              ${accountStatusPill(guardLabel, guardReady ? "success" : "warning")}
+              ${tradeReady ? accountStatusPill("账号级策略", "success") : ""}
+            </div>
           </div>
         </div>
       `;

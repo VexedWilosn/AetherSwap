@@ -37,7 +37,12 @@ class AccountUpdateBody(BaseModel):
 @router.get("/api/accounts")
 def api_list_accounts():
     cfg = load_app_config_validated()
-    accs = [public_account(a, cfg) for a in list_accounts()]
+    from app.account_sessions import public_session_summary
+    accs = []
+    for account in list_accounts():
+        out = public_account(account, cfg)
+        out["session_status"] = public_session_summary(account.get("id"))
+        accs.append(out)
     cid = get_current_account()
     current_id = cid.get("id") if cid else None
     return {"accounts": accs, "current_id": current_id}
@@ -55,7 +60,10 @@ def api_add_account(body: AccountBody):
         acc = update_account(acc["id"], steam_guard=body.steam_guard) or acc
     if body.enabled is not True:
         acc = update_account(acc["id"], enabled=body.enabled) or acc
-    return {"ok": True, "account": public_account(acc, load_app_config_validated())}
+    out = public_account(acc, load_app_config_validated())
+    from app.account_sessions import public_session_summary
+    out["session_status"] = public_session_summary(acc.get("id"))
+    return {"ok": True, "account": out}
 @router.put("/api/accounts/{account_id}")
 def api_update_account(account_id: str, body: AccountUpdateBody):
     kwargs = {}
@@ -80,7 +88,10 @@ def api_update_account(account_id: str, body: AccountUpdateBody):
     acc = update_account(account_id, **kwargs) if kwargs else get_account(account_id)
     if not acc:
         return {"ok": False, "error": "账号不存在"}
-    return {"ok": True, "account": public_account(acc, load_app_config_validated())}
+    out = public_account(acc, load_app_config_validated())
+    from app.account_sessions import public_session_summary
+    out["session_status"] = public_session_summary(acc.get("id"))
+    return {"ok": True, "account": out}
 @router.delete("/api/accounts/{account_id}")
 def api_delete_account(account_id: str):
     ok = delete_account(account_id)
@@ -113,4 +124,42 @@ def api_sync_account_balance(account_id: str):
         return {"ok": False, "error": str(e)}
     if not result.get("ok"):
         return {"ok": False, "error": result.get("error", "余额同步失败")}
-    return {"ok": True, "account": public_account(result["account"], load_app_config_validated())}
+    out = public_account(result["account"], load_app_config_validated())
+    from app.account_sessions import public_session_summary
+    out["session_status"] = public_session_summary(result["account"].get("id"))
+    return {"ok": True, "account": out}
+
+@router.post("/api/accounts/{account_id}/sessions/{provider}/refresh")
+def api_refresh_account_session(account_id: str, provider: str):
+    acc = get_account(account_id)
+    if not acc:
+        return {"ok": False, "error": "账号不存在"}
+    provider = (provider or "").strip().lower()
+    if provider == "steam":
+        result = verify_steam_auto_login(account_id)
+        ok = bool(result.get("ok"))
+        msg = result.get("message", "验证完成" if ok else "验证失败")
+    elif provider == "buff":
+        from app.services.buff_auth import try_buff_auto_relogin
+        ok, status, msg = try_buff_auto_relogin(account_id=account_id, force=True)
+        result = {"ok": ok, "status": status, "message": msg}
+    else:
+        return {"ok": False, "error": "provider 须为 steam 或 buff"}
+    from app.account_sessions import public_session_summary
+    return {
+        "ok": ok,
+        "status": result.get("status", "ok" if ok else "error"),
+        "message": msg,
+        "session_status": public_session_summary(account_id),
+    }
+
+@router.delete("/api/accounts/{account_id}/sessions/{provider}")
+def api_clear_account_session(account_id: str, provider: str):
+    if not get_account(account_id):
+        return {"ok": False, "error": "账号不存在"}
+    provider = (provider or "").strip().lower()
+    if provider not in {"steam", "buff"}:
+        return {"ok": False, "error": "provider 须为 steam 或 buff"}
+    from app.account_sessions import clear_account_session, public_session_summary
+    ok = clear_account_session(account_id, provider)
+    return {"ok": ok, "session_status": public_session_summary(account_id)}

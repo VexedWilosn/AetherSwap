@@ -10,6 +10,7 @@ from sqlmodel import select
 
 from app import database
 from app.database import AccountRecord, AppSetting, get_session
+from app.secret_box import is_protected, protect_secret, unprotect_secret
 
 _ACCOUNTS_FILE = Path(__file__).resolve().parent.parent / "config" / "accounts.json"
 _cache: Optional[dict] = None  # Backward-compatible test/reset hook; DB is the source of truth.
@@ -27,6 +28,7 @@ def _ensure_ready() -> None:
         database.init_db()
         _schema_key = db_key
     _migrate_from_json_if_needed()
+    _encrypt_existing_account_secrets()
 
 
 def _current_migration_key() -> tuple[str, str]:
@@ -93,7 +95,7 @@ def _new_account_id(existing: Optional[set[str]] = None) -> str:
 
 def _safe_json_loads(value: str, fallback: dict) -> dict:
     try:
-        data = json.loads(value or "")
+        data = json.loads(unprotect_secret(value or ""))
         return data if isinstance(data, dict) else dict(fallback)
     except Exception:
         return dict(fallback)
@@ -137,14 +139,14 @@ def _row_from_dict(account: dict, *, created_at: Optional[float] = None, updated
         id=account["id"],
         enabled=bool(account.get("enabled", True)),
         username=account.get("username", ""),
-        password=account.get("password", ""),
+        password=protect_secret(account.get("password", "")),
         steam_id=account.get("steam_id", ""),
         display_name=account.get("display_name", ""),
         account_note=account.get("account_note", ""),
         avatar_url=account.get("avatar_url", ""),
         currency_code=account.get("currency_code"),
         region_code=account.get("region_code"),
-        steam_guard_json=json.dumps(_normalize_steam_guard(account.get("steam_guard") or {}), ensure_ascii=False),
+        steam_guard_json=protect_secret(json.dumps(_normalize_steam_guard(account.get("steam_guard") or {}), ensure_ascii=False)),
         trade_config_json=json.dumps(account.get("trade_config") or {}, ensure_ascii=False),
         wallet_balance=account.get("wallet_balance"),
         balance=account.get("balance"),
@@ -162,7 +164,7 @@ def _row_to_dict(row: AccountRecord) -> dict:
         "id": row.id,
         "enabled": bool(row.enabled),
         "username": row.username or "",
-        "password": row.password or "",
+        "password": unprotect_secret(row.password or ""),
         "steam_id": row.steam_id or "",
         "display_name": row.display_name or "",
         "account_note": row.account_note or "",
@@ -184,6 +186,23 @@ def _row_to_dict(row: AccountRecord) -> dict:
         if value is not None:
             out[key] = value
     return out
+
+
+def _encrypt_existing_account_secrets() -> None:
+    with get_session() as session:
+        rows = session.exec(select(AccountRecord)).all()
+        changed = False
+        for row in rows:
+            if row.password and not is_protected(row.password):
+                row.password = protect_secret(row.password)
+                changed = True
+            if row.steam_guard_json and not is_protected(row.steam_guard_json):
+                row.steam_guard_json = protect_secret(row.steam_guard_json)
+                changed = True
+            if changed:
+                session.add(row)
+        if changed:
+            session.commit()
 
 
 def _get_setting(key: str) -> Optional[str]:
@@ -267,12 +286,15 @@ def update_account(account_id: str, **kwargs: Any) -> Optional[dict]:
             if key not in allowed:
                 continue
             if key == "steam_guard":
-                row.steam_guard_json = json.dumps(_normalize_steam_guard(value), ensure_ascii=False)
+                row.steam_guard_json = protect_secret(json.dumps(_normalize_steam_guard(value), ensure_ascii=False))
             elif key == "trade_config":
                 payload = dict(value or {}) if isinstance(value, dict) else {}
                 row.trade_config_json = json.dumps(payload, ensure_ascii=False)
             elif hasattr(row, key):
-                setattr(row, key, (value or "").strip() if isinstance(value, str) else value)
+                clean_value = (value or "").strip() if isinstance(value, str) else value
+                if key == "password":
+                    clean_value = protect_secret(clean_value)
+                setattr(row, key, clean_value)
         row.updated_at = time.time()
         session.add(row)
         session.commit()

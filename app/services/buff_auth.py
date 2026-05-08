@@ -5,11 +5,12 @@ import threading
 import time
 from pathlib import Path
 from app.state import log, set_buff_auth_expired
+from app.account_sessions import PROVIDER_BUFF, should_retry_session, update_account_session_status
 from app.config_loader import get_buff_credentials, update_buff_creds
 from app.services.playwright_cookies import cookies_to_header, parse_cookie_string_for_url
 _buff_auto_relogin_lock = threading.Lock()
 _buff_auto_relogin_last_success = 0.0
-def try_buff_auto_relogin(account_id: str = "") -> tuple:
+def try_buff_auto_relogin(account_id: str = "", force: bool = False) -> tuple:
     global _buff_auto_relogin_last_success
     if not _buff_auto_relogin_lock.acquire(blocking=False):
         log("buff_relogin: 另一个保活任务正在进行，跳过", "info", category="buff")
@@ -17,11 +18,16 @@ def try_buff_auto_relogin(account_id: str = "") -> tuple:
             return True, "auto_ok", "另一个自动登录刚刚完成"
         return False, "busy", "另一个自动登录正在进行"
     try:
-        return _try_buff_auto_relogin_impl(account_id=account_id)
+        return _try_buff_auto_relogin_impl(account_id=account_id, force=force)
     finally:
         _buff_auto_relogin_lock.release()
-def _try_buff_auto_relogin_impl(account_id: str = "") -> tuple:
+def _try_buff_auto_relogin_impl(account_id: str = "", force: bool = False) -> tuple:
     global _buff_auto_relogin_last_success
+    if not force:
+        retry_ok, retry_msg = should_retry_session(account_id or None, PROVIDER_BUFF)
+        if not retry_ok:
+            log(f"buff_relogin: {retry_msg}", "info", category="buff")
+            return False, "cooldown", retry_msg
     cred = get_buff_credentials(account_id)
     if not cred or not cred.get("cookies"):
         log("buff_relogin: 未保存凭证，无法保活", "warn", category="buff")
@@ -54,6 +60,7 @@ def _try_buff_auto_relogin_impl(account_id: str = "") -> tuple:
             if has_login:
                 cookie_str = cookies_to_header(cookies)
                 update_buff_creds(cookie_str, account_id=account_id)
+                update_account_session_status(account_id or None, PROVIDER_BUFF, status="ok", error=None)
                 set_buff_auth_expired(False)
                 log("buff_relogin: Cookie 刷新成功，会话已延长", "info", category="buff")
                 context.close()
@@ -61,6 +68,7 @@ def _try_buff_auto_relogin_impl(account_id: str = "") -> tuple:
                 return True, "auto_ok", "Buff 会话刷新成功"
             else:
                 log("buff_relogin: 发现会话已失效 (未携带 session)，需要手动重新扫码登录", "warn", category="buff")
+                update_account_session_status(account_id or None, PROVIDER_BUFF, status="expired", error="登录状态已失效")
                 set_buff_auth_expired(True)
                 try:
                     from app.notify import notify_manual_intervention_required
@@ -71,4 +79,5 @@ def _try_buff_auto_relogin_impl(account_id: str = "") -> tuple:
                 return False, "expired", "登录状态已失效，请在界面右上角点击重新登录"
     except Exception as e:
         log(f"buff_relogin: 异常 {e}", "warn", category="buff")
+        update_account_session_status(account_id or None, PROVIDER_BUFF, status="error", error=str(e)[:120])
         return False, "error", (str(e)[:80] or "自动保活异常")

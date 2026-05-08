@@ -11,3 +11,4 @@ pywebview>=4.0.0
 sqlmodel>=0.0.14
 steampy>=0.8.0
 Pillow>=10.0.0
+cryptography>=42.0.0

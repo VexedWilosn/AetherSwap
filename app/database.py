@@ -78,6 +78,8 @@ class AccountSession(SQLModel, table=True):
     steam_id: Optional[str] = None
     status: str = ""
     error: Optional[str] = None
+    failure_count: int = 0
+    next_retry_at: Optional[float] = None
     last_validated_at: Optional[float] = None
     created_at: float = 0.0
     updated_at: float = 0.0
@@ -164,6 +166,8 @@ def init_db() -> None:
             "ALTER TABLE purchase ADD COLUMN account_label TEXT",
             "ALTER TABLE purchase ADD COLUMN account_note TEXT",
             "ALTER TABLE accountrecord ADD COLUMN enabled BOOLEAN DEFAULT 1",
+            "ALTER TABLE accountsession ADD COLUMN failure_count INTEGER DEFAULT 0",
+            "ALTER TABLE accountsession ADD COLUMN next_retry_at REAL",
         ):
             try:
                 conn.execute(sa_text(ddl))

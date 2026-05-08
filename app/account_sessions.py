@@ -6,16 +6,19 @@ from sqlmodel import select
 from app import database
 from app.accounts import get_current_account
 from app.database import AccountSession, get_session
+from app.secret_box import is_protected, protect_secret, unprotect_secret
 from config import get_buff as get_legacy_buff
 from config import get_steam as get_legacy_steam
 from config import update_buff_credentials, update_steam_credentials
 
 PROVIDER_STEAM = "steam"
 PROVIDER_BUFF = "buff"
+_SUCCESS_STATUSES = {"", "ok", "valid"}
 
 
 def _ensure_ready() -> None:
     database.init_db()
+    _encrypt_existing_session_secrets()
 
 
 def _resolve_account_id(account_id: Optional[str] = None) -> str:
@@ -47,17 +50,55 @@ def _session_to_dict(row: AccountSession) -> dict:
     out = {
         "account_id": row.account_id,
         "provider": row.provider,
-        "cookies": row.cookies or "",
+        "cookies": unprotect_secret(row.cookies or ""),
         "status": row.status or "",
     }
     if row.session_id is not None:
-        out["session_id"] = row.session_id
+        out["session_id"] = unprotect_secret(row.session_id)
     if row.steam_id is not None:
         out["steam_id"] = row.steam_id
     if row.error is not None:
         out["error"] = row.error
+    out["failure_count"] = int(row.failure_count or 0)
+    if row.next_retry_at is not None:
+        out["next_retry_at"] = row.next_retry_at
     if row.last_validated_at is not None:
         out["last_validated_at"] = row.last_validated_at
+    return out
+
+
+def _encrypt_existing_session_secrets() -> None:
+    with get_session() as session:
+        rows = session.exec(select(AccountSession)).all()
+        changed = False
+        for row in rows:
+            if row.cookies and not is_protected(row.cookies):
+                row.cookies = protect_secret(row.cookies)
+                changed = True
+            if row.session_id and not is_protected(row.session_id):
+                row.session_id = protect_secret(row.session_id)
+                changed = True
+            if changed:
+                session.add(row)
+        if changed:
+            session.commit()
+
+
+def public_session_summary(account_id: Optional[str]) -> dict:
+    """Return non-sensitive session status for UI/API payloads."""
+    out = {}
+    for provider in (PROVIDER_STEAM, PROVIDER_BUFF):
+        session = get_account_session(account_id, provider)
+        cookies = (session.get("cookies") or "").strip()
+        out[provider] = {
+            "configured": bool(cookies),
+            "status": session.get("status") or ("ok" if cookies else ""),
+            "error": session.get("error") or "",
+            "failure_count": int(session.get("failure_count") or 0),
+            "next_retry_at": session.get("next_retry_at"),
+            "last_validated_at": session.get("last_validated_at"),
+            "steam_id": session.get("steam_id") if provider == PROVIDER_STEAM else None,
+        }
     return out
 
 
@@ -99,17 +140,93 @@ def set_account_session(
                 provider=provider,
                 created_at=now,
             )
-        row.cookies = cookies or ""
-        row.session_id = session_id
+        row.cookies = protect_secret(cookies or "")
+        row.session_id = protect_secret(session_id or "") if session_id is not None else None
         row.steam_id = steam_id
         row.status = status or ""
         row.error = error
-        row.last_validated_at = last_validated_at
+        row.failure_count = 0
+        row.next_retry_at = None
+        row.last_validated_at = last_validated_at if last_validated_at is not None else (now if row.status else None)
         row.updated_at = now
         session.add(row)
         session.commit()
         session.refresh(row)
         return _session_to_dict(row)
+
+
+def update_account_session_status(
+    account_id: Optional[str],
+    provider: str,
+    *,
+    status: str,
+    error: Optional[str] = None,
+) -> dict:
+    _ensure_ready()
+    account_id = _resolve_account_id(account_id)
+    provider = (provider or "").strip().lower()
+    if not account_id or not provider:
+        return {}
+    now = time.time()
+    with get_session() as session:
+        key = _session_key(account_id, provider)
+        row = session.get(AccountSession, key)
+        if row is None:
+            row = AccountSession(
+                id=key,
+                account_id=account_id,
+                provider=provider,
+                created_at=now,
+            )
+        normalized = (status or "").strip().lower()
+        row.status = normalized
+        row.error = error
+        if normalized in _SUCCESS_STATUSES:
+            row.failure_count = 0
+            row.next_retry_at = None
+        else:
+            row.failure_count = int(row.failure_count or 0) + 1
+            delay_seconds = min(3600, 60 * (2 ** max(0, row.failure_count - 1)))
+            row.next_retry_at = now + delay_seconds
+        row.last_validated_at = now
+        row.updated_at = now
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        return _session_to_dict(row)
+
+
+def should_retry_session(account_id: Optional[str], provider: str, *, now: Optional[float] = None) -> tuple[bool, str]:
+    session = get_account_session(account_id, provider)
+    next_retry_at = session.get("next_retry_at")
+    if not next_retry_at:
+        return True, ""
+    now = time.time() if now is None else now
+    if float(next_retry_at) <= now:
+        return True, ""
+    wait_seconds = int(float(next_retry_at) - now)
+    return False, f"冷却中，约 {max(1, wait_seconds)} 秒后重试"
+
+
+def clear_account_session(account_id: Optional[str], provider: str) -> bool:
+    _ensure_ready()
+    account_id = _resolve_account_id(account_id)
+    provider = (provider or "").strip().lower()
+    if not account_id or provider not in {PROVIDER_STEAM, PROVIDER_BUFF}:
+        return False
+    with get_session() as session:
+        row = session.get(AccountSession, _session_key(account_id, provider))
+        if row is None:
+            return True
+        session.delete(row)
+        session.commit()
+    current = get_current_account() or {}
+    if str(current.get("id") or "").strip() == account_id:
+        if provider == PROVIDER_STEAM:
+            update_steam_credentials("", "", None)
+        elif provider == PROVIDER_BUFF:
+            update_buff_credentials("")
+    return True
 
 
 def list_account_sessions() -> list:
@@ -137,11 +254,13 @@ def replace_account_sessions(rows: list) -> None:
                 id=_session_key(account_id, provider),
                 account_id=account_id,
                 provider=provider,
-                cookies=item.get("cookies") or "",
-                session_id=item.get("session_id"),
+                cookies=protect_secret(item.get("cookies") or ""),
+                session_id=protect_secret(item.get("session_id") or "") if item.get("session_id") is not None else None,
                 steam_id=item.get("steam_id"),
                 status=item.get("status") or "",
                 error=item.get("error"),
+                failure_count=int(item.get("failure_count") or 0),
+                next_retry_at=item.get("next_retry_at"),
                 last_validated_at=item.get("last_validated_at"),
                 created_at=now,
                 updated_at=now,

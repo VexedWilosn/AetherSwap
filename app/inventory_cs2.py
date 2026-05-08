@@ -2,7 +2,7 @@ import re
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
-from app.accounts import get_current_account
+from app.accounts import get_account, get_current_account
 from app.config_loader import get_steam_credentials
 from steam.inventory import CS2_APP_ID, fetch_cs2_inventory
 from steam.session import create_market_session
@@ -33,8 +33,12 @@ def _parse_cooldown(owner_descriptions: List[dict]) -> Tuple[str, float]:
             ts = 0.0
         break
     return text, ts
-def scan_cs2_inventory() -> Tuple[bool, List[Dict[str, Any]], str]:
-    cred = get_steam_credentials()
+def scan_cs2_inventory(account_id: str = "") -> Tuple[bool, List[Dict[str, Any]], str]:
+    account = get_account(account_id) if account_id else get_current_account()
+    if not account:
+        return False, [], "未设置 Steam 账号"
+    resolved_account_id = (account.get("id") or "").strip()
+    cred = get_steam_credentials(resolved_account_id)
     steam_id = cred.get("steam_id")
     cookies = cred.get("cookies")
     if not steam_id or not cookies:
@@ -45,13 +49,11 @@ def scan_cs2_inventory() -> Tuple[bool, List[Dict[str, Any]], str]:
         return False, [], "获取 CS2 库存失败"
     if isinstance(data, dict) and data.get("auth_expired"):
         return False, [], "登录已过期，请重新登录"
-    account = get_current_account() or {}
-    account_id = (account.get("id") or "").strip()
     account_label = (
         account.get("display_name")
         or account.get("username")
         or account.get("steam_id")
-        or account_id
+        or resolved_account_id
         or "当前账号"
     )
     account_note = (account.get("account_note") or "").strip()
@@ -92,7 +94,7 @@ def scan_cs2_inventory() -> Tuple[bool, List[Dict[str, Any]], str]:
                 "cooldown_at_iso": _safe_iso(cd_ts),
                 "can_sell": can_sell,
                 "can_trade": can_trade,
-                "account_id": account_id,
+                "account_id": resolved_account_id,
                 "account_label": account_label,
                 "account_note": account_note,
             }

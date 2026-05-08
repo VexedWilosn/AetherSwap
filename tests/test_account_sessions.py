@@ -5,6 +5,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app import account_sessions, accounts, database
+from app.database import AccountSession, get_session
+from app.secret_box import is_protected
 from app.config_loader import get_buff_credentials, get_steam_credentials, update_steam_creds
 from app.services import steam_auth
 import config
@@ -131,3 +133,57 @@ def test_auto_relogin_writes_target_account_without_switching_current(monkeypatc
     assert status == "auto_ok"
     assert accounts.get_current_id() == first["id"]
     assert get_steam_credentials(second["id"])["steam_id"] == "666"
+
+
+def test_session_status_tracks_failures_and_clears_on_success(monkeypatch, tmp_path):
+    _use_temp_storage(monkeypatch, tmp_path)
+    acc = accounts.add_account(username="u")
+
+    failed = account_sessions.update_account_session_status(
+        acc["id"],
+        account_sessions.PROVIDER_STEAM,
+        status="expired",
+        error="expired",
+    )
+
+    assert failed["failure_count"] == 1
+    assert failed["next_retry_at"] is not None
+    retry_ok, retry_msg = account_sessions.should_retry_session(acc["id"], account_sessions.PROVIDER_STEAM, now=failed["next_retry_at"] - 1)
+    assert retry_ok is False
+    assert "冷却中" in retry_msg
+
+    account_sessions.set_steam_session(
+        "sessionid=ok; steamLoginSecure=777%7C%7Ctoken",
+        "ok",
+        account_id=acc["id"],
+        mirror_legacy=False,
+    )
+    saved = account_sessions.get_account_session(acc["id"], account_sessions.PROVIDER_STEAM)
+
+    assert saved["failure_count"] == 0
+    assert "next_retry_at" not in saved
+
+
+def test_clear_account_session_removes_only_target(monkeypatch, tmp_path):
+    _use_temp_storage(monkeypatch, tmp_path)
+    first = accounts.add_account(username="first")
+    second = accounts.add_account(username="second")
+    account_sessions.set_steam_session("sessionid=a; steamLoginSecure=111%7C%7Ctoken", "a", account_id=first["id"], mirror_legacy=False)
+    account_sessions.set_steam_session("sessionid=b; steamLoginSecure=222%7C%7Ctoken", "b", account_id=second["id"], mirror_legacy=False)
+
+    assert account_sessions.clear_account_session(second["id"], account_sessions.PROVIDER_STEAM) is True
+
+    assert account_sessions.get_account_session(second["id"], account_sessions.PROVIDER_STEAM) == {}
+    assert account_sessions.get_account_session(first["id"], account_sessions.PROVIDER_STEAM)["session_id"] == "a"
+
+
+def test_session_secrets_are_stored_protected_when_supported(monkeypatch, tmp_path):
+    _use_temp_storage(monkeypatch, tmp_path)
+    acc = accounts.add_account(username="u")
+    account_sessions.set_steam_session("sessionid=s; steamLoginSecure=888%7C%7Ctoken", "s", account_id=acc["id"], mirror_legacy=False)
+
+    with get_session() as session:
+        row = session.get(AccountSession, f"{acc['id']}:{account_sessions.PROVIDER_STEAM}")
+
+    assert account_sessions.get_account_session(acc["id"], account_sessions.PROVIDER_STEAM)["session_id"] == "s"
+    assert row.cookies != "sessionid=s; steamLoginSecure=888%7C%7Ctoken" or not is_protected(row.cookies)

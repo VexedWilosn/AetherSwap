@@ -34,6 +34,8 @@ class State:
     _plan: List[Any]
     _inventory: List[Any]
     _inventory_meta: dict
+    _inventory_by_account: dict
+    _inventory_meta_by_account: dict
     _receive_status: dict
     _buff_auth_expired: bool
     _progress_total: int
@@ -55,6 +57,8 @@ class State:
         self._plan = []
         self._inventory = []
         self._inventory_meta = {"cached": True, "updated_at": None, "message": ""}
+        self._inventory_by_account = {}
+        self._inventory_meta_by_account = {}
         self._receive_status = {"stage": "idle", "message": "", "updated_at": None}
         self._buff_auth_expired = False
         self._progress_total = 0
@@ -222,19 +226,41 @@ class State:
     def get_plan(self) -> list:
         with self._lock:
             return list(self._plan)
-    def set_inventory(self, items: list, *, cached: bool = False, message: str = "") -> None:
+    def _resolve_inventory_account_id(self, account_id: Optional[str] = None) -> str:
+        if account_id:
+            return str(account_id).strip()
+        try:
+            from app.accounts import get_current_account
+            account = get_current_account() or {}
+            return str(account.get("id") or "").strip()
+        except Exception:
+            return ""
+    def set_inventory(self, items: list, *, cached: bool = False, message: str = "", account_id: Optional[str] = None) -> None:
+        resolved_account_id = self._resolve_inventory_account_id(account_id)
+        meta = {
+            "cached": bool(cached),
+            "updated_at": time.time(),
+            "message": message or "",
+            "account_id": resolved_account_id,
+        }
         with self._lock:
-            self._inventory = list(items)
-            self._inventory_meta = {
-                "cached": bool(cached),
-                "updated_at": time.time(),
-                "message": message or "",
-            }
-    def get_inventory(self) -> list:
+            inventory = list(items)
+            self._inventory = inventory
+            self._inventory_meta = dict(meta)
+            if resolved_account_id:
+                self._inventory_by_account[resolved_account_id] = inventory
+                self._inventory_meta_by_account[resolved_account_id] = dict(meta)
+    def get_inventory(self, account_id: Optional[str] = None) -> list:
+        resolved_account_id = self._resolve_inventory_account_id(account_id)
         with self._lock:
+            if resolved_account_id and resolved_account_id in self._inventory_by_account:
+                return list(self._inventory_by_account[resolved_account_id])
             return list(self._inventory)
-    def get_inventory_meta(self) -> dict:
+    def get_inventory_meta(self, account_id: Optional[str] = None) -> dict:
+        resolved_account_id = self._resolve_inventory_account_id(account_id)
         with self._lock:
+            if resolved_account_id and resolved_account_id in self._inventory_meta_by_account:
+                return dict(self._inventory_meta_by_account[resolved_account_id])
             return dict(self._inventory_meta)
     def clear_log(self) -> None:
         with self._lock:
@@ -328,12 +354,12 @@ def update_purchase_by_id(db_id: int, data: dict) -> bool:
     return get_state().update_purchase_by_id(db_id, data)
 def update_sale(idx: int, data: dict) -> bool:
     return get_state().update_sale(idx, data)
-def set_inventory(items: list, *, cached: bool = False, message: str = "") -> None:
-    get_state().set_inventory(items, cached=cached, message=message)
-def get_inventory() -> list:
-    return get_state().get_inventory()
-def get_inventory_meta() -> dict:
-    return get_state().get_inventory_meta()
+def set_inventory(items: list, *, cached: bool = False, message: str = "", account_id: Optional[str] = None) -> None:
+    get_state().set_inventory(items, cached=cached, message=message, account_id=account_id)
+def get_inventory(account_id: Optional[str] = None) -> list:
+    return get_state().get_inventory(account_id=account_id)
+def get_inventory_meta(account_id: Optional[str] = None) -> dict:
+    return get_state().get_inventory_meta(account_id=account_id)
 def clear_log() -> None:
     get_state().clear_log()
 def replace_log(lines: list) -> None:

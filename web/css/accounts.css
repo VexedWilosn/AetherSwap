@@ -505,6 +505,40 @@
   white-space: nowrap;
 }
 
+.account-session-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.account-text-btn {
+  min-height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.account-text-btn:hover:not(:disabled) {
+  color: var(--text-main);
+  border-color: var(--border-strong);
+}
+
+.account-text-btn.is-danger {
+  color: var(--danger);
+}
+
+.account-text-btn:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .account-detail-tabs {
   display: inline-flex;
   gap: 4px;
