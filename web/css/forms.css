@@ -51,6 +51,23 @@
   border-bottom: 1px solid var(--border-color);
 }
 
+.settings-helper {
+  margin: -8px 0 16px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.legacy-guard-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin: -4px 0 16px;
+}
+
+.settings-group--legacy-guard {
+  border-style: dashed;
+}
+
 .form-grid {
   display: grid;
   gap: 16px;

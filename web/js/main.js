@@ -920,9 +920,17 @@ function bindEvents() {
     holdingsMultiSelectMode = !holdingsMultiSelectMode;
     refreshTransactions();
   });
+  el("btn-holdings-toggle-cols")?.addEventListener("click", () => {
+    holdingsShowMoreColumns = !holdingsShowMoreColumns;
+    syncTxColumnToggleUI();
+  });
   el("btn-history-multiselect")?.addEventListener("click", () => {
     historyMultiSelectMode = !historyMultiSelectMode;
     refreshTransactions();
+  });
+  el("btn-history-toggle-cols")?.addEventListener("click", () => {
+    historyShowMoreColumns = !historyShowMoreColumns;
+    syncTxColumnToggleUI();
   });
   el("btn-history-batch-del")?.addEventListener("click", async () => {
     const checked = document.querySelectorAll("#transactions-table-purchase-history .history-checkbox:checked");

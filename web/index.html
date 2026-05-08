@@ -343,7 +343,10 @@
         <div class="panel-toolbar panel-toolbar--purchases">
           <div class="panel-toolbar-row">
             <span class="label">持有饰品</span>
-            <button id="btn-holdings-multiselect" class="btn btn-sm btn-secondary">多选</button>
+            <div class="panel-toolbar-actions">
+              <button id="btn-holdings-toggle-cols" class="btn btn-sm btn-secondary" type="button" aria-pressed="false">显示更多列</button>
+              <button id="btn-holdings-multiselect" class="btn btn-sm btn-secondary">多选</button>
+            </div>
             <div id="holdings-batch-actions" class="hidden" style="display:none;gap:8px;align-items:center;">
               <button id="btn-holdings-batch-sell" class="btn btn-sm btn-primary">批量出售</button>
               <button id="btn-holdings-batch-del" class="btn btn-sm btn-danger-outline">批量删除</button>
@@ -361,21 +364,21 @@
           <button id="btn-add-purchase" class="btn btn-primary">添加</button>
         </div>
         <div class="table-container table-card">
-          <table id="transactions-table-purchases">
+          <table id="transactions-table-purchases" class="tx-table-compact">
             <thead>
               <tr>
                 <th id="holding-select-th" class="hidden" style="width:52px;min-width:52px"></th>
                 <th>时间</th>
                 <th>物品/说明</th>
-                <th>assetid</th>
+                <th class="tx-extra-col">assetid</th>
                 <th>购入价</th>
-                <th>购入市场价</th>
+                <th class="tx-extra-col">购入市场价</th>
                 <th>现市场价</th>
-                <th>税后价格</th>
+                <th class="tx-extra-col">税后价格</th>
                 <th>实际折扣比率</th>
                 <th>变现收益</th>
-                <th>自用收益</th>
-                <th>市场变动</th>
+                <th class="tx-extra-col">自用收益</th>
+                <th class="tx-extra-col">市场变动</th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -388,7 +391,10 @@
         <div class="panel-toolbar panel-toolbar--purchase-history">
           <div class="panel-toolbar-row">
             <span class="label">操作记录</span>
-            <button id="btn-history-multiselect" class="btn btn-sm btn-secondary">多选</button>
+            <div class="panel-toolbar-actions">
+              <button id="btn-history-toggle-cols" class="btn btn-sm btn-secondary" type="button" aria-pressed="false">显示更多列</button>
+              <button id="btn-history-multiselect" class="btn btn-sm btn-secondary">多选</button>
+            </div>
             <div id="history-batch-actions" class="hidden" style="display:none;gap:8px;align-items:center;">
               <button id="btn-history-batch-del" class="btn btn-sm btn-danger-outline">批量删除</button>
             </div>
@@ -396,21 +402,21 @@
           <div id="purchase-history-summary" class="purchases-summary"></div>
         </div>
         <div class="table-container table-card">
-          <table id="transactions-table-purchase-history">
+          <table id="transactions-table-purchase-history" class="tx-table-compact">
             <thead>
               <tr>
                 <th id="history-select-th" class="hidden" style="width:52px;min-width:52px"></th>
                 <th>时间</th>
                 <th>物品说明</th>
-                <th>assetid</th>
+                <th class="tx-extra-col">assetid</th>
                 <th>购入价</th>
-                <th>购入市场价</th>
+                <th class="tx-extra-col">购入市场价</th>
                 <th>出售状态</th>
                 <th>出售价格</th>
                 <th>实际折扣比率</th>
                 <th>变现收益</th>
-                <th>自用收益</th>
-                <th>价格偏离度</th>
+                <th class="tx-extra-col">自用收益</th>
+                <th class="tx-extra-col">价格偏离度</th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -764,8 +770,14 @@
 
         </div>
         <div class="settings-tab-pane" data-settab-pane="notify" style="display:none">
-          <div class="settings-group">
-            <h2>Steam 令牌</h2>
+          <div class="settings-group settings-group--legacy-guard">
+            <h2>Steam 令牌（兼容旧配置）</h2>
+            <p class="settings-helper">
+              新方案请在「账号管理」里为每个 Steam 账号配置令牌。本区域仅作为旧配置迁移期的全局 fallback，账号未配置时才会读取。
+            </p>
+            <div class="legacy-guard-actions">
+              <button type="button" class="btn btn-sm btn-secondary" onclick="document.querySelector('[data-tab=accounts]')?.click()">前往账号管理</button>
+            </div>
             <div class="form-grid">
               <div class="field">
                 <label for="cfg-steam-shared-secret">shared_secret</label>
@@ -1033,7 +1045,7 @@
         <div class="steam-token-page">
           <div class="steam-token-glow"></div>
           <div class="steam-token-card">
-            <h2 class="steam-token-title">Steam 令牌</h2>
+            <h2 class="steam-token-title">Steam 令牌（兼容视图）</h2>
             <div id="steam-token-circle" class="steam-token-circle">
               <svg class="steam-token-ring" viewBox="0 0 260 260">
                 <defs>
@@ -1052,7 +1064,7 @@
                 </div>
               </div>
             </div>
-            <p class="steam-token-tip" id="steam-token-tip">您的账号受到 Steam Guard 保护</p>
+            <p class="steam-token-tip" id="steam-token-tip">优先显示当前账号令牌，未配置时回退到旧全局配置</p>
           </div>
         </div>
       </section>
@@ -1763,7 +1775,7 @@
         <h3 class="wizard-title">欢迎使用 AetherSwap</h3>
         <p class="wizard-desc">检测到您尚未完成基础配置，建议按向导快速填写关键参数。全程约需 2 分钟，也可跳过后在「设置」面板手动配置。</p>
         <div class="wizard-steps-preview">
-          <div class="wizard-preview-item"><span class="wizard-preview-num">1</span>Steam 令牌密钥</div>
+          <div class="wizard-preview-item"><span class="wizard-preview-num">1</span>账号 Steam 令牌</div>
           <div class="wizard-preview-item"><span class="wizard-preview-num">2</span>推送通知 Token</div>
           <div class="wizard-preview-item"><span class="wizard-preview-num">3</span>Buff 账号登录</div>
           <div class="wizard-preview-item"><span class="wizard-preview-num">4</span>Steam 账号</div>
@@ -1786,8 +1798,8 @@
       <!-- 步骤 1：Steam 令牌 -->
       <div class="wizard-step" id="wizard-step-1">
         <div class="wizard-icon">🔑</div>
-        <h3 class="wizard-title">Steam 令牌密钥</h3>
-        <p class="wizard-desc">用于自动生成 Steam Guard 验证码和确认交易，是自动挂刀的核心凭据。</p>
+        <h3 class="wizard-title">账号 Steam 令牌</h3>
+        <p class="wizard-desc">用于当前 Steam 账号生成 Steam Guard 验证码和确认交易。已有账号时会保存到账号；尚未添加账号时先作为兼容配置保存。</p>
         <div class="field">
           <label for="wiz-shared-secret">shared_secret <span class="wizard-tag">必填</span></label>
           <input type="password" id="wiz-shared-secret" placeholder="Steam Guard 共享密钥" autocomplete="off" />
@@ -1796,7 +1808,7 @@
           <label for="wiz-identity-secret">identity_secret <span class="wizard-tag">必填</span></label>
           <input type="password" id="wiz-identity-secret" placeholder="Steam 身份密钥" autocomplete="off" />
         </div>
-        <p class="wizard-hint">可在 Steam 手机客户端的令牌数据或第三方工具中提取。</p>
+        <p class="wizard-hint">后续可在「账号管理 → Steam 令牌」按账号维护。</p>
       </div>
 
       <!-- 步骤 2：推送通知 -->

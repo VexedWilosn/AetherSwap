@@ -1,6 +1,8 @@
 
 let holdingsMultiSelectMode = false;
 let historyMultiSelectMode = false;
+let holdingsShowMoreColumns = false;
+let historyShowMoreColumns = false;
 let lastEnrichTime = 0;
 let lastEnrichData = null;
 function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, multiSelectMode = false) {
@@ -29,12 +31,12 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
       const cur = t.current_market_price != null ? Number(t.current_market_price) : null;
       const cmp = cur != null ? cur.toFixed(2) : "";
       const marketAtBuy = t.market_price != null ? Number(t.market_price) : null;
-      let plCell = "<td></td>";
+      let plCell = `<td class="tx-extra-col"></td>`;
       if (cur != null && marketAtBuy != null && marketAtBuy > 0) {
         const diff = cur - marketAtBuy;
         const pct = ((diff / marketAtBuy) * 100).toFixed(2) + "%";
         const cls = diff > 0 ? "text-ok" : diff < 0 ? "text-bad" : "";
-        plCell = `<td class="mono ${cls}">${diff >= 0 ? "+" : ""}${diff.toFixed(2)} (${diff >= 0 ? "+" : ""}${pct})</td>`;
+        plCell = `<td class="mono tx-extra-col ${cls}">${diff >= 0 ? "+" : ""}${diff.toFixed(2)} (${diff >= 0 ? "+" : ""}${pct})</td>`;
       }
       const cost = Number(t.price) || 0;
       const afterTaxVal = cur != null && cur > 0 ? cur / 1.15 : null;
@@ -45,12 +47,13 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
       const profitClass = cashProfit ? (parseFloat(cashProfit) > 0 ? "text-ok" : parseFloat(cashProfit) < 0 ? "text-bad" : "") : "";
       const selfUseProfit = afterTaxVal != null && cost > 0 ? (afterTaxVal - cost).toFixed(2) : "";
       const selfUseClass = selfUseProfit ? (parseFloat(selfUseProfit) > 0 ? "text-ok" : parseFloat(selfUseProfit) < 0 ? "text-bad" : "") : "";
-      const afterTaxCell = afterTax ? `<td class="mono">${escapeHtml(afterTax)}</td>` : "<td></td>";
+      const afterTaxCell = afterTax ? `<td class="mono tx-extra-col">${escapeHtml(afterTax)}</td>` : `<td class="tx-extra-col"></td>`;
       const discountRatioCell = discountRatio ? `<td class="mono ${discountRatioClass}">${escapeHtml(discountRatio)}</td>` : "<td></td>";
       const profitCell = cashProfit ? `<td class="mono ${profitClass}">${escapeHtml(parseFloat(cashProfit) >= 0 ? "+" + cashProfit : cashProfit)}</td>` : "<td></td>";
-      const selfUseCell = selfUseProfit ? `<td class="mono ${selfUseClass}">${escapeHtml(parseFloat(selfUseProfit) >= 0 ? "+" + selfUseProfit : selfUseProfit)}</td>` : "<td></td>";
-      const assetidCell = `<td class="mono">${escapeHtml(t.assetid ?? "—")}</td>`;
-      rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${nameHtml}</td>${assetidCell}${priceCell}<td class="mono">${escapeHtml(mp)}</td><td class="mono">${escapeHtml(cmp)}</td>${afterTaxCell}${discountRatioCell}${profitCell}${selfUseCell}${plCell}<td class="tx-actions">${actHtml}</td></tr>`);
+      const selfUseCell = selfUseProfit ? `<td class="mono tx-extra-col ${selfUseClass}">${escapeHtml(parseFloat(selfUseProfit) >= 0 ? "+" + selfUseProfit : selfUseProfit)}</td>` : `<td class="tx-extra-col"></td>`;
+      const assetidCell = `<td class="mono tx-extra-col">${escapeHtml(t.assetid ?? "—")}</td>`;
+      const buyMarketCell = `<td class="mono tx-extra-col">${escapeHtml(mp)}</td>`;
+      rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${nameHtml}</td>${assetidCell}${priceCell}${buyMarketCell}<td class="mono">${escapeHtml(cmp)}</td>${afterTaxCell}${discountRatioCell}${profitCell}${selfUseCell}${plCell}<td class="tx-actions">${actHtml}</td></tr>`);
     } else {
       const assetidCell = `<td class="mono">${escapeHtml(t.assetid ?? "—")}</td>`;
       rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${nameHtml}</td>${assetidCell}${priceCell}<td class="tx-actions">${actHtml}</td></tr>`);
@@ -150,7 +153,7 @@ function renderPurchaseHistoryTable(tbody, list, resellRatio = 0.85, multiSelect
     }
     const cashClass = sold && parseFloat(cashProfitStr) !== 0 ? (parseFloat(cashProfitStr) > 0 ? "text-ok" : "text-bad") : "";
     const selfUseClass = sold && parseFloat(selfUseStr) !== 0 ? (parseFloat(selfUseStr) > 0 ? "text-ok" : "text-bad") : "";
-    let deviationCell = "<td></td>";
+    let deviationCell = `<td class="tx-extra-col"></td>`;
     if (sold) {
       const marketAtBuy = t.market_price != null ? Number(t.market_price) : 0;
       const saleP = Number(t.sale_price) || 0;
@@ -158,18 +161,18 @@ function renderPurchaseHistoryTable(tbody, list, resellRatio = 0.85, multiSelect
         const diff = saleP - marketAtBuy;
         const pct = ((diff / marketAtBuy) * 100).toFixed(2) + "%";
         const devClass = diff > 0 ? "text-ok" : diff < 0 ? "text-bad" : "";
-        deviationCell = `<td class="mono ${devClass}">${diff >= 0 ? "+" : ""}${diff.toFixed(2)} (${diff >= 0 ? "+" : ""}${pct})</td>`;
+        deviationCell = `<td class="mono tx-extra-col ${devClass}">${diff >= 0 ? "+" : ""}${diff.toFixed(2)} (${diff >= 0 ? "+" : ""}${pct})</td>`;
       } else {
-        deviationCell = `<td class="mono">—</td>`;
+        deviationCell = `<td class="mono tx-extra-col">—</td>`;
       }
     } else {
-      deviationCell = `<td class="mono">—</td>`;
+      deviationCell = `<td class="mono tx-extra-col">—</td>`;
     }
     const hasListing = !multiSelectMode && t.listing;
     const delistItem = hasListing ? `<button type="button" class="tx-action-item ph-btn-delist" data-type="purchase" data-idx="${idx}">⏬ 下架</button>` : "";
     const actHtml = !multiSelectMode ? `<div class="tx-actions-dropdown"><button type="button" class="tx-actions-trigger" title="操作">⋮</button><div class="tx-actions-menu">${delistItem}<button type="button" class="tx-action-item tx-action-danger ph-btn-del" data-type="purchase" data-idx="${idx}">🗑️ 删除</button></div></div>` : "";
     const assetidStr = t.assetid ?? "—";
-    rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${escapeHtml(nameText)}</td><td class="mono">${escapeHtml(assetidStr)}</td><td class="mono">${escapeHtml(Number(t.price).toFixed(2))}</td><td class="mono">${escapeHtml(mp)}</td><td class="status-cell ${statusCellClass}">${escapeHtml(statusStr)}</td><td class="mono">${escapeHtml(salePriceStr)}</td><td class="mono ${discountRatioClass}">${escapeHtml(discountRatioStr)}</td><td class="mono ${cashClass}">${escapeHtml(cashProfitStr)}</td><td class="mono ${selfUseClass}">${escapeHtml(selfUseStr)}</td>${deviationCell}<td class="tx-actions">${actHtml}</td></tr>`);
+    rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${escapeHtml(nameText)}</td><td class="mono tx-extra-col">${escapeHtml(assetidStr)}</td><td class="mono">${escapeHtml(Number(t.price).toFixed(2))}</td><td class="mono tx-extra-col">${escapeHtml(mp)}</td><td class="status-cell ${statusCellClass}">${escapeHtml(statusStr)}</td><td class="mono">${escapeHtml(salePriceStr)}</td><td class="mono ${discountRatioClass}">${escapeHtml(discountRatioStr)}</td><td class="mono ${cashClass}">${escapeHtml(cashProfitStr)}</td><td class="mono tx-extra-col ${selfUseClass}">${escapeHtml(selfUseStr)}</td>${deviationCell}<td class="tx-actions">${actHtml}</td></tr>`);
   }
   tbody.innerHTML = rowHtmls.join("");
   tbody.querySelectorAll(".ph-btn-delist").forEach(btn => {
@@ -218,6 +221,7 @@ function applyTransactionsToUI(all, summaryEl, tbodyP, tbodyS, tbodyHistory, res
   const holdings = purchases.filter((t) => !(t.sale_price != null && Number(t.sale_price) > 0));
   const sales = all.filter((t) => t.type === "sale");
   const ratio = Math.max(0.01, Math.min(1, Number(resellRatio) || 0.85));
+  syncTxColumnToggleUI();
   if (tbodyP) renderTxTable(tbodyP, holdings, true, ratio, holdingsMultiSelectMode);
   if (tbodyHistory) renderPurchaseHistoryTable(tbodyHistory, purchases, ratio, historyMultiSelectMode);
   syncHistoryMultiSelectUI();
@@ -343,6 +347,22 @@ function syncHistoryMultiSelectUI() {
     if (selectTh) selectTh.classList.add("hidden");
     if (batchBar) { batchBar.classList.add("hidden"); batchBar.style.display = "none"; }
     if (multiselectBtn) multiselectBtn.textContent = "多选";
+  }
+}
+function syncTxColumnToggleUI() {
+  const holdingsTable = el("transactions-table-purchases");
+  const historyTable = el("transactions-table-purchase-history");
+  const holdingsBtn = el("btn-holdings-toggle-cols");
+  const historyBtn = el("btn-history-toggle-cols");
+  if (holdingsTable) holdingsTable.classList.toggle("show-extra-cols", holdingsShowMoreColumns);
+  if (historyTable) historyTable.classList.toggle("show-extra-cols", historyShowMoreColumns);
+  if (holdingsBtn) {
+    holdingsBtn.textContent = holdingsShowMoreColumns ? "收起列" : "显示更多列";
+    holdingsBtn.setAttribute("aria-pressed", holdingsShowMoreColumns ? "true" : "false");
+  }
+  if (historyBtn) {
+    historyBtn.textContent = historyShowMoreColumns ? "收起列" : "显示更多列";
+    historyBtn.setAttribute("aria-pressed", historyShowMoreColumns ? "true" : "false");
   }
 }
 function getCurrentPriceRefreshMinutes() {

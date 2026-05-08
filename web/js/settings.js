@@ -378,11 +378,35 @@ function setupInventoryAutoRefresh() {
 // ---- 配置完整性检查 & 新手引导向导 ----
 const WIZARD_SKIP_KEY = "aetherswap_onboard_skip";
 
+function getSteamGuardSetupStatus(accounts, cfg) {
+  const list = Array.isArray(accounts) ? accounts : [];
+  const sg = cfg?.steam_guard || {};
+  const sc = cfg?.steam_confirm || {};
+  const globalShared = !!sg.shared_secret;
+  const globalIdentity = !!sc.identity_secret;
+  const accountShared = list.some((a) => {
+    const status = a.steam_guard_status || {};
+    const guard = a.steam_guard || {};
+    return !!status.resolved_configured || !!guard.shared_secret;
+  });
+  const accountIdentity = list.some((a) => {
+    const status = a.steam_guard_status || {};
+    const guard = a.steam_guard || {};
+    return !!status.identity_configured || !!guard.identity_secret;
+  });
+  const hasShared = accountShared || globalShared;
+  const hasIdentity = accountIdentity || globalIdentity;
+  return {
+    hasShared,
+    hasIdentity,
+    complete: hasShared && hasIdentity,
+  };
+}
+
 function _wizardIsFirstTime(cfg, accounts, buffNoCookie) {
-  const sg = cfg.steam_guard || {};
-  const sc = cfg.steam_confirm || {};
   const n = cfg.notify || {};
-  const noConfig = !sg.shared_secret && !sc.identity_secret && !n.pushplus_token;
+  const guardStatus = getSteamGuardSetupStatus(accounts, cfg);
+  const noConfig = !guardStatus.hasShared && !guardStatus.hasIdentity && !n.pushplus_token;
   const noAccount = !accounts || accounts.length === 0;
   // 全未配置 或者 buff cookie 不存在也弹向导
   return (noConfig && noAccount) || buffNoCookie;
@@ -407,12 +431,11 @@ async function checkAndShowOnboardingWizard() {
   } catch (e) { /* 网络错误时默认弹出 */ }
   if (!_wizardIsFirstTime(cfg, accounts, buffNoCookie)) return false;
   // 只有「其他都已配置、仅 Buff Cookie 缺失」时才直接跳到第 3 步
-  const sg = cfg.steam_guard || {};
-  const sc = cfg.steam_confirm || {};
+  const guardStatus = getSteamGuardSetupStatus(accounts, cfg);
   const n = cfg.notify || {};
-  const configDone = sg.shared_secret && sc.identity_secret;
+  const configDone = guardStatus.complete;
   const accountDone = accounts.length > 0;
-  const onlyBuffMissing = buffNoCookie && configDone && accountDone;
+  const onlyBuffMissing = buffNoCookie && configDone && accountDone && !!n.pushplus_token;
   _showWizard(onlyBuffMissing);
   return true;
 }
@@ -576,16 +599,40 @@ function _showWizard(startAtBuffStep = false) {
         const ss = (el("wiz-shared-secret")?.value || "").trim();
         const is = (el("wiz-identity-secret")?.value || "").trim();
         if (!ss && !is) return;
-        const sg = { ...(cfg.steam_guard || {}), ...(ss ? { shared_secret: ss } : {}) };
-        const sc = { ...(cfg.steam_confirm || {}), ...(is ? { identity_secret: is } : {}) };
-        await fetchJson(API + "/config", {
-          method: "POST",
-          body: JSON.stringify({ config: { ...cfg, steam_guard: sg, steam_confirm: sc } }),
-        });
-        const gSteamSecret = el("cfg-steam-shared-secret");
-        if (gSteamSecret && ss) gSteamSecret.value = ss;
-        const gIdentSec = el("cfg-steam-identity-secret");
-        if (gIdentSec && is) gIdentSec.value = is;
+        let accountSaved = false;
+        try {
+          const accData = await fetchJson(API + "/accounts");
+          const list = accData.accounts || [];
+          const target = list.find((a) => a.id === accData.current_id) || list[0];
+          if (target) {
+            const guard = {
+              ...(target.steam_guard || {}),
+              ...(ss ? { shared_secret: ss } : {}),
+              ...(is ? { identity_secret: is } : {}),
+            };
+            const r = await fetchJson(API + "/accounts/" + encodeURIComponent(target.id), {
+              method: "PUT",
+              body: JSON.stringify({ steam_guard: guard }),
+            });
+            accountSaved = !!r.ok;
+          }
+        } catch {
+          accountSaved = false;
+        }
+        if (!accountSaved) {
+          const sg = { ...(cfg.steam_guard || {}), ...(ss ? { shared_secret: ss } : {}) };
+          const sc = { ...(cfg.steam_confirm || {}), ...(is ? { identity_secret: is } : {}) };
+          await fetchJson(API + "/config", {
+            method: "POST",
+            body: JSON.stringify({ config: { ...cfg, steam_guard: sg, steam_confirm: sc } }),
+          });
+          const gSteamSecret = el("cfg-steam-shared-secret");
+          if (gSteamSecret && ss) gSteamSecret.value = ss;
+          const gIdentSec = el("cfg-steam-identity-secret");
+          if (gIdentSec && is) gIdentSec.value = is;
+        } else {
+          try { await refreshAccounts(); } catch { }
+        }
       } else if (currentStep === 2) {
         const tok = (el("wiz-pushplus-token")?.value || "").trim();
         if (!tok) return;
@@ -670,17 +717,19 @@ async function updateUXStatus(cfg) {
 }
 
 function updateNavBadges(cfg, accounts) {
-  const sg = cfg.steam_guard || {};
-  const sc = cfg.steam_confirm || {};
   const n = cfg.notify || {};
-  const configOk = sg.shared_secret && sc.identity_secret && n.pushplus_token;
+  const guardStatus = getSteamGuardSetupStatus(accounts, cfg);
+  const settingsOk = !!n.pushplus_token;
   const accountOk = accounts.length > 0;
 
   const badgeSettings = el("nav-badge-settings");
-  if (badgeSettings) badgeSettings.classList.toggle("hidden", !!configOk);
+  if (badgeSettings) badgeSettings.classList.toggle("hidden", settingsOk);
 
   const badgeAccounts = el("nav-badge-accounts");
-  if (badgeAccounts) badgeAccounts.classList.toggle("hidden", accountOk);
+  if (badgeAccounts) {
+    badgeAccounts.classList.toggle("hidden", accountOk && guardStatus.complete);
+    badgeAccounts.title = !accountOk ? "尚未添加账号" : (!guardStatus.complete ? "Steam 账号令牌未配置" : "");
+  }
 }
 
 function renderGettingStartedCard(cfg, accounts) {
@@ -693,14 +742,13 @@ function renderGettingStartedCard(cfg, accounts) {
     return;
   }
 
-  const sg = cfg.steam_guard || {};
-  const sc = cfg.steam_confirm || {};
   const n = cfg.notify || {};
+  const guardStatus = getSteamGuardSetupStatus(accounts, cfg);
 
   const steps = [
     {
-      done: !!sg.shared_secret && !!sc.identity_secret,
-      label: "填写 Steam 令牌密钥（<span class='gs-link' onclick='document.querySelector(\"[data-tab=settings]\").click()'>系统设置 → Steam 令牌</span>）",
+      done: guardStatus.complete,
+      label: "填写账号 Steam 令牌（<span class='gs-link' onclick='document.querySelector(\"[data-tab=accounts]\").click()'>账号管理 → Steam 令牌</span>）",
     },
     {
       done: !!n.pushplus_token,
@@ -711,7 +759,7 @@ function renderGettingStartedCard(cfg, accounts) {
       label: "添加 Steam 账号并登录（<span class='gs-link' onclick='document.querySelector(\"[data-tab=accounts]\").click()'>账号管理</span>）",
     },
     {
-      done: accounts.length > 0 && !!sg.shared_secret && !!sc.identity_secret && !!n.pushplus_token,
+      done: accounts.length > 0 && guardStatus.complete && !!n.pushplus_token,
       label: "返回仪表盘点击「启动任务」🚀",
     },
   ];

@@ -77,6 +77,10 @@
   width: 80px;
 }
 
+.tx-table-compact:not(.show-extra-cols) .tx-extra-col {
+  display: none;
+}
+
 .panel-toolbar--accounts {
   gap: 16px;
   margin-bottom: 24px;
