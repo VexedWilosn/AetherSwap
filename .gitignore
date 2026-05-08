@@ -3,6 +3,9 @@ config/app_config.json
 config/accounts.json
 config/playwright_steam/
 config/playwright_buff/
+/docs
+
+
 
 # 数据库与缓存
 config/app.db

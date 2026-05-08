@@ -8,236 +8,22 @@
   <link rel="stylesheet" href="/css/variables.css" />
   <link rel="stylesheet" href="/css/base.css" />
   <link rel="stylesheet" href="/css/layout.css?v=2" />
-  <link rel="stylesheet" href="/css/components.css" />
+  <!-- Component modules (split from components.css — Phase 1.4) -->
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/stat-cards.css" />
+  <link rel="stylesheet" href="/css/buttons.css" />
+  <link rel="stylesheet" href="/css/tables.css" />
+  <link rel="stylesheet" href="/css/forms.css" />
+  <link rel="stylesheet" href="/css/modals.css" />
+  <link rel="stylesheet" href="/css/toast.css" />
+  <link rel="stylesheet" href="/css/accounts.css" />
+  <link rel="stylesheet" href="/css/console.css" />
+  <link rel="stylesheet" href="/css/gift.css" />
+  <link rel="stylesheet" href="/css/steam-deals.css" />
+  <link rel="stylesheet" href="/css/proxy.css" />
+  <link rel="stylesheet" href="/css/components-core.css" />
   <link rel="stylesheet" href="/css/animations.css" />
-  <style>
-    /* Nav badge */
-    .nav-badge {
-      display: inline-block;
-      width: 7px;
-      height: 7px;
-      background: #ef4444;
-      border-radius: 50%;
-      margin-left: auto;
-      flex-shrink: 0;
-      box-shadow: 0 0 4px rgba(239, 68, 68, .7);
-    }
-
-    .nav-badge.hidden {
-      display: none;
-    }
-
-    .nav-item {
-      position: relative;
-      align-items: center;
-    }
-
-    /* Required badge */
-    .required-badge {
-      display: inline-block;
-      font-size: 0.68em;
-      font-weight: 600;
-      color: #fff;
-      background: #ef4444;
-      border-radius: 3px;
-      padding: 1px 5px;
-      margin-left: 5px;
-      vertical-align: middle;
-      letter-spacing: 0.03em;
-    }
-
-    /* Getting-started card */
-    .getting-started-card {
-      margin: 0 0 16px;
-      border: 1px solid var(--border, rgba(255, 255, 255, .1));
-      border-radius: 12px;
-      background: var(--card-bg, rgba(255, 255, 255, .04));
-      padding: 14px 16px;
-      animation: fadeIn .3s ease;
-    }
-
-    .gs-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 10px;
-    }
-
-    .gs-title {
-      font-size: .88em;
-      font-weight: 600;
-      color: var(--text-muted, #aaa);
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .gs-close {
-      background: none;
-      border: none;
-      cursor: pointer;
-      color: var(--text-muted, #aaa);
-      font-size: 14px;
-      padding: 2px 6px;
-      border-radius: 4px;
-    }
-
-    .gs-close:hover {
-      background: var(--hover-bg, rgba(255, 255, 255, .08));
-    }
-
-    .gs-steps {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .gs-step {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: .85em;
-      color: var(--text, #e0e0e0);
-      padding: 4px 0;
-    }
-
-    .gs-step .gs-icon {
-      font-size: 1em;
-      flex-shrink: 0;
-    }
-
-    .gs-step .gs-link {
-      color: var(--accent, #60a5fa);
-      cursor: pointer;
-      text-decoration: underline;
-      text-underline-offset: 2px;
-    }
-
-    .gs-step.done {
-      opacity: .45;
-      text-decoration: line-through;
-    }
-
-    /* Account guide callout */
-    .accounts-guide-callout {
-      margin: 0 0 16px;
-      border: 1px solid var(--border, rgba(255, 255, 255, .1));
-      border-left: 3px solid var(--accent, #60a5fa);
-      border-radius: 8px;
-      background: var(--card-bg, rgba(255, 255, 255, .04));
-      padding: 10px 14px;
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 12px;
-      animation: fadeIn .3s ease;
-    }
-
-    .accounts-guide-callout.hidden {
-      display: none;
-    }
-
-    .agu-steps {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px 20px;
-      font-size: .85em;
-    }
-
-    .agu-step {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      color: var(--text-muted, #aaa);
-    }
-
-    .agu-num {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      background: var(--accent, #60a5fa);
-      color: #fff;
-      font-size: .78em;
-      font-weight: 700;
-      flex-shrink: 0;
-    }
-
-    .agu-close {
-      background: none;
-      border: none;
-      cursor: pointer;
-      color: var(--text-muted, #aaa);
-      font-size: 13px;
-      padding: 2px 5px;
-      border-radius: 4px;
-      flex-shrink: 0;
-      margin-top: 1px;
-    }
-
-
-    .agu-close:hover {
-      background: var(--hover-bg, rgba(255, 255, 255, .08));
-    }
-
-    /* Wizard restore from backup */
-    .wizard-restore-divider {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin: 18px 0 12px;
-      color: var(--text-muted, #888);
-      font-size: .8em;
-    }
-
-    .wizard-restore-divider::before,
-    .wizard-restore-divider::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: var(--border, rgba(255, 255, 255, .1));
-    }
-
-    .wizard-restore-card {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 12px 14px;
-      border: 1px dashed var(--border, rgba(255, 255, 255, .15));
-      border-radius: 10px;
-      background: var(--card-bg, rgba(255, 255, 255, .03));
-      transition: border-color .2s;
-    }
-
-    .wizard-restore-card:hover {
-      border-color: var(--accent, #60a5fa);
-    }
-
-    .wizard-restore-icon {
-      font-size: 1.6em;
-      flex-shrink: 0;
-    }
-
-    .wizard-restore-text {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .wizard-restore-title {
-      font-size: .88em;
-      font-weight: 600;
-      color: var(--text, #e0e0e0);
-      margin-bottom: 3px;
-    }
-
-    .wizard-restore-desc {
-      font-size: .78em;
-      color: var(--text-muted, #aaa);
-      line-height: 1.4;
-    }
-  </style>
+  <link rel="stylesheet" href="/css/inline-overrides.css" />
 
 </head>
 
@@ -266,48 +52,25 @@
           </svg>
           <span>仪表盘</span>
         </button>
-        <button class="nav-item" data-tab="inventory">
+
+        <div class="nav-group-label">交易</div>
+        <button class="nav-item" data-tab="transactions">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
             <line x1="7" y1="7" x2="7.01" y2="7"></line>
+          </svg>
+          <span>交易中心</span>
+        </button>
+        <button class="nav-item" data-tab="inventory">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <path d="M16 10a4 4 0 0 1-8 0"></path>
           </svg>
           <span>库存管理</span>
         </button>
-        <button class="nav-item" data-tab="purchases">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
-            <line x1="7" y1="7" x2="7.01" y2="7"></line>
-          </svg>
-          <span>持有饰品</span>
-        </button>
-        <button class="nav-item" data-tab="purchase-history">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <line x1="16" y1="13" x2="8" y2="13"></line>
-            <line x1="16" y1="17" x2="8" y2="17"></line>
-            <polyline points="10 9 9 9 8 9"></polyline>
-          </svg>
-          <span>操作记录</span>
-        </button>
-        <button class="nav-item" data-tab="analytics">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="20" x2="18" y2="10"></line>
-            <line x1="12" y1="20" x2="12" y2="4"></line>
-            <line x1="6" y1="20" x2="6" y2="14"></line>
-          </svg>
-          <span>数据分析</span>
-        </button>
-        <button class="nav-item" data-tab="sales">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <line x1="16" y1="13" x2="8" y2="13"></line>
-            <line x1="16" y1="17" x2="8" y2="17"></line>
-            <polyline points="10 9 9 9 8 9"></polyline>
-          </svg>
-          <span>上架记录</span>
-        </button>
+
+        <div class="nav-group-label">账号</div>
         <button class="nav-item" data-tab="accounts">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
@@ -318,12 +81,8 @@
           <span>账号管理</span>
           <span class="nav-badge hidden" id="nav-badge-accounts" title="尚未添加账号"></span>
         </button>
-        <button class="nav-item" data-tab="steam-guard">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 22c4-2 8-4 8-10V5l-8-3-8 3v7c0 6 4 8 8 10z"></path>
-          </svg>
-          <span>Steam 令牌</span>
-        </button>
+
+        <div class="nav-group-label">工具</div>
         <button class="nav-item" data-tab="proxy">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"></circle>
@@ -331,23 +90,6 @@
             <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
           </svg>
           <span>代理池</span>
-        </button>
-        <button class="nav-item" data-tab="settings">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path
-              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
-            </path>
-          </svg>
-          <span>系统设置</span>
-          <span class="nav-badge hidden" id="nav-badge-settings" title="关键配置未填写"></span>
-        </button>
-        <button class="nav-item" data-tab="debug">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="4 17 10 11 4 5"></polyline>
-            <line x1="12" y1="19" x2="20" y2="19"></line>
-          </svg>
-          <span>运行日志</span>
         </button>
         <button class="nav-item" data-tab="steam-deals">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -366,6 +108,25 @@
             <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path>
           </svg>
           <span>Steam 赠礼</span>
+        </button>
+
+        <div class="nav-group-label">系统</div>
+        <button class="nav-item" data-tab="settings">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+            </path>
+          </svg>
+          <span>系统设置</span>
+          <span class="nav-badge hidden" id="nav-badge-settings" title="关键配置未填写"></span>
+        </button>
+        <button class="nav-item" data-tab="debug">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="4 17 10 11 4 5"></polyline>
+            <line x1="12" y1="19" x2="20" y2="19"></line>
+          </svg>
+          <span>运行日志</span>
         </button>
       </nav>
 
@@ -429,6 +190,29 @@
             <div class="stat-label">实际折扣比率</div>
             <div class="stat-value" id="stat-ratio">0.0000</div>
           </div>
+          <div class="stat-card">
+            <div class="stat-label">持有中</div>
+            <div class="stat-value" id="stat-held-count">0</div>
+            <div class="stat-trend">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <path d="M16 10a4 4 0 0 1-8 0"></path>
+              </svg>
+              <span>库存</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">待处理订单</div>
+            <div class="stat-value" id="stat-pending-orders">0</div>
+            <div class="stat-trend">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+              <span>队列</span>
+            </div>
+          </div>
         </div>
 
         <div class="control-bar">
@@ -462,6 +246,13 @@
             </div>
             <div class="payment-text">
               <h3>等待支付</h3>
+              <div class="payment-item-info">
+                <img id="pay-item-icon" class="payment-item-icon" src="" alt="" onerror="this.style.display='none'" />
+                <div class="payment-item-detail">
+                  <span id="pay-item-name" class="payment-item-name"></span>
+                  <span id="pay-item-price" class="payment-item-price"></span>
+                </div>
+              </div>
               <p id="pay-type">订单待处理</p>
               <p id="pay-status" class="muted small"></p>
               <div id="pay-qrcode-wrap" class="hidden" style="margin-top:10px;">
@@ -479,7 +270,15 @@
         </div>
       </section>
 
-      <section id="panel-purchases" class="panel">
+      <section id="panel-transactions" class="panel">
+        <div class="tx-sub-tabs">
+          <button class="tx-sub-tab active" data-txsub="purchases" onclick="txSubTabSwitch('purchases')">持有中</button>
+          <button class="tx-sub-tab" data-txsub="purchase-history" onclick="txSubTabSwitch('purchase-history')">全部记录</button>
+          <button class="tx-sub-tab" data-txsub="sales" onclick="txSubTabSwitch('sales')">售出记录</button>
+          <button class="tx-sub-tab" data-txsub="analytics" onclick="txSubTabSwitch('analytics')">统计分析</button>
+        </div>
+
+      <div id="tx-pane-purchases" class="tx-pane active">
         <div class="panel-toolbar panel-toolbar--purchases">
           <div class="panel-toolbar-row">
             <span class="label">持有饰品</span>
@@ -522,9 +321,9 @@
             <tbody></tbody>
           </table>
         </div>
-      </section>
+      </div>
 
-      <section id="panel-purchase-history" class="panel">
+      <div id="tx-pane-purchase-history" class="tx-pane">
         <div class="panel-toolbar panel-toolbar--purchase-history">
           <div class="panel-toolbar-row">
             <span class="label">操作记录</span>
@@ -557,9 +356,9 @@
             <tbody></tbody>
           </table>
         </div>
-      </section>
+      </div>
 
-      <section id="panel-sales" class="panel">
+      <div id="tx-pane-sales" class="tx-pane">
         <div class="panel-toolbar">
           <span class="label">上架记录</span>
           <button id="btn-refresh-sales" class="btn btn-sm btn-secondary">刷新</button>
@@ -578,9 +377,9 @@
             <tbody></tbody>
           </table>
         </div>
-      </section>
+      </div>
 
-      <section id="panel-analytics" class="panel">
+      <div id="tx-pane-analytics" class="tx-pane">
         <div class="panel-toolbar">
           <span class="label">饰品交易统计</span>
         </div>
@@ -602,6 +401,7 @@
             <tbody></tbody>
           </table>
         </div>
+      </div>
       </section>
 
       <section id="panel-accounts" class="panel">
@@ -691,6 +491,14 @@
 
       <section id="panel-settings" class="panel">
         <div class="settings-layout">
+        <div class="settings-tab-bar">
+          <button class="settings-tab active" data-settab="datasource" onclick="settingsTabSwitch('datasource')">数据源</button>
+          <button class="settings-tab" data-settab="trade" onclick="settingsTabSwitch('trade')">交易策略</button>
+          <button class="settings-tab" data-settab="sell" onclick="settingsTabSwitch('sell')">出售策略</button>
+          <button class="settings-tab" data-settab="notify" onclick="settingsTabSwitch('notify')">推送通知</button>
+          <button class="settings-tab" data-settab="advanced" onclick="settingsTabSwitch('advanced')">高级参数</button>
+        </div>
+        <div class="settings-tab-pane active" data-settab-pane="datasource">
           <div class="settings-group">
             <h2>SteamDT 配置</h2>
             <div class="form-grid">
@@ -728,6 +536,8 @@
             </div>
           </div>
 
+        </div>
+        <div class="settings-tab-pane" data-settab-pane="trade" style="display:none">
           <div class="settings-group">
             <h2>Buff 交易策略</h2>
             <div class="form-grid">
@@ -793,6 +603,8 @@
             </div>
           </div>
 
+        </div>
+        <div class="settings-tab-pane" data-settab-pane="sell" style="display:none">
           <div class="settings-group">
             <h2>出售策略</h2>
             <div class="form-grid">
@@ -889,6 +701,8 @@
             </div>
           </div>
 
+        </div>
+        <div class="settings-tab-pane" data-settab-pane="notify" style="display:none">
           <div class="settings-group">
             <h2>Steam 令牌</h2>
             <div class="form-grid">
@@ -981,6 +795,8 @@
             </div>
           </div>
 
+        </div>
+        <div class="settings-tab-pane" data-settab-pane="advanced" style="display:none">
           <div class="settings-group">
             <h2>系统参数</h2>
             <div class="form-grid">
@@ -1102,6 +918,7 @@
             </div>
           </div>
 
+        </div>
           <div class="form-actions">
             <button id="btn-export-config" class="btn btn-secondary">导出配置</button>
             <label class="btn btn-secondary file-btn">

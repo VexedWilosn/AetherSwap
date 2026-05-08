@@ -1,0 +1,83 @@
+/* Table and panel toolbar styles — extracted from components.css (Phase 1.4) */
+
+.table-container {
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-xs);
+}
+
+.purchases-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  align-items: center;
+  padding: 14px 20px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  font-size: 13px;
+  box-shadow: var(--shadow-xs);
+}
+
+.purchases-summary .summary-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.purchases-summary .summary-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.purchases-summary .summary-value {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-main);
+}
+
+.purchases-summary .summary-value.mono {
+  font-family: var(--font-mono);
+}
+
+.add-purchase-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  background: var(--bg-surface);
+  padding: 14px 20px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+
+.add-purchase-bar .label {
+  color: var(--text-main);
+  font-size: 14px;
+  font-weight: 600;
+  margin-right: 8px;
+}
+
+.add-purchase-bar input[type="text"] {
+  width: 180px;
+}
+
+.add-purchase-bar input[type="number"] {
+  width: 120px;
+}
+
+.add-purchase-bar #add-purchase-steam-link {
+  min-width: 300px;
+  flex: 1;
+}
+
+.add-purchase-bar #add-purchase-quantity {
+  width: 80px;
+}
+
+.panel-toolbar--accounts {
+  gap: 16px;
+  margin-bottom: 24px;
+}

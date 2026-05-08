@@ -1,0 +1,73 @@
+/* Toast notifications — extracted from components.css (Phase 1.4) */
+
+.toast {
+  background: var(--bg-surface);
+  color: var(--text-main);
+  padding: 16px 20px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-color);
+  min-width: 280px;
+  max-width: 100%;
+  animation: toastEnter 0.45s var(--ease-spring);
+  backdrop-filter: blur(16px);
+  position: relative;
+  overflow: hidden;
+}
+
+.toast.toast-exit {
+  animation: toastExit 0.35s var(--ease-out) forwards;
+}
+
+.toast::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--gradient-accent);
+  transform-origin: left;
+  animation: progressShrink 3.5s linear forwards;
+}
+
+.toast .t {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.toast .d {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.toast {
+  padding: 12px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  animation: slideUp 0.3s var(--ease-spring) both;
+  box-shadow: var(--shadow-md);
+}
+
+.toast-success {
+  background: var(--success);
+  color: #fff;
+}
+
+.toast-error {
+  background: var(--danger);
+  color: #fff;
+}
+
+.toast-warn {
+  background: var(--warning);
+  color: #fff;
+}
+
+.toast-info {
+  background: var(--primary);
+  color: var(--primary-text);
+}

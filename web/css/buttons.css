@@ -1,0 +1,131 @@
+/* Button styles — extracted from components.css (Phase 1.4) */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.25s var(--ease-spring);
+  border: 1px solid transparent;
+  font-family: inherit;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--ripple-x, 50%) var(--ripple-y, 50%), rgba(255, 255, 255, 0.2), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+
+.btn:hover::after {
+  opacity: 1;
+}
+
+.btn:active {
+  transform: scale(0.96);
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: var(--primary-text);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-primary:hover {
+  background: var(--primary-hover);
+  box-shadow: 0 4px 16px var(--glow-primary), var(--primary-shadow);
+  transform: translateY(-2px);
+}
+
+.btn-primary svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.2s var(--ease-spring);
+}
+
+.btn-primary:hover svg {
+  transform: scale(1.1);
+}
+
+.btn-secondary {
+  background: var(--bg-surface);
+  border-color: var(--border-color);
+  color: var(--text-main);
+  box-shadow: var(--shadow-xs);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-input);
+  border-color: var(--text-muted);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.btn-ghost:hover {
+  background: var(--primary-light);
+  color: var(--text-main);
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+}
+
+.btn-outline:hover {
+  background: var(--bg-input);
+  border-color: var(--border-focus);
+}
+
+.btn-edit {
+  background: transparent;
+  border: 1px solid var(--primary);
+  color: var(--primary);
+}
+
+.btn-edit:hover {
+  background: var(--primary-light);
+}
+
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+  border: 1px solid var(--danger);
+  box-shadow: var(--shadow-xs);
+}
+
+.btn-danger:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+  transform: translateY(-2px);
+}
+
+.btn-danger-outline {
+  background: transparent;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  box-shadow: var(--shadow-xs);
+}
+
+.btn-danger-outline:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.btn-sm {
+  padding: 6px 14px;
+  font-size: 13px;
+}

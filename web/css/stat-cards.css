@@ -1,0 +1,112 @@
+/* Dashboard stat cards — extracted from components.css (Phase 1.4) */
+
+.stat-card {
+  background: var(--bg-surface);
+  padding: 24px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  transition: transform 0.35s var(--ease-spring), box-shadow 0.35s var(--ease-out), border-color 0.35s;
+  position: relative;
+  overflow: hidden;
+  opacity: 0;
+  animation: slideUp 0.5s var(--ease-spring) both;
+}
+
+.stat-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.4s;
+  background: linear-gradient(135deg, transparent 40%, rgba(255, 255, 255, 0.03) 50%, transparent 60%);
+  background-size: 200% 200%;
+  pointer-events: none;
+}
+
+.stat-card:hover::after {
+  opacity: 1;
+  animation: shimmer 2s linear infinite;
+}
+
+.stat-card:hover {
+  transform: translateY(-6px) scale(1.01);
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-focus);
+}
+
+.stat-card:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.stat-card:nth-child(2) {
+  animation-delay: 0.08s;
+}
+
+.stat-card:nth-child(3) {
+  animation-delay: 0.16s;
+}
+
+.stat-card:nth-child(4) {
+  animation-delay: 0.24s;
+}
+
+.stat-card.primary {
+  background: var(--primary);
+  background-image: var(--gradient-primary);
+  background-size: 200% 200%;
+  animation: slideUp 0.5s var(--ease-spring) both, gradientShift 8s ease-in-out infinite;
+  color: var(--primary-text);
+  border-color: transparent;
+  box-shadow: var(--primary-shadow);
+}
+
+.stat-card.primary .stat-label {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.stat-card.primary .stat-value {
+  color: var(--primary-text);
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  letter-spacing: -1px;
+  transition: color 0.2s;
+}
+
+.stat-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  margin-top: 12px;
+  background: var(--bg-body);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.stat-trend.positive {
+  color: var(--success);
+}
+
+.stat-card.primary .stat-trend {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--primary-text);
+}
+
+.stat-trend svg {
+  width: 14px;
+  height: 14px;
+}

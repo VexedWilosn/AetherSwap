@@ -1,0 +1,315 @@
+/* Steam deals feature styles — extracted from components.css (Phase 1.4) */
+
+.sg-card {
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  transition: transform 0.35s var(--ease-spring), box-shadow 0.35s var(--ease-out), border-color 0.3s;
+  animation: slideUp 0.45s var(--ease-spring) both;
+}
+
+.sg-card:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-focus);
+}
+
+.sg-card-banner {
+  position: relative;
+  height: 150px;
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--bg-input), var(--bg-body));
+}
+
+.sg-card-banner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s var(--ease-out), filter 0.3s;
+}
+
+.sg-card:hover .sg-card-banner img {
+  transform: scale(1.06);
+}
+
+.sg-badge-discount {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+  padding: 4px 12px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  box-shadow: 0 3px 12px rgba(16, 185, 129, 0.45);
+  letter-spacing: -0.5px;
+}
+
+.sg-card-content {
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sg-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
+  text-decoration: none;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  transition: color 0.2s;
+}
+
+.sg-card-title:hover {
+  color: var(--primary);
+}
+
+.sg-card-review {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sg-review-track {
+  width: 50px;
+  height: 5px;
+  background: var(--bg-input);
+  border-radius: 3px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.sg-review-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s var(--ease-out);
+}
+
+.sg-review-tag {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.sg-review-cnt {
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.sg-card-prices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.sg-pill {
+  display: inline-flex;
+  flex-direction: column;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-body);
+  min-width: 70px;
+  transition: border-color 0.2s;
+}
+
+.sg-pill-label {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.sg-pill-price {
+  font-size: 14px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--text-main);
+  letter-spacing: -0.5px;
+}
+
+.sg-pill-saving {
+  font-size: 10px;
+  font-weight: 600;
+  color: #10b981;
+  margin-top: 1px;
+}
+
+.sg-pill-cn {
+  border-color: rgba(59, 130, 246, 0.25);
+  background: rgba(59, 130, 246, 0.06);
+}
+
+.sg-pill-cn .sg-pill-label {
+  color: #3b82f6;
+}
+
+.sg-pill-compare {
+  border-color: rgba(168, 85, 247, 0.25);
+  background: rgba(168, 85, 247, 0.06);
+}
+
+.sg-pill-compare .sg-pill-label {
+  color: #a855f7;
+}
+
+.sg-pill-cheap {
+  border-color: rgba(16, 185, 129, 0.25);
+  background: rgba(16, 185, 129, 0.06);
+}
+
+.sg-pill-cheap .sg-pill-label {
+  color: #10b981;
+}
+
+.sg-diff-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: #fff;
+  background: linear-gradient(135deg, #10b981, #059669);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+  letter-spacing: -0.3px;
+}
+
+.sg-expand-toggle {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 0;
+  text-align: left;
+  font-family: inherit;
+  transition: color 0.2s;
+}
+
+.sg-expand-toggle:hover {
+  color: var(--primary);
+}
+
+.sg-card-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sg-steam-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  color: #fff;
+  background: linear-gradient(135deg, #1b2838, #2a475e);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  text-decoration: none;
+  transition: opacity 0.2s, transform 0.15s var(--ease-spring), box-shadow 0.2s;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.sg-steam-btn:hover {
+  opacity: 0.88;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.sg-steam-btn svg {
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.sg-expand-panel {
+  border-top: 1px solid var(--border-color);
+  padding-top: 8px;
+  margin-top: 2px;
+  animation: panelFadeIn 0.25s ease;
+}
+
+.sg-expand-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.sg-expand-table tr:hover {
+  background: var(--primary-light);
+}
+
+.sg-exp-name {
+  color: var(--text-muted);
+  font-weight: 500;
+  padding: 3px 4px;
+  white-space: nowrap;
+  width: 62px;
+}
+
+.sg-exp-price {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--text-main);
+  padding: 3px 4px;
+  font-size: 11px;
+}
+
+.sg-exp-orig {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  opacity: 0.6;
+  padding: 3px 4px;
+}
+
+.steam-deals-sentinel {
+  display: flex;
+  justify-content: center;
+  padding: 24px 0 48px;
+}
+
+.steam-deals-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.steam-deals-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-muted);
+  padding: 48px 0;
+}
+
+.steam-deals-empty svg {
+  opacity: 0.3;
+}
+
+.steam-deals-empty p {
+  font-size: 14px;
+  margin: 0;
+}

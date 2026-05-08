@@ -1,0 +1,186 @@
+/* Form controls and settings layout — extracted from components.css (Phase 1.4) */
+
+.settings-layout {
+  max-width: 800px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings-group {
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
+  padding: 24px 28px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-xs);
+  transition: box-shadow 0.35s, transform 0.35s var(--ease-spring), border-color 0.35s;
+  position: relative;
+}
+
+.settings-group::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 24px;
+  bottom: 24px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--gradient-accent);
+  opacity: 0;
+  transform: scaleY(0);
+  transition: opacity 0.3s, transform 0.3s var(--ease-spring);
+}
+
+.settings-group:hover {
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-2px);
+}
+
+.settings-group:hover::before {
+  opacity: 1;
+  transform: scaleY(1);
+}
+
+.settings-group h2 {
+  margin: 0 0 20px 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.form-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.field-row--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.field-row--4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.field--switch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.field--switch label.checkbox-wrapper {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-main);
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+}
+
+.field--switch .field-hint {
+  width: 100%;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.settings-group input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--border-focus);
+  cursor: pointer;
+}
+
+.settings-group .field:has(> label.checkbox-wrapper) {
+  margin-bottom: 0;
+}
+
+.settings-group textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-color);
+}
+
+/* --- Settings Tab Navigation (Phase 2.3) --- */
+.settings-tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 20px;
+  padding: 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg-main);
+}
+
+.settings-tab {
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border: none;
+  background: none;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.2s;
+  white-space: nowrap;
+}
+
+.settings-tab:hover {
+  color: var(--text-main);
+}
+
+.settings-tab.active {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.settings-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--primary);
+  border-radius: 2px 2px 0 0;
+}
+
+.settings-tab-pane {
+  display: none;
+}
+
+.settings-tab-pane.active {
+  display: block;
+}

@@ -350,15 +350,31 @@ async function refreshTransactions() {
   if (!tbodyP && !tbodyS && !tbodyHistory) return;
   try {
     const d = await fetchJson(API + "/transactions?enrich_current_price=0");
-    const all = d.transactions || [];
+    let all = d.transactions || [];
+    let resellRatio = d.resell_ratio;
     const byKey = (t) => `${t.type}:${t.idx}`;
     const enrichedMap = new Map((lastEnrichData || []).map((t) => [byKey(t), t]));
     for (const t of all) {
       const e = enrichedMap.get(byKey(t));
       if (e && e.current_market_price != null) t.current_market_price = e.current_market_price;
     }
+    const holdings = all.filter((t) => t.type === "purchase" && !(t.sale_price != null && Number(t.sale_price) > 0));
+    const missingCurrentPrice = holdings.some((t) => t.current_market_price == null);
+    const refreshAgeMs = getCurrentPriceRefreshMinutes() * 60 * 1000;
+    const priceCacheStale = !lastEnrichTime || (Date.now() - lastEnrichTime) > refreshAgeMs;
+    if (holdings.length && (missingCurrentPrice || priceCacheStale)) {
+      try {
+        const enriched = await fetchJson(API + "/transactions?enrich_current_price=1");
+        if (Array.isArray(enriched.transactions)) {
+          all = enriched.transactions;
+          resellRatio = enriched.resell_ratio ?? resellRatio;
+          lastEnrichTime = Date.now();
+        }
+      } catch {
+      }
+    }
     lastEnrichData = all;
-    applyTransactionsToUI(all, summaryEl, tbodyP, tbodyS, tbodyHistory, d.resell_ratio);
+    applyTransactionsToUI(all, summaryEl, tbodyP, tbodyS, tbodyHistory, resellRatio);
   } catch (e) {
     toast("加载操作记录失败", e.message || "");
   }

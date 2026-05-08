@@ -1,0 +1,276 @@
+/* Console/log viewer styles — extracted from components.css (Phase 1.4) */
+
+.console-wrapper {
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 140px);
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.console-toolbar {
+  background: var(--bg-body);
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.console-filters {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.console-filters input,
+
+.console-filters select {
+  width: 160px;
+}
+
+.console-body {
+  flex: 1;
+  padding: 20px 24px;
+  margin: 0;
+  overflow-y: auto;
+  color: var(--text-main);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.console-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-body);
+}
+
+/* ─── Toolbar ────────────────────────────────── */
+
+.console-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 24px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.console-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.console-filters input[type="text"],
+
+.console-filters select {
+  padding: 7px 12px;
+  font-size: 13px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-family: var(--font-mono);
+  transition: all 0.2s var(--ease-out);
+  height: 34px;
+}
+
+.console-filters select:focus {
+  border-color: var(--border-focus);
+  background: var(--bg-surface);
+  box-shadow: 0 0 0 3px var(--primary-light);
+  transform: none;
+}
+
+.console-filters .checkbox-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  transition: all 0.2s;
+}
+
+.console-filters .checkbox-wrapper:hover {
+  border-color: var(--border-focus);
+  color: var(--text-main);
+  background: var(--bg-surface);
+}
+
+.console-filters input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--border-focus);
+  cursor: pointer;
+}
+
+/* ─── Action Buttons ──────────────────────────── */
+
+.console-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.console-actions .icon-btn {
+  width: auto;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: 12px;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s var(--ease-spring);
+  box-shadow: var(--shadow-xs);
+}
+
+.console-actions .icon-btn:hover {
+  border-color: var(--border-focus);
+  color: var(--text-main);
+  background: var(--bg-body);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.console-actions .icon-btn:active {
+  transform: translateY(0) scale(0.97);
+}
+
+/* ─── Log Output Body ────────────────────────── */
+
+.console-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: auto;
+  margin: 0;
+  padding: 20px 28px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: var(--text-main);
+  background: var(--bg-body);
+  white-space: pre-wrap;
+  word-break: break-all;
+  counter-reset: none;
+  scroll-behavior: smooth;
+}
+
+/* Subtle grid texture for terminal feel */
+
+.console-body::before {
+  content: none;
+}
+
+/* Scrollbar styling */
+
+.console-body::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.console-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.console-body::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+.console-body::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Empty state */
+
+.console-body:empty::after {
+  content: '— 暂无运行日志，启动任务后此处将实时显示输出 —';
+  display: block;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-top: 60px;
+  font-family: var(--font-sans);
+}
+
+/* ─── Log Level Badge (toolbar info) ─────────── */
+
+.console-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* --- Enhanced Log Level Indicators (Phase 2.4) --- */
+.log-line-error {
+  padding-left: 8px;
+  border-left: 3px solid #F87171;
+}
+.log-line-warn {
+  padding-left: 8px;
+  border-left: 3px solid #FBBF24;
+}
+
+/* --- Empty State Component (Phase 3.3) --- */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  color: var(--text-muted);
+  text-align: center;
+  gap: 12px;
+}
+.empty-state-icon {
+  font-size: 40px;
+  opacity: 0.4;
+  line-height: 1;
+}
+.empty-state-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.empty-state-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  max-width: 300px;
+  line-height: 1.6;
+}

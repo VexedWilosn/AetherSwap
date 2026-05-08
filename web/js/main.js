@@ -8,6 +8,7 @@ function tabSwitch(name) {
   console.log("tabSwitch called with name:", name);
   document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
   document.querySelectorAll(".nav-item").forEach((b) => b.classList.remove("active"));
+
   const panel = el("panel-" + name);
   const btn = document.querySelector(`.nav-menu [data-tab="${name}"]`);
   console.log("tabSwitch found panel:", panel, "btn:", btn);
@@ -20,14 +21,90 @@ function tabSwitch(name) {
   if (btn) btn.classList.add("active");
   if (name === "debug") refreshLog();
   if (name === "inventory") refreshInventory(false);
-  if (name === "purchases" || name === "sales" || name === "purchase-history") refreshTransactions();
-  if (name === "analytics") refreshAnalytics();
+  if (name === "transactions") { refreshTransactions(); refreshAnalytics(); }
+  // analytics refresh is now handled by txSubTabSwitch
   if (name === "accounts") refreshAccounts();
   if (name === "steam-guard") initSteamGuardPanel();
   if (name !== "steam-guard") stopSteamGuardTimer();
   if (name === "proxy") {
     loadProxyConfig();
   }
+}
+
+function settingsTabSwitch(name) {
+  document.querySelectorAll('.settings-tab-pane').forEach(p => {
+    p.classList.remove('active');
+    p.style.display = 'none';
+  });
+  document.querySelectorAll('.settings-tab').forEach(b => b.classList.remove('active'));
+  const pane = document.querySelector('.settings-tab-pane[data-settab-pane="' + name + '"]');
+  const btn = document.querySelector('.settings-tab[data-settab="' + name + '"]');
+  if (pane) {
+    pane.style.display = 'block';
+    pane.classList.add('active');
+  }
+  if (btn) btn.classList.add('active');
+}
+
+function txSubTabSwitch(name) {
+  document.querySelectorAll('.tx-pane').forEach(p => {
+    p.classList.remove('active');
+    p.style.display = 'none';
+  });
+  document.querySelectorAll('.tx-sub-tab').forEach(b => b.classList.remove('active'));
+  const pane = document.getElementById('tx-pane-' + name);
+  const btn = document.querySelector('.tx-sub-tab[data-txsub="' + name + '"]');
+  if (pane) {
+    pane.style.display = 'block';
+    pane.classList.add('active');
+  }
+  if (btn) btn.classList.add('active');
+  // Trigger data refresh for the selected sub-tab
+  if (name === 'purchases' || name === 'purchase-history' || name === 'sales') refreshTransactions();
+  if (name === 'analytics') refreshAnalytics();
+}
+
+// --- Phase 2.1: Update dashboard extra stat cards ---
+function updateDashboardExtras(data) {
+  const heldEl = document.getElementById("stat-held-count");
+  const pendingEl = document.getElementById("stat-pending-orders");
+  if (heldEl && data.held_count != null) heldEl.textContent = data.held_count;
+  if (pendingEl && data.pending_orders != null) pendingEl.textContent = data.pending_orders;
+}
+
+// --- Phase 2.5: Update payment item info ---
+function updatePaymentItemInfo(item_name, item_price, item_icon_url) {
+  const nameEl = document.getElementById("pay-item-name");
+  const priceEl = document.getElementById("pay-item-price");
+  const iconEl = document.getElementById("pay-item-icon");
+  if (nameEl) nameEl.textContent = item_name || "";
+  if (priceEl) priceEl.textContent = item_price ? ("¥" + item_price) : "";
+  if (iconEl) {
+    if (item_icon_url) {
+      iconEl.src = item_icon_url;
+      iconEl.style.display = "block";
+    } else {
+      iconEl.style.display = "none";
+    }
+  }
+}
+
+// --- Phase 2.6: Item icon helper (Steam CDN) ---
+function getItemIconUrl(market_hash_name) {
+  if (!market_hash_name) return "";
+  // Use Steam community market image CDN
+  const encoded = encodeURIComponent(market_hash_name);
+  return "https://community.akamai.steamstatic.com/economy/image/class/730/" + encoded + "/128fx128f";
+}
+
+// --- Phase 3.3: Render empty state ---
+function renderEmptyState(container, icon, title, desc) {
+  if (!container) return;
+  container.innerHTML = '<div class="empty-state">' +
+    '<div class="empty-state-icon">' + (icon || "📭") + '</div>' +
+    '<div class="empty-state-title">' + (title || "暂无数据") + '</div>' +
+    '<div class="empty-state-desc">' + (desc || "") + '</div>' +
+    '</div>';
 }
 
 let lastStatus = "idle";
@@ -163,6 +240,7 @@ async function refreshStatus() {
       if (ps) ps.textContent = p.order_id ? "订单号: " + p.order_id : "";
       box.dataset.payUrl = p.pay_url;
       box.dataset.paymentId = p.payment_id || "";
+      updatePaymentItemInfo(p.name, p.price, p.icon_url);
       const qrWrap = el("pay-qrcode-wrap");
       const qrBox = el("pay-qrcode");
       if (p.pay_type === "wechat" && qrWrap && qrBox && typeof QRCode !== "undefined") {
@@ -211,6 +289,7 @@ async function refreshStatus() {
       if (s.discount_ratio <= targetRatio) ratioEl.classList.add("text-ok");
       else ratioEl.classList.add("text-bad");
     } else set("stat-ratio", "—");
+      updateDashboardExtras(s);
   } catch {
   }
 }
@@ -866,7 +945,7 @@ function setupScrollToTop() {
   });
 }
 function setupKeyboardShortcuts() {
-  const tabMap = { "1": "auto", "2": "inventory", "3": "purchases", "4": "purchase-history", "5": "analytics", "6": "sales", "7": "accounts", "8": "steam-guard", "9": "settings", "0": "debug" };
+  const tabMap = { "1": "auto", "2": "transactions", "3": "inventory", "4": "accounts", "5": "proxy", "6": "steam-deals", "7": "gift", "8": "settings", "9": "debug" };
   document.addEventListener("keydown", (e) => {
     if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT" || e.target.isContentEditable) return;
     if (e.altKey && tabMap[e.key]) {

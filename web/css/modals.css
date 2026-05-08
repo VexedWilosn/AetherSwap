@@ -1,0 +1,29 @@
+/* Modal and popup styles — extracted from components.css (Phase 1.4) */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(12px) saturate(1.5);
+  -webkit-backdrop-filter: blur(12px) saturate(1.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: overlayFadeIn 0.3s var(--ease-out);
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+.overlay-content {
+  background: var(--bg-surface);
+  border-radius: var(--radius-xl);
+  padding: 32px;
+  max-width: 460px;
+  width: 90%;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-color);
+  animation: modalBounceIn 0.5s var(--ease-spring);
+}
