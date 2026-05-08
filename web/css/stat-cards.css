@@ -5,7 +5,7 @@
   padding: 24px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-color);
-  transition: transform 0.35s var(--ease-spring), box-shadow 0.35s var(--ease-out), border-color 0.35s;
+  transition: transform 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out), border-color 0.2s var(--ease-out);
   position: relative;
   overflow: hidden;
   opacity: 0;
@@ -25,14 +25,13 @@
 }
 
 .stat-card:hover::after {
-  opacity: 1;
-  animation: shimmer 2s linear infinite;
+  opacity: 0;
 }
 
 .stat-card:hover {
-  transform: translateY(-6px) scale(1.01);
-  box-shadow: var(--shadow-md);
-  border-color: var(--border-focus);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+  border-color: var(--border-strong);
 }
 
 .stat-card:nth-child(1) {
@@ -54,8 +53,8 @@
 .stat-card.primary {
   background: var(--primary);
   background-image: var(--gradient-primary);
-  background-size: 200% 200%;
-  animation: slideUp 0.5s var(--ease-spring) both, gradientShift 8s ease-in-out infinite;
+  background-size: 100% 100%;
+  animation: slideUp 0.5s var(--ease-spring) both;
   color: var(--primary-text);
   border-color: transparent;
   box-shadow: var(--primary-shadow);
@@ -80,7 +79,7 @@
   font-size: 28px;
   font-weight: 700;
   font-family: var(--font-mono);
-  letter-spacing: -1px;
+  letter-spacing: 0;
   transition: color 0.2s;
 }
 
@@ -90,7 +89,7 @@
   gap: 6px;
   font-size: 12px;
   margin-top: 12px;
-  background: var(--bg-body);
+  background: var(--bg-input);
   padding: 4px 10px;
   border-radius: var(--radius-sm);
   font-weight: 500;

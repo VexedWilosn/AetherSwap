@@ -48,8 +48,8 @@
   margin-left: 5px;
   padding: 1px 4px;
   border-radius: 4px;
-  background: rgba(245, 158, 11, 0.14);
-  color: #b45309;
+  background: var(--warning-soft);
+  color: var(--warning);
   font-size: 10px;
   font-family: var(--font-sans);
   font-weight: 700;
@@ -80,10 +80,10 @@
   gap: 12px;
   margin: -4px 0 10px;
   padding: 7px 10px;
-  background: rgba(255, 251, 235, 0.72);
-  border: 1px solid rgba(245, 158, 11, 0.24);
+  background: var(--warning-soft);
+  border: 1px solid color-mix(in srgb, var(--warning) 25%, transparent);
   border-radius: var(--radius-sm);
-  color: #9a5b13;
+  color: var(--warning);
   box-shadow: var(--shadow-xs);
   cursor: pointer;
   font-size: 12px;
@@ -102,12 +102,12 @@
 
 .market-price-notice-title {
   font-weight: 650;
-  color: #78350f;
+  color: var(--warning);
   white-space: nowrap;
 }
 
 .market-price-notice-detail {
-  color: #9a5b13;
+  color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.45;
   overflow: hidden;
@@ -126,10 +126,10 @@
 .market-price-notice-action {
   flex: 0 0 auto;
   padding: 4px 9px;
-  border: 1px solid rgba(245, 158, 11, 0.26);
+  border: 1px solid color-mix(in srgb, var(--warning) 28%, transparent);
   border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.72);
-  color: #78350f;
+  background: var(--bg-surface);
+  color: var(--warning);
   font-size: 12px;
   font-weight: 650;
   line-height: 1.2;
@@ -137,8 +137,8 @@
 }
 
 .market-price-notice-action:hover {
-  background: rgba(255, 255, 255, 0.95);
-  border-color: rgba(245, 158, 11, 0.42);
+  background: var(--bg-input);
+  border-color: var(--warning);
 }
 
 .market-price-notice-action:disabled {
@@ -277,8 +277,8 @@
   background: var(--bg-input);
 }
 .tx-action-danger {
-  color: #ef4444;
+  color: var(--danger);
 }
 .tx-action-danger:hover {
-  background: rgba(239, 68, 68, 0.08);
+  background: var(--danger-soft);
 }

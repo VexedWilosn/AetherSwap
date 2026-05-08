@@ -10,7 +10,8 @@
   font-weight: 600;
   font-size: 14px;
   cursor: pointer;
-  transition: all 0.25s var(--ease-spring);
+  min-height: 38px;
+  transition: background 0.2s var(--ease-out), border-color 0.2s var(--ease-out), color 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out), transform 0.15s var(--ease-out);
   border: 1px solid transparent;
   font-family: inherit;
   position: relative;
@@ -28,11 +29,11 @@
 }
 
 .btn:hover::after {
-  opacity: 1;
+  opacity: 0;
 }
 
 .btn:active {
-  transform: scale(0.96);
+  transform: scale(0.98);
 }
 
 .btn-primary {
@@ -43,8 +44,8 @@
 
 .btn-primary:hover {
   background: var(--primary-hover);
-  box-shadow: 0 4px 16px var(--glow-primary), var(--primary-shadow);
-  transform: translateY(-2px);
+  box-shadow: var(--primary-shadow);
+  transform: translateY(-1px);
 }
 
 .btn-primary svg {
@@ -54,7 +55,7 @@
 }
 
 .btn-primary:hover svg {
-  transform: scale(1.1);
+  transform: translateX(1px);
 }
 
 .btn-secondary {
@@ -66,7 +67,7 @@
 
 .btn-secondary:hover {
   background: var(--bg-input);
-  border-color: var(--text-muted);
+  border-color: var(--border-strong);
 }
 
 .btn-ghost {
@@ -108,10 +109,10 @@
 }
 
 .btn-danger:hover {
-  background: #dc2626;
-  border-color: #dc2626;
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
-  transform: translateY(-2px);
+  background: var(--danger);
+  border-color: var(--danger);
+  box-shadow: 0 8px 18px var(--danger-soft);
+  transform: translateY(-1px);
 }
 
 .btn-danger-outline {
@@ -122,7 +123,7 @@
 }
 
 .btn-danger-outline:hover {
-  background: rgba(239, 68, 68, 0.1);
+  background: var(--danger-soft);
 }
 
 .btn-sm {

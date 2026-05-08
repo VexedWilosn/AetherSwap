@@ -240,11 +240,11 @@
 /* --- Enhanced Log Level Indicators (Phase 2.4) --- */
 .log-line-error {
   padding-left: 8px;
-  border-left: 3px solid #F87171;
+  border-left: 3px solid var(--danger);
 }
 .log-line-warn {
   padding-left: 8px;
-  border-left: 3px solid #FBBF24;
+  border-left: 3px solid var(--warning);
 }
 
 /* --- Empty State Component (Phase 3.3) --- */

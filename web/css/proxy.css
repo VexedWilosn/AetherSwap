@@ -15,14 +15,14 @@
 .proxy-hero-icon {
   width: 56px;
   height: 56px;
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   background: var(--gradient-accent);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  box-shadow: 0 8px 24px var(--glow-accent);
+  box-shadow: var(--primary-shadow);
 }
 
 .proxy-hero-text h2 {
@@ -141,12 +141,12 @@
 }
 
 .proxy-strategy-card {
-  border: 2px solid var(--border-color);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   padding: 20px;
   cursor: pointer;
   position: relative;
-  transition: all 0.3s var(--ease-spring);
+  transition: border-color 0.2s var(--ease-out), background 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out), transform 0.2s var(--ease-out);
   background: var(--bg-body);
   display: flex;
   flex-direction: column;
@@ -154,9 +154,9 @@
 }
 
 .proxy-strategy-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-md);
-  border-color: var(--border-focus);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+  border-color: var(--border-strong);
 }
 
 .proxy-strategy-card.active {
@@ -254,12 +254,12 @@
 }
 
 .proxy-badge--ok {
-  background: rgba(16, 185, 129, 0.1);
+  background: var(--success-soft);
   color: var(--success);
 }
 
 .proxy-badge--fail {
-  background: rgba(239, 68, 68, 0.1);
+  background: var(--danger-soft);
   color: var(--danger);
   cursor: help;
 }

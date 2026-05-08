@@ -4,48 +4,45 @@
   display: flex;
   align-items: center;
   gap: 18px;
-  background: var(--gradient-accent);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   padding: 28px 32px;
   margin-bottom: 24px;
-  color: #fff;
+  color: var(--text-main);
   position: relative;
   overflow: hidden;
-  box-shadow: 0 8px 32px var(--glow-accent);
+  box-shadow: var(--shadow-sm);
 }
 
 .gift-hero::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 80% 50%, rgba(255, 255, 255, 0.12) 0%, transparent 60%);
-  pointer-events: none;
+  content: none;
 }
 
 .gift-hero-icon {
   width: 60px;
   height: 60px;
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--primary-light);
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  backdrop-filter: blur(8px);
+  color: var(--primary);
 }
 
 .gift-hero-text h2 {
   margin: 0 0 6px 0;
   font-size: 20px;
   font-weight: 700;
-  letter-spacing: -0.02em;
-  color: #fff;
+  letter-spacing: 0;
+  color: var(--text-main);
 }
 
 .gift-hero-text p {
   margin: 0;
   font-size: 14px;
-  opacity: 0.8;
+  color: var(--text-secondary);
 }
 
 .gift-section {
@@ -156,9 +153,9 @@
 }
 
 .gift-friend-card.selected {
-  border-color: #6366F1;
-  background: rgba(99, 102, 241, 0.06);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  border-color: var(--primary);
+  background: var(--primary-light);
+  box-shadow: 0 0 0 2px var(--primary-light);
 }
 
 .gift-friend-card .gift-friend-check {
@@ -166,7 +163,7 @@
   right: 10px;
   top: 50%;
   transform: translateY(-50%);
-  color: #6366F1;
+  color: var(--primary);
   opacity: 0;
   transition: opacity 0.2s;
 }
@@ -232,8 +229,8 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  background: rgba(99, 102, 241, 0.06);
-  border: 1px solid rgba(99, 102, 241, 0.25);
+  background: var(--primary-light);
+  border: 1px solid color-mix(in srgb, var(--primary) 25%, transparent);
   border-radius: var(--radius-md);
   padding: 14px 18px;
   margin-bottom: 16px;
@@ -250,7 +247,7 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  border: 2px solid rgba(99, 102, 241, 0.4);
+  border: 2px solid color-mix(in srgb, var(--primary) 40%, transparent);
 }
 
 .gift-selected-avatar img {
@@ -361,14 +358,14 @@
 
 .gift-edition-item:hover {
   border-color: var(--border-focus);
-  transform: translateX(4px);
+  transform: translateY(-1px);
   box-shadow: var(--shadow-sm);
 }
 
 .gift-edition-item.selected {
-  border-color: #6366F1;
-  background: rgba(99, 102, 241, 0.06);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+  border-color: var(--primary);
+  background: var(--primary-light);
+  box-shadow: 0 0 0 2px var(--primary-light);
 }
 
 .gift-edition-radio {
@@ -384,7 +381,7 @@
 }
 
 .gift-edition-item.selected .gift-edition-radio {
-  border-color: #6366F1;
+  border-color: var(--primary);
 }
 
 .gift-edition-dot {
@@ -396,7 +393,7 @@
 }
 
 .gift-edition-item.selected .gift-edition-dot {
-  background: #6366F1;
+  background: var(--primary);
 }
 
 .gift-edition-details {
@@ -417,7 +414,7 @@
 }
 
 .gift-edition-check {
-  color: #6366F1;
+  color: var(--primary);
   opacity: 0;
   transition: opacity 0.2s;
 }
@@ -547,19 +544,19 @@
 }
 
 .gift-step-icon--running {
-  background: rgba(99, 102, 241, 0.1);
-  border: 2px solid #6366F1;
-  color: #6366F1;
+  background: var(--primary-light);
+  border: 2px solid var(--primary);
+  color: var(--primary);
 }
 
 .gift-step-icon--ok {
-  background: rgba(16, 185, 129, 0.12);
+  background: var(--success-soft);
   border: 2px solid var(--success);
   color: var(--success);
 }
 
 .gift-step-icon--error {
-  background: rgba(239, 68, 68, 0.1);
+  background: var(--danger-soft);
   border: 2px solid var(--danger);
   color: var(--danger);
 }
@@ -568,7 +565,7 @@
   width: 12px;
   height: 12px;
   border: 2px solid transparent;
-  border-top-color: #6366F1;
+  border-top-color: var(--primary);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
@@ -632,7 +629,7 @@
 .gift-price-final {
   font-size: 15px;
   font-weight: 700;
-  color: #6366F1;
+  color: var(--primary);
   font-family: var(--font-mono);
   white-space: nowrap;
 }
@@ -649,13 +646,13 @@
   display: inline-flex;
   align-items: center;
   padding: 2px 7px;
-  background: linear-gradient(135deg, #059669, #10B981);
+  background: var(--gradient-success);
   color: #fff;
   border-radius: 6px;
   font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
-  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.35);
+  box-shadow: 0 2px 6px var(--glow-success);
 }
 
 .gift-wallet-area {
@@ -692,7 +689,7 @@
   font-size: 18px;
   font-weight: 800;
   font-family: var(--font-mono);
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   color: #fff;
   white-space: nowrap;
   transition: color 0.3s;

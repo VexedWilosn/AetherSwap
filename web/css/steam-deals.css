@@ -5,14 +5,14 @@
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-color);
   overflow: hidden;
-  transition: transform 0.35s var(--ease-spring), box-shadow 0.35s var(--ease-out), border-color 0.3s;
+  transition: transform 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out), border-color 0.2s var(--ease-out);
   animation: slideUp 0.45s var(--ease-spring) both;
 }
 
 .sg-card:hover {
-  transform: translateY(-5px);
-  box-shadow: var(--shadow-md);
-  border-color: var(--border-focus);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+  border-color: var(--border-strong);
 }
 
 .sg-card-banner {
@@ -71,22 +71,22 @@
 }
 
 .sg-card:hover .sg-card-banner img {
-  transform: scale(1.06);
+  transform: scale(1.03);
 }
 
 .sg-badge-discount {
   position: absolute;
   top: 10px;
   right: 10px;
-  background: linear-gradient(135deg, #10b981, #059669);
+  background: var(--gradient-success);
   color: #fff;
   padding: 4px 12px;
   border-radius: 8px;
   font-size: 15px;
   font-weight: 800;
   font-family: var(--font-mono);
-  box-shadow: 0 3px 12px rgba(16, 185, 129, 0.45);
-  letter-spacing: -0.5px;
+  box-shadow: 0 3px 12px var(--glow-success);
+  letter-spacing: 0;
 }
 
 .sg-card-content {
@@ -136,16 +136,44 @@
   transition: width 0.6s var(--ease-out);
 }
 
+.sg-review-bar-fill.is-good {
+  background: var(--success);
+}
+
+.sg-review-bar-fill.is-warn {
+  background: var(--warning);
+}
+
+.sg-review-bar-fill.is-bad {
+  background: var(--danger);
+}
+
+.sg-review-rate {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sg-review-rate.is-good {
+  color: var(--success);
+}
+
+.sg-review-rate.is-warn {
+  color: var(--warning);
+}
+
+.sg-review-rate.is-bad {
+  color: var(--danger);
+}
+
 .sg-review-tag {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--text-muted);
 }
 
 .sg-review-cnt {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
-  opacity: 0.7;
 }
 
 .sg-card-prices {
@@ -167,7 +195,7 @@
 }
 
 .sg-pill-label {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
   color: var(--text-muted);
   line-height: 1.2;
@@ -179,41 +207,45 @@
   font-weight: 700;
   font-family: var(--font-mono);
   color: var(--text-main);
-  letter-spacing: -0.5px;
+  letter-spacing: 0;
 }
 
 .sg-pill-saving {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
-  color: #10b981;
+  color: var(--success);
   margin-top: 1px;
 }
 
+.sg-pill-saving.is-expensive {
+  color: var(--danger);
+}
+
 .sg-pill-cn {
-  border-color: rgba(59, 130, 246, 0.25);
-  background: rgba(59, 130, 246, 0.06);
+  border-color: color-mix(in srgb, var(--info) 25%, transparent);
+  background: var(--info-soft);
 }
 
 .sg-pill-cn .sg-pill-label {
-  color: #3b82f6;
+  color: var(--info);
 }
 
 .sg-pill-compare {
-  border-color: rgba(168, 85, 247, 0.25);
-  background: rgba(168, 85, 247, 0.06);
+  border-color: color-mix(in srgb, var(--primary) 25%, transparent);
+  background: var(--primary-light);
 }
 
 .sg-pill-compare .sg-pill-label {
-  color: #a855f7;
+  color: var(--primary);
 }
 
 .sg-pill-cheap {
-  border-color: rgba(16, 185, 129, 0.25);
-  background: rgba(16, 185, 129, 0.06);
+  border-color: color-mix(in srgb, var(--success) 25%, transparent);
+  background: var(--success-soft);
 }
 
 .sg-pill-cheap .sg-pill-label {
-  color: #10b981;
+  color: var(--success);
 }
 
 .sg-diff-chip {
@@ -225,9 +257,47 @@
   font-weight: 700;
   font-family: var(--font-mono);
   color: #fff;
-  background: linear-gradient(135deg, #10b981, #059669);
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
-  letter-spacing: -0.3px;
+  background: var(--gradient-success);
+  box-shadow: 0 2px 8px var(--glow-success);
+  letter-spacing: 0;
+}
+
+.sg-diff-chip.is-warning {
+  background: linear-gradient(135deg, var(--warning), color-mix(in srgb, var(--warning) 75%, #000));
+  box-shadow: 0 2px 8px var(--warning-soft);
+}
+
+.sg-diff-chip.is-primary {
+  background: var(--gradient-primary);
+  box-shadow: 0 2px 8px var(--glow-primary);
+}
+
+.sg-diff-chip.is-danger {
+  background: linear-gradient(135deg, var(--danger), color-mix(in srgb, var(--danger) 75%, #000));
+  box-shadow: 0 2px 8px var(--danger-soft);
+}
+
+.sg-badge-status {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
+}
+
+.sg-badge-status.is-low {
+  background: linear-gradient(135deg, var(--danger), color-mix(in srgb, var(--danger) 75%, #000));
+}
+
+.sg-badge-status.is-equal {
+  background: linear-gradient(135deg, var(--warning), color-mix(in srgb, var(--warning) 75%, #000));
 }
 
 .sg-expand-toggle {
@@ -263,8 +333,8 @@
   font-weight: 600;
   font-family: inherit;
   color: #fff;
-  background: linear-gradient(135deg, #1b2838, #2a475e);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--text-main);
+  border: 1px solid var(--text-main);
   text-decoration: none;
   transition: opacity 0.2s, transform 0.15s var(--ease-spring), box-shadow 0.2s;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
@@ -274,6 +344,12 @@
   opacity: 0.88;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.sg-steam-btn.is-compact {
+  margin-left: auto;
+  padding: 2px 8px;
+  font-size: 11px;
 }
 
 .sg-steam-btn svg {
@@ -353,4 +429,29 @@
 .steam-deals-empty p {
   font-size: 14px;
   margin: 0;
+}
+
+#sg-context-menu {
+  position: absolute;
+  pointer-events: all;
+  min-width: 190px;
+  padding: 6px 0;
+  color: var(--text-main);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.sg-cm-item {
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: background 0.15s var(--ease-out), color 0.15s var(--ease-out);
+}
+
+.sg-cm-item:hover {
+  background: var(--primary-light);
+  color: var(--primary);
 }

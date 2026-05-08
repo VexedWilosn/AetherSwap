@@ -14,7 +14,7 @@
   padding: 24px 28px;
   border: 1px solid var(--border-color);
   box-shadow: var(--shadow-xs);
-  transition: box-shadow 0.35s, transform 0.35s var(--ease-spring), border-color 0.35s;
+  transition: box-shadow 0.2s var(--ease-out), border-color 0.2s var(--ease-out);
   position: relative;
 }
 
@@ -26,7 +26,7 @@
   bottom: 24px;
   width: 3px;
   border-radius: 0 3px 3px 0;
-  background: var(--gradient-accent);
+  background: var(--primary);
   opacity: 0;
   transform: scaleY(0);
   transition: opacity 0.3s, transform 0.3s var(--ease-spring);
@@ -34,7 +34,7 @@
 
 .settings-group:hover {
   box-shadow: var(--shadow-sm);
-  transform: translateY(-2px);
+  border-color: var(--border-strong);
 }
 
 .settings-group:hover::before {

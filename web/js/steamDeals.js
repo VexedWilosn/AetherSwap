@@ -101,7 +101,7 @@
             card.dataset.gameName = g.name || '';
             card.dataset.bannerUrl = g.banner_url || '';
             const rate = g.positive_rate != null ? g.positive_rate : 0;
-            const rateColor = rate >= 80 ? '#10b981' : rate >= 60 ? '#f59e0b' : '#ef4444';
+            const rateTone = rate >= 80 ? 'is-good' : rate >= 60 ? 'is-warn' : 'is-bad';
             const rateLabel = rate >= 95 ? '好评如潮' : rate >= 80 ? '特别好评' : rate >= 70 ? '多半好评' : rate >= 50 ? '褒贬不一' : '差评';
             const cnCny = g.cny_prices?.cn;
             let pricePills = '';
@@ -142,27 +142,26 @@
             }
             let diffBadge = '';
             if (_sortBy === 'discount_abs' && g.discount_abs_cn != null) {
-                diffBadge = `<span class="sg-diff-chip" style="background:linear-gradient(135deg, #f59e0b, #d97706);box-shadow:0 2px 8px rgba(245, 158, 11, 0.3)">降¥${g.discount_abs_cn.toFixed(0)}</span>`;
+                diffBadge = `<span class="sg-diff-chip is-warning">降¥${g.discount_abs_cn.toFixed(0)}</span>`;
             } else if (_sortBy === 'region_value' && g.price_diff != null && g.cny_prices?.[_compareRegion]) {
                 const regCny = g.cny_prices[_compareRegion];
                 const ratio = regCny > 0 ? ((g.price_diff / regCny) * 100).toFixed(0) : null;
                 if (ratio !== null) {
-                    diffBadge = `<span class="sg-diff-chip" style="background:linear-gradient(135deg, #8b5cf6, #6d28d9);box-shadow:0 2px 8px rgba(139, 92, 246, 0.35)">省¥${g.price_diff.toFixed(0)} · 值${ratio}%</span>`;
+                    diffBadge = `<span class="sg-diff-chip is-primary">省¥${g.price_diff.toFixed(0)} · 值${ratio}%</span>`;
                 }
             } else if (g.price_diff != null) {
                 if (g.price_diff >= 0) {
                     diffBadge = `<span class="sg-diff-chip">省¥${g.price_diff.toFixed(0)}</span>`;
                 } else {
-                    diffBadge = `<span class="sg-diff-chip" style="background:linear-gradient(135deg, #ef4444, #dc2626);box-shadow:0 2px 8px rgba(239, 68, 68, 0.3)">贵¥${Math.abs(g.price_diff).toFixed(0)}</span>`;
+                    diffBadge = `<span class="sg-diff-chip is-danger">贵¥${Math.abs(g.price_diff).toFixed(0)}</span>`;
                 }
             }
             let discBadge = g.discount_percent
                 ? `<div class="sg-badge-discount">${g.discount_percent}%</div>`
                 : '';
             if (g.deal_status === '新史低' || g.deal_status === '平史低') {
-                const color = g.deal_status === '新史低' ? '#ef4444' : '#f59e0b';
-                const icon = g.deal_status === '新史低' ? '🔥' : '🏷️';
-                discBadge += `<div class="sg-badge-status" style="position:absolute;top:10px;left:10px;background:linear-gradient(135deg, ${color}, ${color}dd);color:white;padding:4px 8px;border-radius:6px;font-size:12px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.2);backdrop-filter:blur(4px);z-index:2;line-height:1;">${icon} ${g.deal_status}</div>`;
+                const statusClass = g.deal_status === '新史低' ? 'is-low' : 'is-equal';
+                discBadge += `<div class="sg-badge-status ${statusClass}">${g.deal_status}</div>`;
             }
             const uid = 'sg-expand-' + g.app_id;
             let allRows = '';
@@ -190,12 +189,12 @@
         </div>
         <div class="sg-card-content">
           <a class="sg-card-title" href="${storeUrl}" target="_blank" rel="noopener" title="${g.name}">${g.name}</a>
-          <div class="sg-card-review" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-            <div class="sg-review-track"><div class="sg-review-bar-fill" style="width:${rate}%;background:${rateColor}"></div></div>
-            <span style="color:${rateColor};font-weight:600;font-size:12px">${rate}%</span>
+          <div class="sg-card-review">
+            <div class="sg-review-track"><div class="sg-review-bar-fill ${rateTone}" style="width:${rate}%"></div></div>
+            <span class="sg-review-rate ${rateTone}">${rate}%</span>
             <span class="sg-review-tag">${rateLabel}</span>
             <span class="sg-review-cnt">${fmtReviews(g.total_reviews)}</span>
-            <a class="sg-steam-btn" href="${storeUrl}" target="_blank" rel="noopener" style="margin-left:auto;padding:2px 8px;font-size:11px;">
+            <a class="sg-steam-btn is-compact" href="${storeUrl}" target="_blank" rel="noopener">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.606 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.999 1.314 1.25 1.297.539 2.793-.076 3.332-1.375.263-.63.264-1.319.005-1.949s-.75-1.121-1.377-1.383c-.624-.26-1.29-.249-1.878-.03l1.523.63c.956.4 1.409 1.5 1.009 2.455-.397.957-1.497 1.41-2.455 1.012zm11.415-9.303c0-1.662-1.353-3.015-3.015-3.015-1.665 0-3.015 1.353-3.015 3.015 0 1.665 1.35 3.015 3.015 3.015 1.662 0 3.015-1.35 3.015-3.015zm-5.273-.005c0-1.252 1.013-2.266 2.265-2.266 1.249 0 2.266 1.014 2.266 2.266 0 1.251-1.017 2.265-2.266 2.265-1.252 0-2.265-1.014-2.265-2.265z"/></svg>
               Steam 商店
             </a>
@@ -216,8 +215,7 @@
     }
     function _pill(label, cnyVal, cls, savingText, isExpensive) {
         const price = fmtCNY(cnyVal);
-        const savingStyle = isExpensive ? 'color: #ef4444;' : '';
-        const sv = savingText ? `<div class="sg-pill-saving" style="${savingStyle}">${savingText}</div>` : '';
+        const sv = savingText ? `<div class="sg-pill-saving${isExpensive ? ' is-expensive' : ''}">${savingText}</div>` : '';
         return `
       <div class="sg-pill ${cls}">
         <span class="sg-pill-label">${label}</span>
@@ -468,22 +466,9 @@
 
                 const menu = document.createElement('div');
                 menu.id = 'sg-context-menu';
-                menu.style.cssText = [
-                    'position:absolute',
-                    'pointer-events:all',
-                    'background:#1e293b',
-                    'border:1px solid #334155',
-                    'border-radius:6px',
-                    'padding:8px 0',
-                    'box-shadow:0 10px 25px rgba(0,0,0,0.5)',
-                    'color:#e2e8f0',
-                    'font-size:14px',
-                    'min-width:180px',
-                    'white-space:nowrap',
-                ].join(';');
                 menu.innerHTML = `
-                  <div class="sg-cm-item" data-action="gift" style="padding:8px 16px;cursor:pointer;transition:background 0.15s;">🎁 加入 Steam 赠礼候选</div>
-                  <div class="sg-cm-item" data-action="card" style="padding:8px 16px;cursor:pointer;transition:background 0.15s;">✨ 生成高质量折扣分享卡片</div>
+                  <div class="sg-cm-item" data-action="gift">加入 Steam 赠礼候选</div>
+                  <div class="sg-cm-item" data-action="card">生成折扣分享卡片</div>
                 `;
                 portal.appendChild(menu);
 
@@ -495,11 +480,6 @@
                     if (y + menu.offsetHeight > window.innerHeight) y -= menu.offsetHeight;
                     menu.style.left = `${x}px`;
                     menu.style.top = `${y}px`;
-                });
-
-                menu.querySelectorAll('.sg-cm-item').forEach(item => {
-                    item.addEventListener('mouseenter', () => item.style.background = '#334155');
-                    item.addEventListener('mouseleave', () => item.style.background = 'transparent');
                 });
 
                 menu.querySelector('[data-action="gift"]')?.addEventListener('click', () => {

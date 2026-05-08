@@ -6,20 +6,20 @@
 
 /* --- Status Badge Series (05 §1.3) --- */
 .badge-success {
-  background: rgba(16, 185, 129, 0.1);
-  color: #059669;
+  background: var(--success-soft);
+  color: var(--success);
 }
 .badge-warning {
-  background: rgba(245, 158, 11, 0.1);
-  color: #d97706;
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 .badge-danger {
-  background: rgba(239, 68, 68, 0.1);
-  color: #dc2626;
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 .badge-info {
-  background: var(--primary-light, rgba(37, 99, 235, 0.08));
-  color: var(--text-secondary);
+  background: var(--info-soft);
+  color: var(--info);
 }
 .badge-dot::before {
   content: '';
@@ -104,6 +104,7 @@
 }
 .table-card thead th {
   background: var(--bg-input);
+  color: var(--text-secondary);
   position: sticky;
   top: 0;
   z-index: 2;
@@ -145,7 +146,7 @@
 .payment-timer {
   font-family: var(--font-mono);
   font-size: 13px;
-  color: var(--warning, #f59e0b);
+  color: var(--warning);
   font-weight: 600;
   margin-left: auto;
 }
@@ -184,10 +185,11 @@
   border-radius: var(--radius-lg);
   padding: 18px 20px;
   box-shadow: var(--shadow-xs);
-  transition: box-shadow 0.2s, transform 0.2s;
+  transition: box-shadow 0.2s var(--ease-out), transform 0.2s var(--ease-out), border-color 0.2s var(--ease-out);
 }
 .dash-card:hover {
   box-shadow: var(--shadow-sm);
+  border-color: var(--border-strong);
   transform: translateY(-1px);
 }
 .dash-card-header {
@@ -200,7 +202,8 @@
   color: var(--text-secondary);
 }
 .dash-card-header svg {
-  opacity: 0.5;
+  color: var(--primary);
+  opacity: 0.85;
   flex-shrink: 0;
 }
 .dash-card-body {
@@ -218,7 +221,7 @@
   border-top: 1px solid var(--border-color);
 }
 .dash-card-label {
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 .dash-card-value {
@@ -232,11 +235,11 @@
   font-size: 12px;
   color: var(--primary);
   cursor: pointer;
-  opacity: 0.8;
-  transition: opacity 0.2s;
+  opacity: 1;
+  transition: color 0.2s;
 }
 .dash-card-link:hover {
-  opacity: 1;
+  color: var(--primary-hover);
 }
 .dash-shortcut-grid {
   display: grid;
@@ -254,19 +257,20 @@
   font-size: 13px;
   cursor: pointer;
   border: 1px solid transparent;
-  transition: border-color 0.2s, background 0.2s;
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
 }
 .dash-shortcut:hover {
-  border-color: var(--border-focus);
+  border-color: var(--primary);
   background: var(--bg-body);
+  color: var(--primary);
 }
 
 /* --- Cache Notice Banner (03 §3.3) --- */
 .cache-notice {
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.2);
+  background: var(--warning-soft);
+  border: 1px solid color-mix(in srgb, var(--warning) 25%, transparent);
   border-radius: var(--radius-sm);
-  color: var(--warning, #d97706);
+  color: var(--warning);
   padding: 8px 14px;
   font-size: 13px;
   display: flex;

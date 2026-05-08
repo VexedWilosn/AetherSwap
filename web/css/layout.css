@@ -50,10 +50,12 @@
   }
   .sidebar {
     width: 100%;
+    left: 0;
+    right: 0;
     height: auto;
     flex-direction: row;
     align-items: center;
-    padding: 12px 16px;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
     border-right: none;
     border-top: 1px solid var(--border-color);
     position: fixed;
@@ -62,21 +64,23 @@
     background: var(--bg-sidebar);
     backdrop-filter: blur(28px) saturate(1.8);
     -webkit-backdrop-filter: blur(28px) saturate(1.8);
-    justify-content: space-around;
+    justify-content: flex-start;
     box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.06);
+    overflow-x: auto;
+    overflow-y: hidden;
   }
   .brand,
   .sidebar-footer {
     display: none;
   }
   .main-content {
-    margin-bottom: 70px;
+    margin-bottom: 92px;
   }
   .top-header {
     padding: 0 20px;
     height: 64px;
   }
   .panel {
-    padding: 0 20px 20px;
+    padding: 0 20px 24px;
   }
 }

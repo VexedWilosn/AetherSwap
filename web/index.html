@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AetherSwap</title>
   <link rel="stylesheet" href="/css/variables.css" />
   <link rel="stylesheet" href="/css/base.css" />
@@ -132,7 +132,7 @@
       </nav>
 
       <div class="sidebar-footer">
-        <button id="btn-theme" class="theme-toggle" aria-label="切换主题">
+        <button id="btn-theme" class="theme-toggle" aria-label="切换外观">
           <span class="theme-icon">
             <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
               <circle cx="12" cy="12" r="5"></circle>
@@ -149,7 +149,7 @@
           <span>切换外观</span>
         </button>
         <div
-          style="font-size: 0.75rem; color: var(--text-muted, #888); text-align: center; margin-top: 10px; opacity: 0.6; cursor: default;">
+          style="font-size: 0.75rem; color: var(--text-secondary, #666); text-align: center; margin-top: 10px; cursor: default;">
           制作者：烦恼的威尔逊
         </div>
       </div>
@@ -320,10 +320,10 @@
             </div>
             <div class="dash-card-body">
               <div class="dash-shortcut-grid">
-                <button class="dash-shortcut" onclick="tabSwitch('settings')">⚙️ 系统设置</button>
-                <button class="dash-shortcut" onclick="tabSwitch('proxy')">🌐 代理池</button>
-                <button class="dash-shortcut" onclick="tabSwitch('steam-deals')">🏷️ Steam 折扣</button>
-                <button class="dash-shortcut" onclick="tabSwitch('gift')">🎁 Steam 赠礼</button>
+                <button class="dash-shortcut" onclick="tabSwitch('settings')">系统设置</button>
+                <button class="dash-shortcut" onclick="tabSwitch('proxy')">代理池</button>
+                <button class="dash-shortcut" onclick="tabSwitch('steam-deals')">Steam 折扣</button>
+                <button class="dash-shortcut" onclick="tabSwitch('gift')">Steam 赠礼</button>
               </div>
             </div>
           </div>
@@ -1585,8 +1585,8 @@
               </label>
               <select id="steam-deals-status-filter">
                 <option value="">全部状态</option>
-                <option value="新史低">🔥 新史低</option>
-                <option value="平史低">🏷️ 平史低</option>
+                <option value="新史低">新史低</option>
+                <option value="平史低">平史低</option>
               </select>
             </div>
           </div>

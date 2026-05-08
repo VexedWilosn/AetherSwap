@@ -284,8 +284,8 @@
   min-width: 22px;
   height: 22px;
   padding: 0 7px;
-  background: var(--gradient-accent);
-  color: #fff;
+  background: var(--primary-light);
+  color: var(--primary);
   border-radius: 999px;
   font-size: 11px;
   font-weight: 700;
@@ -314,12 +314,12 @@
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 999px;
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 .account-guard-status.configured {
-  background: rgba(16, 185, 129, 0.1);
-  color: #10b981;
+  background: var(--success-soft);
+  color: var(--success);
 }
 .account-guard-code {
   display: flex;

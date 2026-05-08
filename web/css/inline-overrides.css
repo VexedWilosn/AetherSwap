@@ -5,11 +5,11 @@
   display: inline-block;
   width: 7px;
   height: 7px;
-  background: #ef4444;
+  background: var(--danger);
   border-radius: 50%;
   margin-left: auto;
   flex-shrink: 0;
-  box-shadow: 0 0 4px rgba(239, 68, 68, .7);
+  box-shadow: 0 0 4px var(--danger-soft);
 }
 
 .nav-badge.hidden {
@@ -27,7 +27,7 @@
   font-size: 0.68em;
   font-weight: 600;
   color: #fff;
-  background: #ef4444;
+  background: var(--danger);
   border-radius: 3px;
   padding: 1px 5px;
   margin-left: 5px;
@@ -38,9 +38,9 @@
 /* Getting-started card */
 .getting-started-card {
   margin: 0 0 16px;
-  border: 1px solid var(--border, rgba(255, 255, 255, .1));
-  border-radius: 12px;
-  background: var(--card-bg, rgba(255, 255, 255, .04));
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
   padding: 14px 16px;
   animation: fadeIn .3s ease;
 }
@@ -55,7 +55,7 @@
 .gs-title {
   font-size: .88em;
   font-weight: 600;
-  color: var(--text-muted, #aaa);
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -65,14 +65,14 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--text-muted, #aaa);
+  color: var(--text-secondary);
   font-size: 14px;
   padding: 2px 6px;
   border-radius: 4px;
 }
 
 .gs-close:hover {
-  background: var(--hover-bg, rgba(255, 255, 255, .08));
+  background: var(--bg-input);
 }
 
 .gs-steps {
@@ -86,7 +86,7 @@
   align-items: center;
   gap: 8px;
   font-size: .85em;
-  color: var(--text, #e0e0e0);
+  color: var(--text-main);
   padding: 4px 0;
 }
 
@@ -96,7 +96,7 @@
 }
 
 .gs-step .gs-link {
-  color: var(--accent, #60a5fa);
+  color: var(--primary);
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -110,10 +110,10 @@
 /* Account guide callout */
 .accounts-guide-callout {
   margin: 0 0 16px;
-  border: 1px solid var(--border, rgba(255, 255, 255, .1));
-  border-left: 3px solid var(--accent, #60a5fa);
-  border-radius: 8px;
-  background: var(--card-bg, rgba(255, 255, 255, .04));
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--primary);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
   padding: 10px 14px;
   display: flex;
   align-items: flex-start;
@@ -137,7 +137,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: var(--text-muted, #aaa);
+  color: var(--text-secondary);
 }
 
 .agu-num {
@@ -147,7 +147,7 @@
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--accent, #60a5fa);
+  background: var(--primary);
   color: #fff;
   font-size: .78em;
   font-weight: 700;
@@ -158,7 +158,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--text-muted, #aaa);
+  color: var(--text-secondary);
   font-size: 13px;
   padding: 2px 5px;
   border-radius: 4px;
@@ -168,7 +168,7 @@
 
 
 .agu-close:hover {
-  background: var(--hover-bg, rgba(255, 255, 255, .08));
+  background: var(--bg-input);
 }
 
 /* Wizard restore from backup */
@@ -177,7 +177,7 @@
   align-items: center;
   gap: 10px;
   margin: 18px 0 12px;
-  color: var(--text-muted, #888);
+  color: var(--text-secondary);
   font-size: .8em;
 }
 
@@ -186,7 +186,7 @@
   content: '';
   flex: 1;
   height: 1px;
-  background: var(--border, rgba(255, 255, 255, .1));
+  background: var(--border-color);
 }
 
 .wizard-restore-card {
@@ -194,14 +194,14 @@
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
-  border: 1px dashed var(--border, rgba(255, 255, 255, .15));
+  border: 1px dashed var(--border-color);
   border-radius: 10px;
-  background: var(--card-bg, rgba(255, 255, 255, .03));
+  background: var(--bg-surface);
   transition: border-color .2s;
 }
 
 .wizard-restore-card:hover {
-  border-color: var(--accent, #60a5fa);
+  border-color: var(--primary);
 }
 
 .wizard-restore-icon {
@@ -217,12 +217,12 @@
 .wizard-restore-title {
   font-size: .88em;
   font-weight: 600;
-  color: var(--text, #e0e0e0);
+  color: var(--text-main);
   margin-bottom: 3px;
 }
 
 .wizard-restore-desc {
   font-size: .78em;
-  color: var(--text-muted, #aaa);
+  color: var(--text-secondary);
   line-height: 1.4;
 }
