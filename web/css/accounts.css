@@ -307,3 +307,18 @@
   font-size: 11px;
   color: var(--text-muted);
 }
+.account-guard-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+.account-guard-fields .field {
+  margin: 0;
+}
+.account-guard-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}

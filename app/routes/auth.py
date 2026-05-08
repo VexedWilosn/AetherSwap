@@ -19,7 +19,7 @@ from app.config_loader import (
     update_buff_creds,
     update_steam_creds,
 )
-from app.accounts import get_current_account, get_profile_dir, set_current, update_account
+from app.accounts import get_account, get_account_steam_guard, get_current_account, get_profile_dir, set_current, update_account
 from app.services.steam_auth import (
     fetch_steam_profile_via_api,
     try_steam_auto_relogin,
@@ -257,10 +257,13 @@ def api_auth_buff_relogin_start(request: Request):
 def api_auth_buff_relogin_finish(body: ReloginFinishBody):
     return _relogin_finish(body.success)
 @router.get("/api/steam_guard")
-def api_steam_guard():
+def api_steam_guard(account_id: str = ""):
     cfg = load_app_config_validated()
-    sg = cfg.get("steam_guard") or {}
-    shared_secret = (sg.get("shared_secret") or "").strip()
+    account = get_account(account_id) if account_id else get_current_account()
+    if account_id and not account:
+        return {"ok": False, "error": "账号不存在"}
+    guard = get_account_steam_guard(account, cfg)
+    shared_secret = (guard.get("shared_secret") or "").strip()
     if not shared_secret:
         return {"ok": False, "error": "未配置 shared_secret"}
     code = _generate_steam_guard_code(shared_secret)

@@ -231,20 +231,21 @@ def api_stats():
         all_trades.append({"name": s.get("name", ""), "price": float(s.get("price", 0)), "at": s.get("at", 0), "type": "sale"})
     all_trades.sort(key=lambda x: x.get("at", 0), reverse=True)
     recent_purchases = all_trades[:5]
-    # #8: Inventory value from held items' market_price
+    # #8: Inventory overview should use one data source: cached Steam inventory.
     from app.state import get_inventory
     inv = get_inventory() or []
     inv_count = len(inv)
-    # Compute held value from purchase records that have market_price
-    inv_value = sum(float(p.get("market_price", 0) or 0) for p in held if float(p.get("market_price", 0) or 0) > 0)
+    inv_value = sum(float(it.get("lowest_price", 0) or 0) for it in inv if float(it.get("lowest_price", 0) or 0) > 0)
     inv_after_tax = round(inv_value / 1.15, 2) if inv_value > 0 else 0.0
     # Account info
     try:
+        from app.accounts import get_current_account
         from app.config_loader import get_steam_credentials
+        account = get_current_account() or {}
         steam_creds = get_steam_credentials()
         account_info = {
-            "username": steam_creds.get("username", ""),
-            "display_name": steam_creds.get("display_name") or steam_creds.get("username", ""),
+            "username": account.get("username", ""),
+            "display_name": account.get("display_name") or account.get("username", ""),
             "cookie_valid": bool((steam_creds.get("cookies") or "").strip()),
         }
         from config import get_buff

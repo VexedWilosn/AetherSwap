@@ -29,6 +29,7 @@ function _lineToHtml(x) {
 function renderLogFull() {
   const out = el("log-output");
   if (!out) return;
+  if (typeof resetLogDedupState === "function") resetLogDedupState();
   const q = (el("log-search")?.value || "").trim().toLowerCase();
   const lv = el("log-level")?.value || "all";
   const filtered = logLines.filter((x) => {
@@ -37,7 +38,15 @@ function renderLogFull() {
     const s = `[${x.level || "info"}] ${x.msg || ""}`.toLowerCase();
     return s.includes(q);
   });
-  out.innerHTML = filtered.map(_lineToHtml).join("\n") + (filtered.length ? "\n" : "");
+  if (typeof appendLogWithDedup === "function") {
+    const frag = document.createDocumentFragment();
+    filtered.forEach((l) => appendLogWithDedup(frag, l));
+    frag.appendChild(document.createTextNode(filtered.length ? "\n" : ""));
+    out.innerHTML = "";
+    out.appendChild(frag);
+  } else {
+    out.innerHTML = filtered.map(_lineToHtml).join("\n") + (filtered.length ? "\n" : "");
+  }
   if (autoScroll) out.scrollTop = out.scrollHeight;
 }
 async function refreshLog() {
@@ -87,6 +96,7 @@ async function clearLog() {
       out.innerHTML = "";
       out.dataset.lastIndex = "0";
     }
+    if (typeof resetLogDedupState === "function") resetLogDedupState();
     _updateBadge();
     toast("日志已清空");
   } catch (e) {

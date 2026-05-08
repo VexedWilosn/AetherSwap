@@ -1,5 +1,5 @@
 """Account management routes."""
-from typing import Optional
+from typing import Any, Optional
 from fastapi import APIRouter
 from pydantic import BaseModel
 from app.accounts import (
@@ -7,10 +7,12 @@ from app.accounts import (
     delete_account,
     get_account,
     get_current_account,
+    public_account,
     list_accounts,
     set_current,
     update_account,
 )
+from app.config_loader import load_app_config_validated
 from app.services.steam_auth import verify_steam_auto_login
 router = APIRouter()
 class AccountBody(BaseModel):
@@ -19,15 +21,19 @@ class AccountBody(BaseModel):
     steam_id: str = ""
     display_name: str = ""
     avatar_url: str = ""
+    steam_guard: Optional[dict[str, Any]] = None
 class AccountUpdateBody(BaseModel):
     username: Optional[str] = None
     password: Optional[str] = None
     steam_id: Optional[str] = None
     display_name: Optional[str] = None
     avatar_url: Optional[str] = None
+    steam_guard: Optional[dict[str, Any]] = None
+    trade_config: Optional[dict[str, Any]] = None
 @router.get("/api/accounts")
 def api_list_accounts():
-    accs = list_accounts()
+    cfg = load_app_config_validated()
+    accs = [public_account(a, cfg) for a in list_accounts()]
     cid = get_current_account()
     current_id = cid.get("id") if cid else None
     return {"accounts": accs, "current_id": current_id}
@@ -40,7 +46,9 @@ def api_add_account(body: AccountBody):
         display_name=body.display_name,
         avatar_url=body.avatar_url,
     )
-    return {"ok": True, "account": acc}
+    if body.steam_guard is not None:
+        acc = update_account(acc["id"], steam_guard=body.steam_guard) or acc
+    return {"ok": True, "account": public_account(acc, load_app_config_validated())}
 @router.put("/api/accounts/{account_id}")
 def api_update_account(account_id: str, body: AccountUpdateBody):
     kwargs = {}
@@ -54,10 +62,14 @@ def api_update_account(account_id: str, body: AccountUpdateBody):
         kwargs["display_name"] = body.display_name
     if body.avatar_url is not None:
         kwargs["avatar_url"] = body.avatar_url
+    if body.steam_guard is not None:
+        kwargs["steam_guard"] = body.steam_guard
+    if body.trade_config is not None:
+        kwargs["trade_config"] = body.trade_config
     acc = update_account(account_id, **kwargs) if kwargs else get_account(account_id)
     if not acc:
         return {"ok": False, "error": "账号不存在"}
-    return {"ok": True, "account": acc}
+    return {"ok": True, "account": public_account(acc, load_app_config_validated())}
 @router.delete("/api/accounts/{account_id}")
 def api_delete_account(account_id: str):
     ok = delete_account(account_id)

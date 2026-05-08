@@ -1,3 +1,4 @@
+import copy
 import json
 import uuid
 from pathlib import Path
@@ -47,6 +48,12 @@ def add_account(username: str = "", password: str = "", steam_id: str = "", disp
         "steam_id": (steam_id or "").strip(),
         "display_name": (display_name or "").strip(),
         "avatar_url": (avatar_url or "").strip(),
+        "steam_guard": {
+            "shared_secret": "",
+            "identity_secret": "",
+            "device_id": "",
+        },
+        "trade_config": {},
     }
     accs.append(acc)
     if not data.get("current_id"):
@@ -57,12 +64,17 @@ def add_account(username: str = "", password: str = "", steam_id: str = "", disp
 def update_account(account_id: str, **kwargs: Any) -> Optional[dict]:
     data = _load()
     accs = data.get("accounts", [])
-    allowed = ("username", "password", "steam_id", "display_name", "avatar_url", "currency_code", "region_code")
+    allowed = ("username", "password", "steam_id", "display_name", "avatar_url", "currency_code", "region_code", "steam_guard", "trade_config")
     for a in accs:
         if a.get("id") == account_id:
             for k, v in kwargs.items():
                 if k in allowed:
-                    a[k] = (v or "").strip() if isinstance(v, str) else v
+                    if k == "steam_guard":
+                        a[k] = _normalize_steam_guard(v)
+                    elif k == "trade_config":
+                        a[k] = dict(v or {}) if isinstance(v, dict) else {}
+                    else:
+                        a[k] = (v or "").strip() if isinstance(v, str) else v
             _save(data)
             return a
     return None
@@ -89,6 +101,39 @@ def replace_all(data: dict) -> None:
         "current_id": data.get("current_id"),
     }
     _save(payload)
+
+def _normalize_steam_guard(value: Any) -> dict:
+    src = value if isinstance(value, dict) else {}
+    return {
+        "shared_secret": (src.get("shared_secret") or "").strip(),
+        "identity_secret": (src.get("identity_secret") or "").strip(),
+        "device_id": (src.get("device_id") or "").strip(),
+    }
+
+def get_account_steam_guard(account: Optional[dict], cfg: Optional[dict] = None) -> dict:
+    """Return account-level Steam Guard secrets with global config fallback."""
+    acc_guard = _normalize_steam_guard((account or {}).get("steam_guard") or {})
+    cfg = cfg or {}
+    cfg_guard = cfg.get("steam_guard") or {}
+    cfg_confirm = cfg.get("steam_confirm") or {}
+    return {
+        "shared_secret": acc_guard.get("shared_secret") or (cfg_guard.get("shared_secret") or "").strip(),
+        "identity_secret": acc_guard.get("identity_secret") or (cfg_confirm.get("identity_secret") or "").strip(),
+        "device_id": acc_guard.get("device_id") or (cfg_confirm.get("device_id") or "").strip(),
+    }
+
+def public_account(account: dict, cfg: Optional[dict] = None) -> dict:
+    """Return an account payload with compatibility guard status metadata."""
+    out = copy.deepcopy(account)
+    guard = _normalize_steam_guard(out.get("steam_guard") or {})
+    resolved = get_account_steam_guard(out, cfg)
+    out["steam_guard"] = guard
+    out["steam_guard_status"] = {
+        "account_configured": bool(guard.get("shared_secret")),
+        "resolved_configured": bool(resolved.get("shared_secret")),
+        "identity_configured": bool(resolved.get("identity_secret") and resolved.get("device_id")),
+    }
+    return out
 def get_profile_dir(account_id: Optional[str] = None) -> Path:
     base = Path(__file__).resolve().parent.parent / "config" / "playwright_steam"
     if account_id:

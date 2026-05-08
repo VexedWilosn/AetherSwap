@@ -110,6 +110,12 @@ var _lastLogMsg = '';
 var _lastLogCount = 0;
 var _lastLogSpan = null;
 
+function resetLogDedupState() {
+  _lastLogMsg = '';
+  _lastLogCount = 0;
+  _lastLogSpan = null;
+}
+
 function appendLogWithDedup(frag, line) {
   var msg = line.msg || '';
   var level = line.level || 'info';

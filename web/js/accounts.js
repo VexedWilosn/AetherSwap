@@ -40,6 +40,10 @@ function renderAccountDetail(acc, currentId) {
   else if (region === "IN") regionLabel = "印度 (IN)";
   else if (region === "RU") regionLabel = "俄罗斯 (RU)";
   else if (region === "EU") regionLabel = "欧元区 (EU)";
+  const guard = acc.steam_guard || {};
+  const guardStatus = acc.steam_guard_status || {};
+  const guardConfigured = !!guardStatus.resolved_configured;
+  const accountGuardConfigured = !!guardStatus.account_configured;
   detail.innerHTML = `
     <div class="account-detail-header">
       <div class="account-detail-main">
@@ -71,20 +75,48 @@ function renderAccountDetail(acc, currentId) {
         </svg>
         <div class="callout-text"><strong>安全提示：</strong>若你选择保存密码，仅用于自动填充登录。建议系统环境保持可信，定期更换密码并开启 Steam 令牌等二次验证。</div>
       </div>
-      </div>
       <div class="account-guard-section">
         <div class="account-guard-header">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
           <span>Steam 令牌</span>
-          <span class="account-guard-status" id="acct-guard-status-${escapeHtml(acc.id)}">未配置</span>
+          <span class="account-guard-status ${guardConfigured ? "configured" : ""}" id="acct-guard-status-${escapeHtml(acc.id)}">${accountGuardConfigured ? "账号级" : guardConfigured ? "使用全局" : "未配置"}</span>
         </div>
         <div class="account-guard-code" id="acct-guard-code-${escapeHtml(acc.id)}" title="点击复制令牌">
           <span class="guard-code-text">-----</span>
-          <span class="guard-code-hint">需在设置中配置 shared_secret</span>
+          <span class="guard-code-hint">${guardConfigured ? "点击刷新验证码" : "填写 shared_secret 后可生成验证码"}</span>
+        </div>
+        <div class="account-guard-fields">
+          <div class="field">
+            <label>shared_secret</label>
+            <input type="password" id="acct-guard-shared" value="${escapeHtml(guard.shared_secret || "")}" autocomplete="new-password" />
+          </div>
+          <div class="field">
+            <label>identity_secret</label>
+            <input type="password" id="acct-guard-identity" value="${escapeHtml(guard.identity_secret || "")}" autocomplete="new-password" />
+          </div>
+          <div class="field">
+            <label>device_id</label>
+            <input type="text" id="acct-guard-device" value="${escapeHtml(guard.device_id || "")}" placeholder="android:..." />
+          </div>
+        </div>
+        <div class="account-guard-actions">
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-acct-guard-refresh" data-id="${escapeHtml(acc.id)}">刷新验证码</button>
+          <button type="button" class="btn btn-primary btn-sm" id="btn-acct-guard-save" data-id="${escapeHtml(acc.id)}">保存令牌</button>
         </div>
       </div>
     </div>
   `;
+  detail.querySelector("#btn-acct-guard-save")?.addEventListener("click", async (e) => {
+    const id = e.currentTarget?.dataset?.id;
+    if (id) await saveAccountGuard(id);
+  });
+  detail.querySelector("#btn-acct-guard-refresh")?.addEventListener("click", async (e) => {
+    const id = e.currentTarget?.dataset?.id;
+    if (id) await refreshAccountGuardCode(id);
+  });
+  detail.querySelector(".account-guard-code")?.addEventListener("click", async () => {
+    await refreshAccountGuardCode(acc.id);
+  });
   detail.querySelector("#btn-acc-edit")?.addEventListener("click", (e) => {
     const id = e.currentTarget?.dataset?.id;
     if (id) openAccountForm(id);
@@ -287,6 +319,60 @@ async function refreshAccounts() {
     toast("加载失败", e.message || "");
     list.innerHTML = '<div style="padding:18px" class="text-muted">加载失败</div>';
     renderAccountDetail(null, null);
+  }
+}
+
+async function saveAccountGuard(accountId) {
+  const shared = (el("acct-guard-shared")?.value || "").trim();
+  const identity = (el("acct-guard-identity")?.value || "").trim();
+  const device = (el("acct-guard-device")?.value || "").trim();
+  try {
+    const r = await fetchJson(API + "/accounts/" + accountId, {
+      method: "PUT",
+      body: JSON.stringify({
+        steam_guard: {
+          shared_secret: shared,
+          identity_secret: identity,
+          device_id: device,
+        },
+      }),
+    });
+    if (r.ok) {
+      toast("令牌已保存");
+      await refreshAccounts();
+      await refreshAccountGuardCode(accountId);
+    } else {
+      toast("保存失败", r.error || "");
+    }
+  } catch (e) {
+    toast("保存失败", e.message || "");
+  }
+}
+
+async function refreshAccountGuardCode(accountId) {
+  const codeBox = document.getElementById("acct-guard-code-" + accountId);
+  const codeEl = codeBox?.querySelector(".guard-code-text");
+  const hintEl = codeBox?.querySelector(".guard-code-hint");
+  if (codeEl) codeEl.textContent = "-----";
+  try {
+    const d = await fetchJson(API + "/steam_guard?account_id=" + encodeURIComponent(accountId));
+    if (d.ok) {
+      if (codeEl) codeEl.textContent = d.code || "-----";
+      const remaining = d.server_time != null ? (d.period || 30) - (d.server_time % (d.period || 30)) : null;
+      if (hintEl) hintEl.textContent = remaining != null ? `${remaining}s 后刷新` : "点击复制验证码";
+      try {
+        await navigator.clipboard.writeText(d.code || "");
+        toast("验证码已复制", d.code || "");
+      } catch {
+        toast("验证码", d.code || "");
+      }
+    } else {
+      if (hintEl) hintEl.textContent = d.error || "获取失败";
+      toast("获取验证码失败", d.error || "");
+    }
+  } catch (e) {
+    if (hintEl) hintEl.textContent = e.message || "获取失败";
+    toast("获取验证码失败", e.message || "");
   }
 }
 

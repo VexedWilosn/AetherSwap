@@ -6,7 +6,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Optional
 
-from app.accounts import get_current_account
+from app.accounts import get_account_steam_guard, get_current_account
 from app.config_loader import get_steam_credentials, load_app_config_validated
 from app.config_schema import DEFAULTS, merge
 from app.inventory_cs2 import scan_cs2_inventory
@@ -407,8 +407,9 @@ def _auto_confirm_listings(ctx: PipelineContext, cfg: dict, steam_id: str, cooki
     steam_confirm_cfg = cfg.get("steam_confirm") or {}
     if not bool(steam_confirm_cfg.get("enabled")):
         return
-    identity_secret = (steam_confirm_cfg.get("identity_secret") or "").strip()
-    device_id = (steam_confirm_cfg.get("device_id") or "").strip()
+    guard = get_account_steam_guard(get_current_account(), cfg)
+    identity_secret = (guard.get("identity_secret") or "").strip()
+    device_id = (guard.get("device_id") or "").strip()
     if not identity_secret or not device_id:
         ctx.log("[确认] 已开启自动确认，但 identity_secret/device_id 未配置，跳过", "warn", category="steam")
         return
