@@ -349,25 +349,28 @@
               <span class="label">当前持仓</span>
               <span class="hint">按最新市场价测算收益</span>
             </div>
+            <div class="panel-toolbar-left-actions">
+              <button id="btn-holdings-multiselect" class="btn btn-sm btn-secondary">多选</button>
+              <div id="holdings-batch-actions" class="tx-batch-bar hidden" style="display:none;">
+                <span class="tx-batch-count">已选择 <strong id="holdings-selected-count">0</strong> 项</span>
+                <button id="btn-holdings-batch-sell" class="btn btn-sm btn-primary">批量记录售出</button>
+                <button id="btn-holdings-batch-del" class="btn btn-sm btn-danger-outline">批量删除</button>
+              </div>
+            </div>
             <div class="panel-toolbar-actions">
               <div class="market-price-tools">
                 <button id="btn-refresh-market-price" class="btn btn-sm btn-secondary" type="button">刷新价格</button>
                 <span id="market-price-refresh-record" class="market-price-refresh-record">未刷新</span>
               </div>
-              <button id="btn-holdings-toggle-cols" class="btn btn-sm btn-secondary" type="button" aria-pressed="false">显示更多列</button>
-              <button id="btn-holdings-multiselect" class="btn btn-sm btn-secondary">多选</button>
+              <button id="btn-holdings-toggle-cols" class="btn btn-sm btn-secondary" type="button" aria-pressed="false">显示更多数据</button>
               <div class="tx-toolbar-more" id="tx-more-actions">
                 <button id="btn-tx-more-actions" class="btn btn-sm btn-secondary tx-toolbar-more-trigger" type="button" aria-haspopup="menu" aria-expanded="false">更多操作</button>
                 <div class="tx-toolbar-more-menu" role="menu">
                   <button id="btn-open-add-purchase" class="tx-action-item" type="button" role="menuitem">手动入账</button>
                   <button id="btn-sync-sold" class="tx-action-item" type="button" role="menuitem">同步持仓状态</button>
+                  <button id="btn-holdings-column-sort" class="tx-action-item" type="button" role="menuitem">调整列顺序</button>
                 </div>
               </div>
-            </div>
-            <div id="holdings-batch-actions" class="tx-batch-bar hidden" style="display:none;">
-              <span class="tx-batch-count">已选择 <strong id="holdings-selected-count">0</strong> 项</span>
-              <button id="btn-holdings-batch-sell" class="btn btn-sm btn-primary">批量记录售出</button>
-              <button id="btn-holdings-batch-del" class="btn btn-sm btn-danger-outline">批量删除</button>
             </div>
           </div>
           <div id="purchases-summary" class="purchases-summary"></div>
@@ -391,8 +394,41 @@
             <option value="fallback">摘要价</option>
             <option value="missing">价格缺失</option>
           </select>
+          <select id="holdings-sort-by" title="当前持仓排序字段">
+            <option value="time">按时间</option>
+            <option value="name">按物品</option>
+            <option value="unlock">按解禁时间</option>
+            <option value="buy_price">按购入价</option>
+            <option value="buy_market">按购入市场价</option>
+            <option value="current_market">按现市场价</option>
+            <option value="discount">按实际折扣</option>
+            <option value="cash_profit">按变现收益</option>
+            <option value="self_use">按自用收益</option>
+            <option value="market_change">按市场变动</option>
+          </select>
+          <select id="holdings-sort-dir" title="当前持仓排序方向">
+            <option value="desc">降序</option>
+            <option value="asc">升序</option>
+          </select>
           <button id="btn-reset-holdings-filter" class="btn btn-sm btn-secondary" type="button">重置</button>
           <span id="holdings-filter-count" class="tx-filter-count"></span>
+        </div>
+        <div id="holdings-column-sort-bar" class="tx-column-sort-bar hidden" aria-live="polite">
+          <div class="tx-column-sort-header">
+            <span class="tx-column-sort-title">列排序中</span>
+            <button id="btn-holdings-column-sort-reset" class="btn btn-sm btn-secondary" type="button">重置列顺序</button>
+            <button id="btn-holdings-column-sort-done" class="btn btn-sm btn-primary" type="button">完成</button>
+          </div>
+          <div class="tx-column-sort-lanes">
+            <div class="tx-column-sort-lane">
+              <span class="tx-column-sort-label">当前展示</span>
+              <div id="holdings-column-sort-visible" class="tx-column-sort-list"></div>
+            </div>
+            <div class="tx-column-sort-lane">
+              <span id="holdings-column-sort-extra-label" class="tx-column-sort-label">更多数据</span>
+              <div id="holdings-column-sort-extra" class="tx-column-sort-list"></div>
+            </div>
+          </div>
         </div>
         <div id="market-price-notice" class="market-price-notice hidden" role="button" tabindex="0" aria-live="polite">
           <div class="market-price-notice-main">
@@ -413,22 +449,22 @@
           <table id="transactions-table-purchases" class="tx-table-compact">
             <thead>
               <tr>
-                <th id="holding-select-th" class="hidden" style="width:52px;min-width:52px"></th>
-                <th>时间</th>
-                <th>物品/说明</th>
-                <th>账号</th>
-                <th>解禁时间</th>
-                <th>自动化</th>
-                <th class="tx-extra-col">assetid</th>
-                <th>购入价</th>
-                <th class="tx-extra-col">购入市场价</th>
-                <th>现市场价</th>
-                <th class="tx-extra-col">税后价格</th>
-                <th>实际折扣比率</th>
-                <th>变现收益</th>
-                <th class="tx-extra-col">自用收益</th>
-                <th class="tx-extra-col">市场变动</th>
-                <th>操作</th>
+                <th id="holding-select-th" data-col="select" class="hidden" style="width:52px;min-width:52px"></th>
+                <th data-col="time">时间</th>
+                <th data-col="name">物品/说明</th>
+                <th data-col="account">账号</th>
+                <th data-col="unlock">解禁时间</th>
+                <th data-col="automation">自动化</th>
+                <th data-col="assetid" class="tx-extra-col">assetid</th>
+                <th data-col="buy_price">购入价</th>
+                <th data-col="buy_market" class="tx-extra-col">购入市场价</th>
+                <th data-col="current_market">现市场价</th>
+                <th data-col="after_tax" class="tx-extra-col">税后价格</th>
+                <th data-col="discount">实际折扣比率</th>
+                <th data-col="cash_profit">变现收益</th>
+                <th data-col="self_use" class="tx-extra-col">自用收益</th>
+                <th data-col="market_change" class="tx-extra-col">市场变动</th>
+                <th data-col="actions">操作</th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -443,13 +479,15 @@
               <span class="label">交易流水</span>
               <span class="hint">买入、出售、下架与历史结果</span>
             </div>
-            <div class="panel-toolbar-actions">
-              <button id="btn-history-toggle-cols" class="btn btn-sm btn-secondary" type="button" aria-pressed="false">显示更多列</button>
+            <div class="panel-toolbar-left-actions">
               <button id="btn-history-multiselect" class="btn btn-sm btn-secondary">多选</button>
+              <div id="history-batch-actions" class="tx-batch-bar hidden" style="display:none;">
+                <span class="tx-batch-count">已选择 <strong id="history-selected-count">0</strong> 项</span>
+                <button id="btn-history-batch-del" class="btn btn-sm btn-danger-outline">批量删除</button>
+              </div>
             </div>
-            <div id="history-batch-actions" class="tx-batch-bar hidden" style="display:none;">
-              <span class="tx-batch-count">已选择 <strong id="history-selected-count">0</strong> 项</span>
-              <button id="btn-history-batch-del" class="btn btn-sm btn-danger-outline">批量删除</button>
+            <div class="panel-toolbar-actions">
+              <button id="btn-history-toggle-cols" class="btn btn-sm btn-secondary" type="button" aria-pressed="false">显示更多数据</button>
             </div>
           </div>
           <div id="purchase-history-summary" class="purchases-summary"></div>
@@ -973,12 +1011,13 @@
                 </div>
                 <div class="field">
                   <label>库存自动刷新 (秒)</label>
-                  <input type="number" id="cfg-inv-refresh" />
+                  <input type="number" id="cfg-inv-refresh" min="0" placeholder="60"
+                    title="网页打开时每隔多少秒刷新 Steam 库存，0 表示关闭前端自动刷新" />
                 </div>
                 <div class="field">
                   <label>操作记录现市场价刷新间隔 (分钟)</label>
-                  <input type="number" id="cfg-current-price-refresh-minutes" min="1" placeholder="10"
-                    title="仅在此间隔过后再次打开/刷新操作记录时才请求 Steam 现价" />
+                  <input type="number" id="cfg-current-price-refresh-minutes" min="0" placeholder="10"
+                    title="网页打开时每隔多少分钟刷新 Steam 现市场价，0 表示关闭前端自动刷新" />
                 </div>
                 <div class="field field--switch">
                   <label class="checkbox-wrapper">
@@ -992,6 +1031,11 @@
                   <label for="cfg-exchange-refresh-hours">汇率刷新间隔(小时)</label>
                   <input type="number" id="cfg-exchange-refresh-hours" min="0" step="0.5" placeholder="0"
                     title="每隔多少小时自动查询一次汇率，0 表示关闭" />
+                </div>
+                <div class="field">
+                  <label for="cfg-session-keepalive-hours">Steam 保活间隔(小时)</label>
+                  <input type="number" id="cfg-session-keepalive-hours" min="0" step="0.5" placeholder="4"
+                    title="服务器后台每隔多少小时验证/保活 Steam Cookie，0 表示关闭" />
                 </div>
                 <div class="field">
                   <label for="cfg-ui_scale">界面缩放比例(内部浏览器)</label>

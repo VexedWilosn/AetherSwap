@@ -30,6 +30,11 @@ def api_status():
     buff_creds = get_buff()
     st["buff_no_cookie"] = not bool((buff_creds.get("cookies") or "").strip())
     st["receive"] = get_receive_status()
+    try:
+        from app.shared_market import get_market_price_context
+        st["price_meta"] = get_market_price_context()
+    except Exception:
+        st["price_meta"] = {}
     return st
 
 @router.get("/api/log")

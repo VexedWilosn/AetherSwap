@@ -219,6 +219,9 @@ async function refreshStatus() {
         pushLyricLine(receiveText);
       }
     }
+    if (d.price_meta && typeof handleMarketPriceMeta === "function") {
+      handleMarketPriceMeta(d.price_meta);
+    }
     const pill = el("status-pill");
     if (pill) {
       pill.classList.remove("status-idle", "status-running", "status-stopped", "status-error");
@@ -711,12 +714,18 @@ function bindEvents() {
   });
   el("btn-clear-market-circuit")?.addEventListener("click", (e) => {
     e.stopPropagation();
+    el("market-price-notice-more")?.classList.remove("open");
+    el("btn-market-price-notice-more")?.setAttribute("aria-expanded", "false");
     if (typeof clearMarketPriceCircuit === "function") clearMarketPriceCircuit();
   });
   el("btn-market-price-notice-more")?.addEventListener("click", (e) => {
     e.stopPropagation();
     const wrap = el("market-price-notice-more");
     const open = !wrap?.classList.contains("open");
+    document.querySelectorAll(".tx-toolbar-more.open").forEach((node) => {
+      node.classList.remove("open");
+      node.querySelector("[aria-expanded]")?.setAttribute("aria-expanded", "false");
+    });
     if (wrap) wrap.classList.toggle("open", open);
     e.currentTarget.setAttribute("aria-expanded", open ? "true" : "false");
   });
@@ -725,8 +734,24 @@ function bindEvents() {
     const wrap = el("tx-more-actions");
     const open = !wrap?.classList.contains("open");
     document.querySelectorAll(".tx-toolbar-more.open").forEach((node) => node.classList.remove("open"));
+    document.querySelectorAll(".market-price-notice-more.open").forEach((node) => {
+      node.classList.remove("open");
+      node.querySelector("[aria-expanded]")?.setAttribute("aria-expanded", "false");
+    });
     if (wrap) wrap.classList.toggle("open", open);
     e.currentTarget.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  el("btn-holdings-column-sort")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    el("tx-more-actions")?.classList.remove("open");
+    el("btn-tx-more-actions")?.setAttribute("aria-expanded", "false");
+    if (typeof toggleHoldingsColumnSortMode === "function") toggleHoldingsColumnSortMode();
+  });
+  el("btn-holdings-column-sort-done")?.addEventListener("click", () => {
+    if (typeof setHoldingsColumnSortMode === "function") setHoldingsColumnSortMode(false);
+  });
+  el("btn-holdings-column-sort-reset")?.addEventListener("click", () => {
+    if (typeof resetHoldingsColumnOrderPreference === "function") resetHoldingsColumnOrderPreference();
   });
   document.addEventListener("click", (e) => {
     if (e.target.closest(".tx-toolbar-more")) return;
@@ -753,10 +778,12 @@ function bindEvents() {
   el("btn-refresh-market-price")?.addEventListener("click", () => {
     if (typeof retrySmartMarketPrices === "function") retrySmartMarketPrices();
   });
-  el("market-price-notice")?.addEventListener("click", () => {
+  el("market-price-notice")?.addEventListener("click", (e) => {
+    if (e.target.closest(".market-price-notice-actions")) return;
     if (typeof retrySmartMarketPrices === "function") retrySmartMarketPrices();
   });
   el("market-price-notice")?.addEventListener("keydown", (e) => {
+    if (e.target.closest(".market-price-notice-actions")) return;
     if (e.key !== "Enter" && e.key !== " ") return;
     e.preventDefault();
     if (typeof retrySmartMarketPrices === "function") retrySmartMarketPrices();
@@ -771,13 +798,24 @@ function bindEvents() {
   el("holdings-filter-price")?.addEventListener("change", () => {
     if (typeof rerenderTransactionsFromCache === "function") rerenderTransactionsFromCache();
   });
+  el("holdings-sort-by")?.addEventListener("change", () => {
+    if (typeof rerenderTransactionsFromCache === "function") rerenderTransactionsFromCache();
+  });
+  el("holdings-sort-dir")?.addEventListener("change", () => {
+    if (typeof rerenderTransactionsFromCache === "function") rerenderTransactionsFromCache();
+  });
   el("btn-reset-holdings-filter")?.addEventListener("click", () => {
     const search = el("holdings-filter-search");
     const status = el("holdings-filter-status");
     const price = el("holdings-filter-price");
+    const sortBy = el("holdings-sort-by");
+    const sortDir = el("holdings-sort-dir");
     if (search) search.value = "";
     if (status) status.value = "all";
     if (price) price.value = "all";
+    if (sortBy) sortBy.value = "time";
+    if (sortDir) sortDir.value = "desc";
+    if (typeof resetHoldingsColumnOrderPreference === "function") resetHoldingsColumnOrderPreference();
     if (typeof rerenderTransactionsFromCache === "function") rerenderTransactionsFromCache();
   });
   el("accounts-search")?.addEventListener("input", (e) => {
@@ -1024,14 +1062,14 @@ function bindEvents() {
   });
   el("btn-holdings-multiselect")?.addEventListener("click", () => {
     holdingsMultiSelectMode = !holdingsMultiSelectMode;
-    refreshTransactions();
+    if (typeof syncHoldingsMultiSelectUI === "function") syncHoldingsMultiSelectUI();
   });
   el("btn-holdings-toggle-cols")?.addEventListener("click", () => {
     setHoldingsShowMoreColumns(!holdingsShowMoreColumns);
   });
   el("btn-history-multiselect")?.addEventListener("click", () => {
     historyMultiSelectMode = !historyMultiSelectMode;
-    refreshTransactions();
+    if (typeof syncHistoryMultiSelectUI === "function") syncHistoryMultiSelectUI();
   });
   el("btn-history-toggle-cols")?.addEventListener("click", () => {
     setHistoryShowMoreColumns(!historyShowMoreColumns);

@@ -3,11 +3,19 @@
 避免同一物品被重复查询两次。
 """
 import re
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, Optional, Set
 from urllib.parse import quote
 from app.config_loader import get_steam_credentials, load_app_config_validated
 _BATCH_MAX_WORKERS = 4
+_PRICE_DETAIL_TTL = 60
+_PRICE_DETAIL_FAILURE_TTL = 15
+_PRICE_DETAIL_WAIT_TIMEOUT = 35
+_price_detail_cache: dict = {}
+_price_detail_inflight: dict = {}
+_price_detail_lock = threading.Lock()
 PRICE_SOURCE_SMART = "smart"
 PRICE_SOURCE_STEAM_LOWEST = "steam_lowest"
 PRICE_SOURCE_LABELS = {
@@ -121,9 +129,65 @@ def get_steam_smart_price_cny(session, market_hash_name: str, app_id: int = 730)
     """
     detail = get_steam_market_price_detail(session, market_hash_name, app_id=app_id)
     return detail.get("price")
+def _detail_cache_key(market_hash_name: str, app_id: int) -> tuple:
+    return ((market_hash_name or "").strip(), int(app_id))
+def _copy_detail(detail: dict) -> dict:
+    return dict(detail) if isinstance(detail, dict) else {"price": None, "source": None, "source_label": "", "reason": ""}
+def _get_cached_detail(key: tuple) -> Optional[dict]:
+    with _price_detail_lock:
+        entry = _price_detail_cache.get(key)
+        if not entry:
+            return None
+        detail, expires_at = entry
+        if time.time() >= expires_at:
+            _price_detail_cache.pop(key, None)
+            return None
+        return _copy_detail(detail)
+def _set_cached_detail(key: tuple, detail: dict) -> None:
+    price = detail.get("price") if isinstance(detail, dict) else None
+    ttl = _PRICE_DETAIL_TTL if price is not None and price > 0 else _PRICE_DETAIL_FAILURE_TTL
+    with _price_detail_lock:
+        _price_detail_cache[key] = (_copy_detail(detail), time.time() + ttl)
+def _fetch_price_detail_coalesced(cookies: str, steam_id: str, name: str, app_id: int, force_smart: bool) -> tuple:
+    from steam.session import create_market_session
+    key = _detail_cache_key(name, app_id)
+    if not force_smart:
+        cached = _get_cached_detail(key)
+        if cached is not None:
+            return name, cached
+    inflight_key = (key, bool(force_smart))
+    with _price_detail_lock:
+        if not force_smart:
+            entry = _price_detail_cache.get(key)
+            if entry:
+                detail, expires_at = entry
+                if time.time() < expires_at:
+                    return name, _copy_detail(detail)
+                _price_detail_cache.pop(key, None)
+        event = _price_detail_inflight.get(inflight_key)
+        if event is None:
+            event = threading.Event()
+            _price_detail_inflight[inflight_key] = event
+            owner = True
+        else:
+            owner = False
+    if not owner:
+        event.wait(_PRICE_DETAIL_WAIT_TIMEOUT)
+        cached = _get_cached_detail(key)
+        if cached is not None:
+            return name, cached
+        return name, {"price": None, "source": None, "source_label": "", "reason": "market_price_inflight_timeout"}
+    try:
+        session = create_market_session(cookies, steam_id)
+        detail = get_steam_market_price_detail(session, name, app_id=app_id, force_smart=force_smart)
+        _set_cached_detail(key, detail)
+        return name, detail
+    finally:
+        with _price_detail_lock:
+            _price_detail_inflight.pop(inflight_key, None)
+            event.set()
 def batch_fetch_price_details(names: Set[str], app_id: int = 730, force_smart: bool = False) -> Dict[str, dict]:
     """Batch query market prices with source metadata."""
-    from steam.session import create_market_session
     if not names:
         return {}
     cred = get_steam_credentials()
@@ -133,9 +197,7 @@ def batch_fetch_price_details(names: Set[str], app_id: int = 730, force_smart: b
         return {}
     def _fetch_one(name: str) -> tuple:
         try:
-            session = create_market_session(cookies, steam_id)
-            detail = get_steam_market_price_detail(session, name, app_id=app_id, force_smart=force_smart)
-            return name, detail
+            return _fetch_price_detail_coalesced(cookies, steam_id, name, app_id, force_smart)
         except Exception as e:
             try:
                 from app.state import log

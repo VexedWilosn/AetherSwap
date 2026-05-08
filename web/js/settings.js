@@ -3,6 +3,14 @@ let inventoryRefreshSeconds = 60;
 let inventoryTimer = null;
 let currentPriceRefreshMinutes = 10;
 let currentPriceTimer = null;
+function readNumberInput(id, parser = parseFloat) {
+  const node = el(id);
+  if (!node) return undefined;
+  const raw = String(node.value ?? "").trim();
+  if (raw === "") return undefined;
+  const value = parser(raw);
+  return Number.isFinite(value) ? value : undefined;
+}
 function isInternalWebviewShell() {
   try {
     return new URLSearchParams(window.location.search).get("shell") === "webview";
@@ -108,7 +116,8 @@ async function loadConfig() {
   if (sellPressureThresh) sellPressureThresh.value = p.sell_pressure_threshold ?? "";
   const currentPriceRefreshEl = el("cfg-current-price-refresh-minutes");
   if (currentPriceRefreshEl) currentPriceRefreshEl.value = p.current_price_refresh_minutes ?? "";
-  currentPriceRefreshMinutes = parseInt(p.current_price_refresh_minutes, 10) || currentPriceRefreshMinutes || 10;
+  const currentPriceValue = parseInt(p.current_price_refresh_minutes, 10);
+  currentPriceRefreshMinutes = Number.isFinite(currentPriceValue) ? currentPriceValue : 10;
   const marketCircuitEnabled = el("cfg-market-price-circuit-enabled");
   if (marketCircuitEnabled) marketCircuitEnabled.checked = p.market_price_circuit_enabled !== false;
   const gStartTimeLimitEnabled = el("cfg-start-time-limit-enabled");
@@ -119,7 +128,8 @@ async function loadConfig() {
   if (gEndTimeHour) gEndTimeHour.value = p.end_time_hour ?? "";
   const invInput = el("cfg-inv-refresh");
   if (invInput) invInput.value = inv.refresh_seconds ?? "";
-  inventoryRefreshSeconds = parseInt(inv.refresh_seconds, 10) || inventoryRefreshSeconds || 60;
+  const inventoryRefreshValue = parseInt(inv.refresh_seconds, 10);
+  inventoryRefreshSeconds = Number.isFinite(inventoryRefreshValue) ? inventoryRefreshValue : 60;
   const n = c.notify || {};
   const gPush = el("cfg-pushplus_token");
   if (gPush) gPush.value = n.pushplus_token ?? "";
@@ -157,6 +167,8 @@ async function loadConfig() {
   if (gDeviceId) gDeviceId.value = sc.device_id ?? "";
   const gFx = el("cfg-exchange-refresh-hours");
   if (gFx) gFx.value = sys.exchange_rate_refresh_hours ?? "";
+  const gKeepalive = el("cfg-session-keepalive-hours");
+  if (gKeepalive) gKeepalive.value = sys.session_keepalive_hours ?? "";
   const gUiScale = el("cfg-ui_scale");
   if (gUiScale) {
     gUiScale.value = sys.ui_scale || "0.7";
@@ -225,7 +237,7 @@ function formToConfig() {
       safe_purchase_low_price_hard_cap: el("cfg-safe_purchase_low_price_hard_cap") ? parseInt(el("cfg-safe_purchase_low_price_hard_cap").value, 10) : undefined,
       sell_pressure_orders_n: el("cfg-sell_pressure_orders_n") ? parseInt(el("cfg-sell_pressure_orders_n").value, 10) : undefined,
       sell_pressure_threshold: el("cfg-sell_pressure_threshold") ? parseFloat(el("cfg-sell_pressure_threshold").value) : undefined,
-      current_price_refresh_minutes: el("cfg-current-price-refresh-minutes") ? parseInt(el("cfg-current-price-refresh-minutes").value, 10) || undefined : undefined,
+      current_price_refresh_minutes: readNumberInput("cfg-current-price-refresh-minutes", (v) => parseInt(v, 10)),
       market_price_circuit_enabled: el("cfg-market-price-circuit-enabled") ? el("cfg-market-price-circuit-enabled").checked : undefined,
       start_time_limit_enabled: !!el("cfg-start-time-limit-enabled")?.checked,
       start_time_hour: el("cfg-start-time-hour") ? (parseInt(el("cfg-start-time-hour").value, 10) >= 0 && parseInt(el("cfg-start-time-hour").value, 10) <= 23 ? parseInt(el("cfg-start-time-hour").value, 10) : undefined) : undefined,
@@ -245,7 +257,7 @@ function formToConfig() {
       use_vwap: el("cfg-use_vwap") ? el("cfg-use_vwap").checked : undefined,
     },
     inventory: {
-      refresh_seconds: el("cfg-inv-refresh") ? parseInt(el("cfg-inv-refresh").value, 10) || undefined : undefined,
+      refresh_seconds: readNumberInput("cfg-inv-refresh", (v) => parseInt(v, 10)),
     },
     notify: {
       pushplus_token: el("cfg-pushplus_token") ? el("cfg-pushplus_token").value.trim() : undefined,
@@ -270,7 +282,8 @@ function formToConfig() {
       device_id: el("cfg-steam-device-id") ? el("cfg-steam-device-id").value.trim() : undefined,
     },
     system: {
-      exchange_rate_refresh_hours: el("cfg-exchange-refresh-hours") ? parseFloat(el("cfg-exchange-refresh-hours").value) || undefined : undefined,
+      exchange_rate_refresh_hours: readNumberInput("cfg-exchange-refresh-hours"),
+      session_keepalive_hours: readNumberInput("cfg-session-keepalive-hours"),
       ui_scale: el("cfg-ui_scale") ? el("cfg-ui_scale").value : undefined,
     },
     steam_deals: {

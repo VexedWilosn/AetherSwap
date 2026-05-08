@@ -4,9 +4,53 @@ let historyMultiSelectMode = false;
 const TX_HOLDINGS_COLUMNS_KEY = "aetherswap_holdings_show_extra_cols";
 const TX_HISTORY_COLUMNS_KEY = "aetherswap_history_show_extra_cols";
 const TX_PRICE_REFRESH_RECORD_KEY = "aetherswap_price_refresh_record";
+const TX_HOLDINGS_SORT_KEY = "aetherswap_holdings_sort";
+const TX_HOLDINGS_COLUMN_ORDER_KEY = "aetherswap_holdings_column_order";
+const TX_HOLDINGS_EXTRA_COLUMNS_KEY = "aetherswap_holdings_extra_columns";
 const TX_TRADE_COOLDOWN_DAYS = 7;
+const TX_HOLDINGS_FIXED_COLUMNS = ["select"];
+const TX_HOLDINGS_COLUMN_ORDER = [
+  "time",
+  "name",
+  "account",
+  "unlock",
+  "automation",
+  "assetid",
+  "buy_price",
+  "buy_market",
+  "current_market",
+  "after_tax",
+  "discount",
+  "cash_profit",
+  "self_use",
+  "market_change",
+  "actions",
+];
+const TX_HOLDINGS_DEFAULT_EXTRA_COLUMNS = ["assetid", "buy_market", "after_tax", "self_use", "market_change"];
+const TX_HOLDINGS_COLUMN_LABELS = {
+  time: "时间",
+  name: "物品/说明",
+  account: "账号",
+  unlock: "解禁时间",
+  automation: "自动化",
+  assetid: "assetid",
+  buy_price: "购入价",
+  buy_market: "购入市场价",
+  current_market: "现市场价",
+  after_tax: "税后价格",
+  discount: "实际折扣比率",
+  cash_profit: "变现收益",
+  self_use: "自用收益",
+  market_change: "市场变动",
+  actions: "操作",
+};
 let txAccountsCapabilityCache = null;
 let txAccountsCapabilityAt = 0;
+let holdingsColumnSortMode = false;
+let holdingsColumnDragPlaceholder = null;
+let txHoldingsSort = readHoldingsSortPreference();
+let txHoldingsColumnOrder = readHoldingsColumnOrderPreference();
+let txHoldingsExtraColumns = readHoldingsExtraColumnsPreference();
 let txHoldingsFilters = { search: "", status: "all", price: "all" };
 function readTxColumnPreference(key, defaultValue = false) {
   try {
@@ -22,6 +66,69 @@ function writeTxColumnPreference(key, value) {
     localStorage.setItem(key, value ? "1" : "0");
   } catch {
   }
+}
+function readHoldingsSortPreference() {
+  try {
+    const raw = localStorage.getItem(TX_HOLDINGS_SORT_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    const by = TX_HOLDINGS_COLUMN_ORDER.includes(parsed.by) ? parsed.by : "time";
+    const dir = parsed.dir === "asc" ? "asc" : "desc";
+    return { by, dir };
+  } catch {
+    return { by: "time", dir: "desc" };
+  }
+}
+function writeHoldingsSortPreference(value) {
+  try {
+    localStorage.setItem(TX_HOLDINGS_SORT_KEY, JSON.stringify(value));
+  } catch {
+  }
+}
+function readHoldingsColumnOrderPreference() {
+  try {
+    const raw = localStorage.getItem(TX_HOLDINGS_COLUMN_ORDER_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return TX_HOLDINGS_COLUMN_ORDER.slice();
+    const known = parsed.filter((col) => TX_HOLDINGS_COLUMN_ORDER.includes(col));
+    return [...known, ...TX_HOLDINGS_COLUMN_ORDER.filter((col) => !known.includes(col))];
+  } catch {
+    return TX_HOLDINGS_COLUMN_ORDER.slice();
+  }
+}
+function writeHoldingsColumnOrderPreference(order) {
+  txHoldingsColumnOrder = order.filter((col) => TX_HOLDINGS_COLUMN_ORDER.includes(col));
+  try {
+    localStorage.setItem(TX_HOLDINGS_COLUMN_ORDER_KEY, JSON.stringify(txHoldingsColumnOrder));
+  } catch {
+  }
+}
+function readHoldingsExtraColumnsPreference() {
+  try {
+    const raw = localStorage.getItem(TX_HOLDINGS_EXTRA_COLUMNS_KEY);
+    const parsed = raw ? JSON.parse(raw) : TX_HOLDINGS_DEFAULT_EXTRA_COLUMNS;
+    if (!Array.isArray(parsed)) return TX_HOLDINGS_DEFAULT_EXTRA_COLUMNS.slice();
+    return parsed.filter((col) => TX_HOLDINGS_COLUMN_ORDER.includes(col) && !TX_HOLDINGS_FIXED_COLUMNS.includes(col));
+  } catch {
+    return TX_HOLDINGS_DEFAULT_EXTRA_COLUMNS.slice();
+  }
+}
+function writeHoldingsExtraColumnsPreference(cols) {
+  txHoldingsExtraColumns = cols.filter((col) => TX_HOLDINGS_COLUMN_ORDER.includes(col) && !TX_HOLDINGS_FIXED_COLUMNS.includes(col));
+  try {
+    localStorage.setItem(TX_HOLDINGS_EXTRA_COLUMNS_KEY, JSON.stringify(txHoldingsExtraColumns));
+  } catch {
+  }
+}
+function resetHoldingsColumnOrderPreference() {
+  txHoldingsColumnOrder = TX_HOLDINGS_COLUMN_ORDER.slice();
+  txHoldingsExtraColumns = TX_HOLDINGS_DEFAULT_EXTRA_COLUMNS.slice();
+  try {
+    localStorage.removeItem(TX_HOLDINGS_COLUMN_ORDER_KEY);
+    localStorage.removeItem(TX_HOLDINGS_EXTRA_COLUMNS_KEY);
+  } catch {
+  }
+  applyHoldingsColumnOrder();
+  renderHoldingsColumnSortBar();
 }
 function readMarketPriceRefreshRecord() {
   try {
@@ -141,6 +248,13 @@ function readHoldingsFiltersFromUI() {
     status: el("holdings-filter-status")?.value || "all",
     price: el("holdings-filter-price")?.value || "all",
   };
+  const sortBy = el("holdings-sort-by")?.value || txHoldingsSort.by;
+  const sortDir = el("holdings-sort-dir")?.value || txHoldingsSort.dir;
+  txHoldingsSort = {
+    by: TX_HOLDINGS_COLUMN_ORDER.includes(sortBy) ? sortBy : "time",
+    dir: sortDir === "asc" ? "asc" : "desc",
+  };
+  writeHoldingsSortPreference(txHoldingsSort);
   return txHoldingsFilters;
 }
 function filterHoldingsList(holdings) {
@@ -160,6 +274,53 @@ function filterHoldingsList(holdings) {
     }
     return true;
   });
+}
+function getHoldingSortValue(t, key, resellRatio = 0.85) {
+  const cost = Number(t.price) || 0;
+  const cur = t.current_market_price != null ? Number(t.current_market_price) : null;
+  const buyMarket = t.market_price != null ? Number(t.market_price) : null;
+  const afterTax = cur != null && cur > 0 ? cur / 1.15 : null;
+  const ratio = Math.max(0.01, Math.min(1, Number(resellRatio) || 0.85));
+  if (key === "time") return Number(t.at) || 0;
+  if (key === "name") return (t.name || "").toString().toLowerCase();
+  if (key === "account") return normalizeAccountLabel(getTxAccountCapability().current).toLowerCase();
+  if (key === "unlock") return getUnlockState(t).unlockTs || 0;
+  if (key === "automation") return getAutomationState(t, getTxAccountCapability()).key || "";
+  if (key === "assetid") return t.assetid || "";
+  if (key === "buy_price") return cost;
+  if (key === "buy_market") return buyMarket;
+  if (key === "current_market") return cur;
+  if (key === "after_tax") return afterTax;
+  if (key === "discount") return afterTax != null && afterTax > 0 && cost > 0 ? cost / afterTax : null;
+  if (key === "cash_profit") return afterTax != null && cost > 0 ? afterTax * ratio - cost : null;
+  if (key === "self_use") return afterTax != null && cost > 0 ? afterTax - cost : null;
+  if (key === "market_change") return cur != null && buyMarket != null ? cur - buyMarket : null;
+  return Number(t.at) || 0;
+}
+function sortHoldingsList(list, resellRatio = 0.85) {
+  const sort = txHoldingsSort || { by: "time", dir: "desc" };
+  const dir = sort.dir === "asc" ? 1 : -1;
+  return list.slice().sort((a, b) => {
+    const av = getHoldingSortValue(a, sort.by, resellRatio);
+    const bv = getHoldingSortValue(b, sort.by, resellRatio);
+    const aMissing = av == null || av === "";
+    const bMissing = bv == null || bv === "";
+    if (aMissing && bMissing) return (Number(b.at) || 0) - (Number(a.at) || 0);
+    if (aMissing) return 1;
+    if (bMissing) return -1;
+    if (typeof av === "string" || typeof bv === "string") {
+      const cmp = String(av).localeCompare(String(bv), "zh-Hans-CN", { numeric: true });
+      return cmp === 0 ? (Number(b.at) || 0) - (Number(a.at) || 0) : cmp * dir;
+    }
+    const cmp = Number(av) - Number(bv);
+    return cmp === 0 ? (Number(b.at) || 0) - (Number(a.at) || 0) : cmp * dir;
+  });
+}
+function syncHoldingsSortControls() {
+  const sortBy = el("holdings-sort-by");
+  const sortDir = el("holdings-sort-dir");
+  if (sortBy) sortBy.value = txHoldingsSort.by || "time";
+  if (sortDir) sortDir.value = txHoldingsSort.dir || "desc";
 }
 function refreshHoldingsFilterUI(total, filtered) {
   const countEl = el("holdings-filter-count");
@@ -249,6 +410,16 @@ function getLiveMarketCircuit(circuit = {}) {
   }
   return live;
 }
+function getCurrentMarketCircuit() {
+  return getLiveMarketCircuit(lastMarketPriceMeta?.circuit || {});
+}
+function formatMarketCircuitRemaining(seconds) {
+  const total = Math.max(0, Number(seconds || 0));
+  const mins = Math.floor(total / 60);
+  const secs = Math.floor(total % 60);
+  if (mins <= 0) return `${secs}秒`;
+  return `${mins}:${String(secs).padStart(2, "0")}`;
+}
 function stopMarketCircuitTimer() {
   if (marketCircuitTimer) {
     clearInterval(marketCircuitTimer);
@@ -292,8 +463,9 @@ function buildMarketPriceIssueDetail(counts, meta = null) {
   if (fallback > 0) parts.push(`${fallback} 项使用最低/中位价摘要`);
   const circuit = getLiveMarketCircuit(meta?.circuit || {});
   if (circuit.open) {
-    parts.push(`Steam 智能价熔断剩余约 ${circuit.remaining_seconds || 0} 秒`);
-    parts.push("当前仅能使用最低价/中位价摘要");
+    parts.push(`Steam 智能价熔断剩余 ${formatMarketCircuitRemaining(circuit.remaining_seconds)}`);
+    parts.push("重试已暂停，当前仅能使用最低价/中位价摘要");
+    parts.push("确认代理/加速器恢复后可在更多里解除熔断");
   }
   if (meta?.proxy_enabled === false && Number(meta?.configured_proxy_count || 0) > 0) {
     parts.push("已配置代理但代理池未启用");
@@ -307,9 +479,15 @@ function buildMarketPriceIssueDetail(counts, meta = null) {
 }
 function syncMarketPriceRefreshControls() {
   const btn = el("btn-refresh-market-price");
+  const circuit = getCurrentMarketCircuit();
   if (btn) {
-    btn.disabled = smartPriceRetrying;
-    btn.textContent = smartPriceRetrying ? "刷新中..." : "刷新价格";
+    btn.disabled = smartPriceRetrying || !!circuit.open;
+    if (smartPriceRetrying) btn.textContent = "刷新中...";
+    else if (circuit.open) btn.textContent = `熔断中 ${formatMarketCircuitRemaining(circuit.remaining_seconds)}`;
+    else btn.textContent = "刷新价格";
+    btn.title = circuit.open
+      ? "Steam 智能价熔断保护中，暂不重试；确认代理/加速器恢复后可在提示栏更多操作中解除熔断。"
+      : "";
   }
   const recordEl = el("market-price-refresh-record");
   if (!recordEl) return;
@@ -383,7 +561,9 @@ function updateMarketPriceNotice(meta, holdings) {
   const fallbackCount = list.filter((t) => t.current_market_price != null && t.current_market_price_source === "steam_lowest").length;
   const missingCount = list.filter((t) => t.current_market_price == null).length;
   const circuit = getLiveMarketCircuit(meta?.circuit || {});
-  const shouldShow = list.length > 0 && (fallbackCount > 0 || missingCount > 0 || !!meta?.warning || !!meta?.fallback_used || !!circuit.open);
+  const warning = meta?.warning ? String(meta.warning) : "";
+  const liveWarning = warning && !(warning.includes("熔断") && !circuit.open);
+  const shouldShow = list.length > 0 && (fallbackCount > 0 || missingCount > 0 || !!liveWarning || !!meta?.fallback_used || !!circuit.open);
   if (!shouldShow) {
     notice.classList.add("hidden");
     notice.classList.remove("is-loading");
@@ -416,8 +596,13 @@ function updateMarketPriceNotice(meta, holdings) {
   notice.classList.remove("hidden");
   notice.classList.toggle("is-loading", smartPriceRetrying);
   if (retryBtn) {
-    retryBtn.disabled = smartPriceRetrying;
-    retryBtn.textContent = smartPriceRetrying ? "获取中..." : "重试获取现市场价";
+    retryBtn.disabled = smartPriceRetrying || !!circuit.open;
+    if (smartPriceRetrying) retryBtn.textContent = "获取中...";
+    else if (circuit.open) retryBtn.textContent = `熔断中 ${formatMarketCircuitRemaining(circuit.remaining_seconds)}`;
+    else retryBtn.textContent = "重试获取现市场价";
+    retryBtn.title = circuit.open
+      ? "熔断倒计时结束前不会自动重试；确认网络恢复后可在更多里解除熔断。"
+      : "";
   }
   if (clearBtn) {
     clearBtn.disabled = smartPriceRetrying || marketCircuitClearing;
@@ -433,6 +618,251 @@ function updateMarketPriceNotice(meta, holdings) {
   }
   syncMarketPriceRefreshControls();
 }
+function getCurrentHoldingsColumnOrderFromHeader() {
+  const table = el("transactions-table-purchases");
+  const cols = Array.from(table?.querySelectorAll("thead th[data-col]") || [])
+    .map((th) => th.dataset.col)
+    .filter((col) => col && !TX_HOLDINGS_FIXED_COLUMNS.includes(col));
+  return [...cols.filter((col) => TX_HOLDINGS_COLUMN_ORDER.includes(col)), ...TX_HOLDINGS_COLUMN_ORDER.filter((col) => !cols.includes(col))];
+}
+function applyHoldingsColumnOrder() {
+  const table = el("transactions-table-purchases");
+  if (!table) return;
+  table.classList.toggle("is-column-sort-mode", holdingsColumnSortMode);
+  const fullOrder = ["select", ...txHoldingsColumnOrder];
+  const reorderCells = (row) => {
+    const cellsByCol = new Map(Array.from(row.children).map((cell) => [cell.dataset.col, cell]));
+    fullOrder.forEach((col) => {
+      const cell = cellsByCol.get(col);
+      if (cell) row.appendChild(cell);
+    });
+  };
+  const headerRow = table.querySelector("thead tr");
+  if (headerRow) reorderCells(headerRow);
+  table.querySelectorAll("tbody tr").forEach((row) => {
+    if (!row.querySelector("[data-col]")) return;
+    reorderCells(row);
+  });
+  table.querySelectorAll("thead th[data-col], tbody td[data-col]").forEach((cell) => {
+    const col = cell.dataset.col;
+    if (!col || TX_HOLDINGS_FIXED_COLUMNS.includes(col)) return;
+    cell.classList.toggle("tx-extra-col", txHoldingsExtraColumns.includes(col));
+  });
+  bindHoldingsColumnDrag();
+}
+function setHoldingColumnZone(col, zone) {
+  if (!col || TX_HOLDINGS_FIXED_COLUMNS.includes(col)) return;
+  const next = txHoldingsExtraColumns.filter((item) => item !== col);
+  if (zone === "extra") next.push(col);
+  writeHoldingsExtraColumnsPreference(next);
+}
+function moveHoldingColumnBefore(from, to, insertAfter = false, targetZone = null) {
+  if (!from || !to || from === to || TX_HOLDINGS_FIXED_COLUMNS.includes(from) || TX_HOLDINGS_FIXED_COLUMNS.includes(to)) return;
+  if (targetZone) setHoldingColumnZone(from, targetZone);
+  const order = txHoldingsColumnOrder.filter((col) => col !== from);
+  const toIdx = order.indexOf(to);
+  if (toIdx < 0) return;
+  order.splice(toIdx + (insertAfter ? 1 : 0), 0, from);
+  writeHoldingsColumnOrderPreference(order);
+  applyHoldingsColumnOrder();
+  renderHoldingsColumnSortBar();
+}
+function moveHoldingColumnToZoneEnd(from, targetZone) {
+  if (!from || TX_HOLDINGS_FIXED_COLUMNS.includes(from)) return;
+  setHoldingColumnZone(from, targetZone);
+  const sameZoneCols = txHoldingsColumnOrder.filter((col) => {
+    if (col === from) return false;
+    const isExtra = txHoldingsExtraColumns.includes(col);
+    return targetZone === "extra" ? isExtra : !isExtra;
+  });
+  const lastInZone = sameZoneCols[sameZoneCols.length - 1];
+  const order = txHoldingsColumnOrder.filter((col) => col !== from);
+  const insertAt = lastInZone ? order.indexOf(lastInZone) + 1 : (targetZone === "extra" ? order.length : 0);
+  order.splice(Math.max(0, insertAt), 0, from);
+  writeHoldingsColumnOrderPreference(order);
+  applyHoldingsColumnOrder();
+  renderHoldingsColumnSortBar();
+}
+function clearHoldingsColumnPlaceholder() {
+  if (holdingsColumnDragPlaceholder) {
+    holdingsColumnDragPlaceholder.remove();
+    holdingsColumnDragPlaceholder = null;
+  }
+}
+function showHoldingsColumnPlaceholder(target, insertAfter = false) {
+  if (!target || !target.parentElement) return;
+  if (!holdingsColumnDragPlaceholder) {
+    holdingsColumnDragPlaceholder = document.createElement("span");
+    holdingsColumnDragPlaceholder.className = "tx-column-placeholder";
+    holdingsColumnDragPlaceholder.setAttribute("aria-hidden", "true");
+  }
+  const width = Math.max(56, Math.round(target.getBoundingClientRect().width));
+  holdingsColumnDragPlaceholder.style.width = `${width}px`;
+  target.parentElement.insertBefore(holdingsColumnDragPlaceholder, insertAfter ? target.nextSibling : target);
+}
+function showHoldingsColumnPlaceholderAtEnd(wrap) {
+  if (!wrap) return;
+  if (!holdingsColumnDragPlaceholder) {
+    holdingsColumnDragPlaceholder = document.createElement("span");
+    holdingsColumnDragPlaceholder.className = "tx-column-placeholder";
+    holdingsColumnDragPlaceholder.setAttribute("aria-hidden", "true");
+  }
+  holdingsColumnDragPlaceholder.style.width = "72px";
+  wrap.appendChild(holdingsColumnDragPlaceholder);
+}
+function bindHoldingsColumnDrag() {
+  const table = el("transactions-table-purchases");
+  if (!table) return;
+  table.querySelectorAll("thead th[data-col]").forEach((th) => {
+    const col = th.dataset.col;
+    const draggable = holdingsColumnSortMode && col && !TX_HOLDINGS_FIXED_COLUMNS.includes(col);
+    th.draggable = draggable;
+    th.classList.toggle("tx-draggable-col", draggable);
+    if (!draggable || th.dataset.dragBound === "1") return;
+    th.dataset.dragBound = "1";
+    th.addEventListener("dragstart", (e) => {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", col);
+      th.classList.add("is-dragging");
+    });
+    th.addEventListener("dragend", () => {
+      th.classList.remove("is-dragging");
+      table.querySelectorAll("thead th.is-drop-before, thead th.is-drop-after").forEach((node) => node.classList.remove("is-drop-before", "is-drop-after"));
+    });
+    th.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      const after = e.offsetX > th.offsetWidth / 2;
+      table.querySelectorAll("thead th.is-drop-before, thead th.is-drop-after").forEach((node) => {
+        if (node !== th) node.classList.remove("is-drop-before", "is-drop-after");
+      });
+      th.classList.toggle("is-drop-before", !after);
+      th.classList.toggle("is-drop-after", after);
+    });
+    th.addEventListener("dragleave", () => {
+      th.classList.remove("is-drop-before", "is-drop-after");
+    });
+    th.addEventListener("drop", (e) => {
+      e.preventDefault();
+      th.classList.remove("is-drop-before", "is-drop-after");
+      const from = e.dataTransfer.getData("text/plain");
+      const to = th.dataset.col;
+      moveHoldingColumnBefore(from, to, e.offsetX > th.offsetWidth / 2);
+    });
+  });
+}
+function setHoldingsColumnSortMode(enabled) {
+  holdingsColumnSortMode = !!enabled;
+  const bar = el("holdings-column-sort-bar");
+  const menuBtn = el("btn-holdings-column-sort");
+  if (bar) bar.classList.toggle("hidden", !holdingsColumnSortMode);
+  if (menuBtn) menuBtn.textContent = holdingsColumnSortMode ? "退出列排序" : "调整列顺序";
+  applyHoldingsColumnOrder();
+  renderHoldingsColumnSortBar();
+}
+function toggleHoldingsColumnSortMode() {
+  setHoldingsColumnSortMode(!holdingsColumnSortMode);
+}
+function renderHoldingsColumnSortBar() {
+  const bar = el("holdings-column-sort-bar");
+  if (!bar || !holdingsColumnSortMode) return;
+  const visibleWrap = el("holdings-column-sort-visible");
+  const extraWrap = el("holdings-column-sort-extra");
+  const extraLabel = el("holdings-column-sort-extra-label");
+  const renderChip = (col) => `<button class="tx-column-chip" type="button" draggable="true" data-col="${escapeHtml(col)}">${escapeHtml(TX_HOLDINGS_COLUMN_LABELS[col] || col)}</button>`;
+  const visibleCols = txHoldingsColumnOrder.filter((col) => !txHoldingsExtraColumns.includes(col));
+  const extraCols = txHoldingsColumnOrder.filter((col) => txHoldingsExtraColumns.includes(col));
+  if (visibleWrap) visibleWrap.innerHTML = visibleCols.map(renderChip).join("");
+  if (extraWrap) extraWrap.innerHTML = extraCols.map(renderChip).join("");
+  if (extraLabel) extraLabel.textContent = holdingsShowMoreColumns ? "更多数据" : "收起数据";
+  const clearZoneHighlight = () => {
+    bar.querySelectorAll(".tx-column-sort-lane.is-drop-zone").forEach((node) => node.classList.remove("is-drop-zone"));
+  };
+  [visibleWrap, extraWrap].forEach((wrap) => {
+    if (!wrap || wrap.dataset.dropBound === "1") return;
+    wrap.dataset.dropBound = "1";
+    wrap.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      const chip = e.target.closest(".tx-column-chip");
+      if (chip?.classList.contains("is-dragging")) {
+        showHoldingsColumnPlaceholderAtEnd(wrap);
+        return;
+      }
+      if (!chip && wrap.lastElementChild) showHoldingsColumnPlaceholder(wrap.lastElementChild, true);
+      else if (!chip) showHoldingsColumnPlaceholderAtEnd(wrap);
+    });
+    wrap.addEventListener("drop", (e) => {
+      e.preventDefault();
+      clearHoldingsColumnPlaceholder();
+      const from = e.dataTransfer.getData("text/plain");
+      const targetZone = wrap.id === "holdings-column-sort-extra" ? "extra" : "visible";
+      const chip = e.target.closest(".tx-column-chip");
+      if (chip?.classList.contains("is-dragging")) {
+        moveHoldingColumnToZoneEnd(from, targetZone);
+        return;
+      }
+      if (chip) moveHoldingColumnBefore(from, chip.dataset.col, e.offsetX > chip.offsetWidth / 2, targetZone);
+      else moveHoldingColumnToZoneEnd(from, targetZone);
+    });
+  });
+  [visibleWrap?.closest(".tx-column-sort-lane"), extraWrap?.closest(".tx-column-sort-lane")].forEach((lane) => {
+    if (!lane || lane.dataset.dropBound === "1") return;
+    lane.dataset.dropBound = "1";
+    lane.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      clearZoneHighlight();
+      lane.classList.add("is-drop-zone");
+      const list = lane.querySelector(".tx-column-sort-list");
+      const chip = e.target.closest(".tx-column-chip");
+      if (!chip && list) showHoldingsColumnPlaceholderAtEnd(list);
+    });
+    lane.addEventListener("dragleave", (e) => {
+      if (e.relatedTarget && lane.contains(e.relatedTarget)) return;
+      lane.classList.remove("is-drop-zone");
+    });
+    lane.addEventListener("drop", (e) => {
+      e.preventDefault();
+      clearZoneHighlight();
+      clearHoldingsColumnPlaceholder();
+      const list = lane.querySelector(".tx-column-sort-list");
+      const targetZone = list?.id === "holdings-column-sort-extra" ? "extra" : "visible";
+      const chip = e.target.closest(".tx-column-chip");
+      if (chip && !chip.classList.contains("is-dragging")) moveHoldingColumnBefore(e.dataTransfer.getData("text/plain"), chip.dataset.col, e.offsetX > chip.offsetWidth / 2, targetZone);
+      else moveHoldingColumnToZoneEnd(e.dataTransfer.getData("text/plain"), targetZone);
+    });
+  });
+  bar.querySelectorAll(".tx-column-chip").forEach((chip) => {
+    chip.addEventListener("dragstart", (e) => {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", chip.dataset.col || "");
+      chip.classList.add("is-dragging");
+      showHoldingsColumnPlaceholder(chip, true);
+    });
+    chip.addEventListener("dragend", () => {
+      chip.classList.remove("is-dragging");
+      clearZoneHighlight();
+      clearHoldingsColumnPlaceholder();
+    });
+    chip.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = "move";
+      showHoldingsColumnPlaceholder(chip, e.offsetX > chip.offsetWidth / 2);
+    });
+    chip.addEventListener("dragleave", () => {
+    });
+    chip.addEventListener("drop", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      clearHoldingsColumnPlaceholder();
+      const wrap = chip.closest(".tx-column-sort-list");
+      const targetZone = wrap?.id === "holdings-column-sort-extra" ? "extra" : "visible";
+      moveHoldingColumnBefore(e.dataTransfer.getData("text/plain"), chip.dataset.col, e.offsetX > chip.offsetWidth / 2, targetZone);
+    });
+  });
+}
 function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, multiSelectMode = false) {
   const ratio = Math.max(0.01, Math.min(1, Number(resellRatio) || 0.85));
   const accountCapability = getTxAccountCapability();
@@ -445,32 +875,30 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
     const idx = t.idx;
     const type = t.type;
     const checkCell = isPurchase
-      ? (multiSelectMode
-        ? `<td class="holding-select-cell"><input type="checkbox" class="holding-checkbox" data-idx="${idx}" /></td>`
-        : `<td class="holding-select-cell hidden"></td>`)
+      ? `<td data-col="select" class="holding-select-cell ${multiSelectMode ? "" : "hidden"}"><input type="checkbox" class="holding-checkbox" data-idx="${idx}" /></td>`
       : "";
-    const priceCell = `<td class="mono">${escapeHtml(Number(t.price).toFixed(2))}</td>`;
+    const priceCell = `<td data-col="buy_price" class="mono">${escapeHtml(Number(t.price).toFixed(2))}</td>`;
     if (isPurchase) {
       const state = getAutomationState(t, accountCapability);
       const actHtml = renderTradeAction(t, state, type, idx, multiSelectMode);
-      const accountCell = `<td><span class="tx-account-cell" title="${escapeHtml(accountName)}">${escapeHtml(accountName)}</span></td>`;
-      const unlockCell = `<td><span class="tx-unlock-cell ${state.unlock.locked ? "is-locked" : "is-ready"}"><span>${escapeHtml(state.unlock.detail)}</span><small>${escapeHtml(state.unlock.label)}</small></span></td>`;
-      const automationCell = `<td>${renderAutomationBadge(state)}</td>`;
+      const accountCell = `<td data-col="account"><span class="tx-account-cell" title="${escapeHtml(accountName)}">${escapeHtml(accountName)}</span></td>`;
+      const unlockCell = `<td data-col="unlock"><span class="tx-unlock-cell ${state.unlock.locked ? "is-locked" : "is-ready"}"><span>${escapeHtml(state.unlock.detail)}</span><small>${escapeHtml(state.unlock.label)}</small></span></td>`;
+      const automationCell = `<td data-col="automation">${renderAutomationBadge(state)}</td>`;
       const mp = t.market_price != null ? Number(t.market_price).toFixed(2) : "—";
       const cur = t.current_market_price != null ? Number(t.current_market_price) : null;
       const cmp = cur != null ? cur.toFixed(2) : "";
       const cmpSource = marketPriceSourceLabel(t);
       const cmpTitle = cmpSource ? ` title="价格来源：${escapeHtml(cmpSource)}"` : "";
       const cmpCell = cmp
-        ? `<td class="mono"${cmpTitle}>${escapeHtml(cmp)}${cmpSource === "最低价/中位价摘要" ? '<span class="tx-price-source">摘</span>' : ""}</td>`
-        : '<td class="mono text-muted" title="现市场价暂未获取到">—</td>';
+        ? `<td data-col="current_market" class="mono"${cmpTitle}>${escapeHtml(cmp)}${cmpSource === "最低价/中位价摘要" ? '<span class="tx-price-source">摘</span>' : ""}</td>`
+        : '<td data-col="current_market" class="mono text-muted" title="现市场价暂未获取到">—</td>';
       const marketAtBuy = t.market_price != null ? Number(t.market_price) : null;
-      let plCell = `<td class="tx-extra-col"></td>`;
+      let plCell = `<td data-col="market_change" class="tx-extra-col"></td>`;
       if (cur != null && marketAtBuy != null && marketAtBuy > 0) {
         const diff = cur - marketAtBuy;
         const pct = ((diff / marketAtBuy) * 100).toFixed(2) + "%";
         const cls = diff > 0 ? "text-ok" : diff < 0 ? "text-bad" : "";
-        plCell = `<td class="mono tx-extra-col ${cls}">${diff >= 0 ? "+" : ""}${diff.toFixed(2)} (${diff >= 0 ? "+" : ""}${pct})</td>`;
+        plCell = `<td data-col="market_change" class="mono tx-extra-col ${cls}">${diff >= 0 ? "+" : ""}${diff.toFixed(2)} (${diff >= 0 ? "+" : ""}${pct})</td>`;
       }
       const cost = Number(t.price) || 0;
       const afterTaxVal = cur != null && cur > 0 ? cur / 1.15 : null;
@@ -481,13 +909,13 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
       const profitClass = cashProfit ? (parseFloat(cashProfit) > 0 ? "text-ok" : parseFloat(cashProfit) < 0 ? "text-bad" : "") : "";
       const selfUseProfit = afterTaxVal != null && cost > 0 ? (afterTaxVal - cost).toFixed(2) : "";
       const selfUseClass = selfUseProfit ? (parseFloat(selfUseProfit) > 0 ? "text-ok" : parseFloat(selfUseProfit) < 0 ? "text-bad" : "") : "";
-      const afterTaxCell = afterTax ? `<td class="mono tx-extra-col">${escapeHtml(afterTax)}</td>` : `<td class="tx-extra-col"></td>`;
-      const discountRatioCell = discountRatio ? `<td class="mono ${discountRatioClass}">${escapeHtml(discountRatio)}</td>` : "<td></td>";
-      const profitCell = cashProfit ? `<td class="mono ${profitClass}">${escapeHtml(parseFloat(cashProfit) >= 0 ? "+" + cashProfit : cashProfit)}</td>` : "<td></td>";
-      const selfUseCell = selfUseProfit ? `<td class="mono tx-extra-col ${selfUseClass}">${escapeHtml(parseFloat(selfUseProfit) >= 0 ? "+" + selfUseProfit : selfUseProfit)}</td>` : `<td class="tx-extra-col"></td>`;
-      const assetidCell = `<td class="mono tx-extra-col">${escapeHtml(t.assetid ?? "—")}</td>`;
-      const buyMarketCell = `<td class="mono tx-extra-col">${escapeHtml(mp)}</td>`;
-      rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${nameHtml}</td>${accountCell}${unlockCell}${automationCell}${assetidCell}${priceCell}${buyMarketCell}${cmpCell}${afterTaxCell}${discountRatioCell}${profitCell}${selfUseCell}${plCell}<td class="tx-actions">${actHtml}</td></tr>`);
+      const afterTaxCell = afterTax ? `<td data-col="after_tax" class="mono tx-extra-col">${escapeHtml(afterTax)}</td>` : `<td data-col="after_tax" class="tx-extra-col"></td>`;
+      const discountRatioCell = discountRatio ? `<td data-col="discount" class="mono ${discountRatioClass}">${escapeHtml(discountRatio)}</td>` : '<td data-col="discount"></td>';
+      const profitCell = cashProfit ? `<td data-col="cash_profit" class="mono ${profitClass}">${escapeHtml(parseFloat(cashProfit) >= 0 ? "+" + cashProfit : cashProfit)}</td>` : '<td data-col="cash_profit"></td>';
+      const selfUseCell = selfUseProfit ? `<td data-col="self_use" class="mono tx-extra-col ${selfUseClass}">${escapeHtml(parseFloat(selfUseProfit) >= 0 ? "+" + selfUseProfit : selfUseProfit)}</td>` : `<td data-col="self_use" class="tx-extra-col"></td>`;
+      const assetidCell = `<td data-col="assetid" class="mono tx-extra-col">${escapeHtml(t.assetid ?? "—")}</td>`;
+      const buyMarketCell = `<td data-col="buy_market" class="mono tx-extra-col">${escapeHtml(mp)}</td>`;
+      rowHtmls.push(`<tr>${checkCell}<td data-col="time" class="mono">${escapeHtml(timeStr)}</td><td data-col="name">${nameHtml}</td>${accountCell}${unlockCell}${automationCell}${assetidCell}${priceCell}${buyMarketCell}${cmpCell}${afterTaxCell}${discountRatioCell}${profitCell}${selfUseCell}${plCell}<td data-col="actions" class="tx-actions">${actHtml}</td></tr>`);
     } else {
       const actHtml = `<div class="tx-actions-dropdown"><button type="button" class="tx-actions-trigger" title="操作">⋮</button><div class="tx-actions-menu"><button type="button" class="tx-action-item tx-btn-edit" data-type="${escapeHtml(type)}" data-idx="${idx}">编辑</button><button type="button" class="tx-action-item tx-action-danger tx-btn-del" data-type="${escapeHtml(type)}" data-idx="${idx}">删除</button></div></div>`;
       const assetidCell = `<td class="mono">${escapeHtml(t.assetid ?? "—")}</td>`;
@@ -499,6 +927,7 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
   } else {
     tbody.innerHTML = rowHtmls.join("");
   }
+  if (isPurchase) applyHoldingsColumnOrder();
   bindSelectionCount("#transactions-table-purchases .holding-checkbox", "holdings-selected-count");
   tbody.querySelectorAll(".ph-btn-delist").forEach(btn => {
     btn.addEventListener("click", async () => {
@@ -604,9 +1033,7 @@ function renderPurchaseHistoryTable(tbody, list, resellRatio = 0.85, multiSelect
     const nameText = (t.name || "—").toString();
     const nameHtml = buildItemNameHtml(nameText);
     const idx = t.idx;
-    const checkCell = multiSelectMode
-      ? `<td class="holding-select-cell"><input type="checkbox" class="history-checkbox" data-idx="${idx}" /></td>`
-      : `<td class="holding-select-cell hidden"></td>`;
+    const checkCell = `<td class="holding-select-cell ${multiSelectMode ? "" : "hidden"}"><input type="checkbox" class="history-checkbox" data-idx="${idx}" /></td>`;
     const cost = Number(t.price) || 0;
     const mp = t.market_price != null ? Number(t.market_price).toFixed(2) : "—";
     const sold = t.sale_price != null && Number(t.sale_price) > 0;
@@ -696,8 +1123,8 @@ function renderPurchaseHistoryTable(tbody, list, resellRatio = 0.85, multiSelect
 function applyTransactionsToUI(all, summaryEl, tbodyP, tbodyHistory, resellRatio = 0.85) {
   const purchases = all.filter((t) => t.type === "purchase");
   const holdings = purchases.filter((t) => !(t.sale_price != null && Number(t.sale_price) > 0));
-  const filteredHoldings = filterHoldingsList(holdings);
   const ratio = Math.max(0.01, Math.min(1, Number(resellRatio) || 0.85));
+  const filteredHoldings = sortHoldingsList(filterHoldingsList(holdings), ratio);
   lastTransactionsResellRatio = ratio;
   const holdingsCountEl = el("tx-tab-count-purchases");
   const historyCountEl = el("tx-tab-count-history");
@@ -726,6 +1153,7 @@ function applyTransactionsToUI(all, summaryEl, tbodyP, tbodyHistory, resellRatio
   if (tbodyHistory) renderPurchaseHistoryTable(tbodyHistory, purchases, ratio, historyMultiSelectMode);
   updateMarketPriceNotice(lastMarketPriceMeta, holdings);
   refreshHoldingsFilterUI(holdings.length, filteredHoldings.length);
+  syncHoldingsSortControls();
   syncMarketPriceRefreshControls();
   syncHistoryMultiSelectUI();
   const historySummaryEl = el("purchase-history-summary");
@@ -829,15 +1257,21 @@ function syncHoldingsMultiSelectUI() {
   const selectTh = el("holding-select-th");
   const batchBar = el("holdings-batch-actions");
   const multiselectBtn = el("btn-holdings-multiselect");
+  document.querySelectorAll("#transactions-table-purchases .holding-select-cell").forEach((cell) => {
+    cell.classList.toggle("hidden", !holdingsMultiSelectMode);
+  });
   if (holdingsMultiSelectMode) {
     if (selectTh) selectTh.classList.remove("hidden");
     if (batchBar) { batchBar.classList.remove("hidden"); batchBar.style.display = "flex"; }
     if (multiselectBtn) multiselectBtn.textContent = "取消多选";
+    if (multiselectBtn) multiselectBtn.setAttribute("aria-pressed", "true");
     bindSelectionCount("#transactions-table-purchases .holding-checkbox", "holdings-selected-count");
   } else {
     if (selectTh) selectTh.classList.add("hidden");
     if (batchBar) { batchBar.classList.add("hidden"); batchBar.style.display = "none"; }
     if (multiselectBtn) multiselectBtn.textContent = "多选";
+    if (multiselectBtn) multiselectBtn.setAttribute("aria-pressed", "false");
+    document.querySelectorAll("#transactions-table-purchases .holding-checkbox:checked").forEach((cb) => { cb.checked = false; });
     const countEl = el("holdings-selected-count");
     if (countEl) countEl.textContent = "0";
   }
@@ -846,15 +1280,21 @@ function syncHistoryMultiSelectUI() {
   const selectTh = el("history-select-th");
   const batchBar = el("history-batch-actions");
   const multiselectBtn = el("btn-history-multiselect");
+  document.querySelectorAll("#transactions-table-purchase-history .holding-select-cell").forEach((cell) => {
+    cell.classList.toggle("hidden", !historyMultiSelectMode);
+  });
   if (historyMultiSelectMode) {
     if (selectTh) selectTh.classList.remove("hidden");
     if (batchBar) { batchBar.classList.remove("hidden"); batchBar.style.display = "flex"; }
     if (multiselectBtn) multiselectBtn.textContent = "取消多选";
+    if (multiselectBtn) multiselectBtn.setAttribute("aria-pressed", "true");
     bindSelectionCount("#transactions-table-purchase-history .history-checkbox", "history-selected-count");
   } else {
     if (selectTh) selectTh.classList.add("hidden");
     if (batchBar) { batchBar.classList.add("hidden"); batchBar.style.display = "none"; }
     if (multiselectBtn) multiselectBtn.textContent = "多选";
+    if (multiselectBtn) multiselectBtn.setAttribute("aria-pressed", "false");
+    document.querySelectorAll("#transactions-table-purchase-history .history-checkbox:checked").forEach((cb) => { cb.checked = false; });
     const countEl = el("history-selected-count");
     if (countEl) countEl.textContent = "0";
   }
@@ -867,11 +1307,11 @@ function syncTxColumnToggleUI() {
   if (holdingsTable) holdingsTable.classList.toggle("show-extra-cols", holdingsShowMoreColumns);
   if (historyTable) historyTable.classList.toggle("show-extra-cols", historyShowMoreColumns);
   if (holdingsBtn) {
-    holdingsBtn.textContent = holdingsShowMoreColumns ? "收起列" : "显示更多列";
+    holdingsBtn.textContent = holdingsShowMoreColumns ? "收起数据" : "显示更多数据";
     holdingsBtn.setAttribute("aria-pressed", holdingsShowMoreColumns ? "true" : "false");
   }
   if (historyBtn) {
-    historyBtn.textContent = historyShowMoreColumns ? "收起列" : "显示更多列";
+    historyBtn.textContent = historyShowMoreColumns ? "收起数据" : "显示更多数据";
     historyBtn.setAttribute("aria-pressed", historyShowMoreColumns ? "true" : "false");
   }
 }
@@ -879,6 +1319,7 @@ function setHoldingsShowMoreColumns(value) {
   holdingsShowMoreColumns = !!value;
   writeTxColumnPreference(TX_HOLDINGS_COLUMNS_KEY, holdingsShowMoreColumns);
   syncTxColumnToggleUI();
+  renderHoldingsColumnSortBar();
 }
 function setHistoryShowMoreColumns(value) {
   historyShowMoreColumns = !!value;
@@ -948,6 +1389,16 @@ async function refreshTransactions(options = {}) {
 }
 async function retrySmartMarketPrices() {
   if (smartPriceRetrying) return;
+  const circuit = getCurrentMarketCircuit();
+  if (circuit.open) {
+    const msg = `Steam 智能价熔断剩余 ${formatMarketCircuitRemaining(circuit.remaining_seconds)}，确认代理/加速器恢复后可在提示栏“更多”里解除熔断。`;
+    toast("智能价熔断中", msg);
+    const holdings = Array.isArray(lastEnrichData)
+      ? lastEnrichData.filter((t) => t.type === "purchase" && !(t.sale_price != null && Number(t.sale_price) > 0))
+      : [];
+    updateMarketPriceNotice(lastMarketPriceMeta, holdings);
+    return;
+  }
   smartPriceRetrying = true;
   syncMarketPriceRefreshControls();
   updateMarketPriceNotice(lastMarketPriceMeta, Array.isArray(lastEnrichData) ? lastEnrichData : []);
