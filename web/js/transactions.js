@@ -55,6 +55,9 @@ let txHoldingsColumnOrder = readHoldingsColumnOrderPreference();
 let txHoldingsExtraColumns = readHoldingsExtraColumnsPreference();
 let txHoldingsFilters = { search: "", status: "all", price: "all" };
 let txHistoryFilters = { search: "", status: "all", period: "all" };
+function txEmptyText() {
+  return '<span class="tx-empty-value">—</span>';
+}
 function readTxColumnPreference(key, defaultValue = false) {
   try {
     const raw = localStorage.getItem(key);
@@ -1100,7 +1103,7 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
       const cmpTitle = cmpSource ? ` title="价格来源：${escapeHtml(cmpSource)}"` : "";
       const cmpCell = cmp
         ? `<td data-col="current_market" class="mono"${cmpTitle}>${escapeHtml(cmp)}${cmpSource === "最低价/中位价摘要" ? '<span class="tx-price-source">摘</span>' : ""}</td>`
-        : '<td data-col="current_market" class="mono text-muted" title="现市场价暂未获取到">—</td>';
+        : `<td data-col="current_market" class="mono text-muted" title="现市场价暂未获取到">${txEmptyText()}</td>`;
       const marketAtBuy = t.market_price != null ? Number(t.market_price) : null;
       let plCell = `<td data-col="market_change" class="tx-extra-col"></td>`;
       if (cur != null && marketAtBuy != null && marketAtBuy > 0) {
@@ -1118,16 +1121,16 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
       const profitClass = cashProfit ? (parseFloat(cashProfit) > 0 ? "text-ok" : parseFloat(cashProfit) < 0 ? "text-bad" : "") : "";
       const selfUseProfit = afterTaxVal != null && cost > 0 ? (afterTaxVal - cost).toFixed(2) : "";
       const selfUseClass = selfUseProfit ? (parseFloat(selfUseProfit) > 0 ? "text-ok" : parseFloat(selfUseProfit) < 0 ? "text-bad" : "") : "";
-      const afterTaxCell = afterTax ? `<td data-col="after_tax" class="mono tx-extra-col">${escapeHtml(afterTax)}</td>` : `<td data-col="after_tax" class="tx-extra-col"></td>`;
-      const discountRatioCell = discountRatio ? `<td data-col="discount" class="mono ${discountRatioClass}">${escapeHtml(discountRatio)}</td>` : '<td data-col="discount"></td>';
-      const profitCell = cashProfit ? `<td data-col="cash_profit" class="mono ${profitClass}">${escapeHtml(parseFloat(cashProfit) >= 0 ? "+" + cashProfit : cashProfit)}</td>` : '<td data-col="cash_profit"></td>';
-      const selfUseCell = selfUseProfit ? `<td data-col="self_use" class="mono tx-extra-col ${selfUseClass}">${escapeHtml(parseFloat(selfUseProfit) >= 0 ? "+" + selfUseProfit : selfUseProfit)}</td>` : `<td data-col="self_use" class="tx-extra-col"></td>`;
-      const assetidCell = `<td data-col="assetid" class="mono tx-extra-col">${escapeHtml(t.assetid ?? "—")}</td>`;
+      const afterTaxCell = afterTax ? `<td data-col="after_tax" class="mono tx-extra-col">${escapeHtml(afterTax)}</td>` : `<td data-col="after_tax" class="tx-extra-col">${txEmptyText()}</td>`;
+      const discountRatioCell = discountRatio ? `<td data-col="discount" class="mono ${discountRatioClass}">${escapeHtml(discountRatio)}</td>` : `<td data-col="discount">${txEmptyText()}</td>`;
+      const profitCell = cashProfit ? `<td data-col="cash_profit" class="mono ${profitClass}">${escapeHtml(parseFloat(cashProfit) >= 0 ? "+" + cashProfit : cashProfit)}</td>` : `<td data-col="cash_profit">${txEmptyText()}</td>`;
+      const selfUseCell = selfUseProfit ? `<td data-col="self_use" class="mono tx-extra-col ${selfUseClass}">${escapeHtml(parseFloat(selfUseProfit) >= 0 ? "+" + selfUseProfit : selfUseProfit)}</td>` : `<td data-col="self_use" class="tx-extra-col">${txEmptyText()}</td>`;
+      const assetidCell = `<td data-col="assetid" class="mono tx-extra-col">${t.assetid != null ? escapeHtml(t.assetid) : txEmptyText()}</td>`;
       const buyMarketCell = `<td data-col="buy_market" class="mono tx-extra-col">${escapeHtml(mp)}</td>`;
       rowHtmls.push(`<tr>${checkCell}<td data-col="time" class="mono">${escapeHtml(timeStr)}</td><td data-col="name">${nameHtml}</td>${accountCell}${unlockCell}${automationCell}${assetidCell}${priceCell}${buyMarketCell}${cmpCell}${afterTaxCell}${discountRatioCell}${profitCell}${selfUseCell}${plCell}<td data-col="actions" class="tx-actions">${actHtml}</td></tr>`);
     } else {
       const actHtml = `<div class="tx-actions-dropdown"><button type="button" class="tx-actions-trigger" title="操作">⋮</button><div class="tx-actions-menu"><button type="button" class="tx-action-item tx-btn-edit" data-type="${escapeHtml(type)}" data-idx="${idx}">编辑</button><button type="button" class="tx-action-item tx-action-danger tx-btn-del" data-type="${escapeHtml(type)}" data-idx="${idx}">删除</button></div></div>`;
-      const assetidCell = `<td class="mono">${escapeHtml(t.assetid ?? "—")}</td>`;
+      const assetidCell = `<td class="mono">${t.assetid != null ? escapeHtml(t.assetid) : txEmptyText()}</td>`;
       rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${nameHtml}</td>${assetidCell}${priceCell}<td class="tx-actions">${actHtml}</td></tr>`);
     }
   }
@@ -1188,7 +1191,7 @@ function renderPurchaseHistoryTable(tbody, list, resellRatio = 0.85, multiSelect
   const rowHtmls = [];
   for (const t of list) {
     const timeStr = formatDateTime(t.at);
-    const soldTimeStr = formatDateTime(t.sold_at);
+    const soldTimeStr = t.sold_at ? formatDateTime(t.sold_at) : "";
     const nameText = (t.name || "—").toString();
     const nameHtml = buildItemNameHtml(nameText);
     const idx = t.idx;
@@ -1199,8 +1202,8 @@ function renderPurchaseHistoryTable(tbody, list, resellRatio = 0.85, multiSelect
     const statusMeta = getHistoryStatusMeta(t, state);
     const sold = statusMeta.key === "sold";
     const metrics = getHistoryMetrics(t, ratio);
-    const salePriceStr = sold && metrics.sale != null ? metrics.sale.toFixed(2) : "—";
-    let discountRatioStr = "—", cashProfitStr = "—", selfUseStr = "—", discountRatioClass = "";
+    const salePriceStr = sold && metrics.sale != null ? metrics.sale.toFixed(2) : txEmptyText();
+    let discountRatioStr = txEmptyText(), cashProfitStr = txEmptyText(), selfUseStr = txEmptyText(), discountRatioClass = "";
     if (sold && metrics.afterTax != null) {
       discountRatioStr = metrics.discount != null ? metrics.discount.toFixed(4) : "—";
       discountRatioClass = discountRatioStr !== "—" ? (parseFloat(discountRatioStr) > ratio ? "text-bad" : "text-ok") : "";
@@ -1221,16 +1224,17 @@ function renderPurchaseHistoryTable(tbody, list, resellRatio = 0.85, multiSelect
         const devClass = diff > 0 ? "text-ok" : diff < 0 ? "text-bad" : "";
         deviationCell = `<td class="mono tx-extra-col ${devClass}">${diff >= 0 ? "+" : ""}${diff.toFixed(2)} (${diff >= 0 ? "+" : ""}${pct})</td>`;
       } else {
-        deviationCell = `<td class="mono tx-extra-col">—</td>`;
+        deviationCell = `<td class="mono tx-extra-col">${txEmptyText()}</td>`;
       }
     } else {
-      deviationCell = `<td class="mono tx-extra-col">—</td>`;
+      deviationCell = `<td class="mono tx-extra-col">${txEmptyText()}</td>`;
     }
     const hasListing = !multiSelectMode && t.listing;
     const delistItem = hasListing ? `<button type="button" class="tx-action-item ph-btn-delist" data-type="purchase" data-idx="${idx}">下架</button>` : "";
     const actHtml = !multiSelectMode ? `<div class="tx-actions-dropdown"><button type="button" class="tx-actions-trigger" title="操作">⋮</button><div class="tx-actions-menu">${delistItem}<button type="button" class="tx-action-item tx-action-danger ph-btn-del" data-type="purchase" data-idx="${idx}">删除</button></div></div>` : "";
-    const assetidStr = t.assetid ?? "—";
-    rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${nameHtml}</td><td><span class="tx-account-cell" title="${escapeHtml(accountName)}">${escapeHtml(accountName)}</span></td><td>${renderAutomationBadge(sold ? { className: "is-sold", label: "已完成", hint: "该记录已出售" } : state)}</td><td class="mono tx-extra-col">${escapeHtml(assetidStr)}</td><td class="mono">${escapeHtml(Number(t.price).toFixed(2))}</td><td class="mono tx-extra-col">${escapeHtml(mp)}</td><td>${renderHistoryStatusBadge(statusMeta)}</td><td class="mono">${escapeHtml(salePriceStr)}</td><td class="mono tx-extra-col">${escapeHtml(soldTimeStr)}</td><td class="mono ${discountRatioClass}">${escapeHtml(discountRatioStr)}</td><td class="mono ${cashClass}">${escapeHtml(cashProfitStr)}</td><td class="mono tx-extra-col ${selfUseClass}">${escapeHtml(selfUseStr)}</td>${deviationCell}<td class="tx-actions">${actHtml}</td></tr>`);
+    const assetidStr = t.assetid != null ? escapeHtml(t.assetid) : txEmptyText();
+    const soldTimeHtml = t.sold_at ? escapeHtml(soldTimeStr) : txEmptyText();
+    rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${nameHtml}</td><td><span class="tx-account-cell" title="${escapeHtml(accountName)}">${escapeHtml(accountName)}</span></td><td>${renderAutomationBadge(sold ? { className: "is-sold", label: "已完成", hint: "该记录已出售" } : state)}</td><td class="mono tx-extra-col">${assetidStr}</td><td class="mono">${escapeHtml(Number(t.price).toFixed(2))}</td><td class="mono tx-extra-col">${escapeHtml(mp)}</td><td>${renderHistoryStatusBadge(statusMeta)}</td><td class="mono">${salePriceStr}</td><td class="mono tx-extra-col">${soldTimeHtml}</td><td class="mono ${discountRatioClass}">${discountRatioStr}</td><td class="mono ${cashClass}">${cashProfitStr}</td><td class="mono tx-extra-col ${selfUseClass}">${selfUseStr}</td>${deviationCell}<td class="tx-actions">${actHtml}</td></tr>`);
   }
   tbody.innerHTML = rowHtmls.length
     ? rowHtmls.join("")

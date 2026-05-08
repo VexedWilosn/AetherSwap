@@ -405,7 +405,9 @@
 }
 
 .tx-filter-bar #history-filter-period,
-.tx-filter-bar #history-sort-by {
+.tx-filter-bar #history-sort-by,
+.tx-filter-bar #analytics-filter-period,
+.tx-filter-bar #analytics-filter-result {
   width: 150px;
 }
 
@@ -789,6 +791,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+#panel-transactions .tx-empty-value {
+  display: block;
+  width: 100%;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
 #panel-transactions .item-name-cell {
   display: flex;
   align-items: center;
@@ -922,12 +931,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: center;
 }
 
 #analytics-table th:not(:first-child),
 #analytics-table td:not(:first-child) {
   width: 110px;
-  text-align: right;
+  text-align: center;
 }
 
 .tx-table-compact:not(.show-extra-cols) .tx-extra-col {
@@ -1009,6 +1019,7 @@
   width: auto;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-align: center;
   white-space: nowrap;
 }
 
@@ -1051,7 +1062,7 @@
 #transactions-table-purchases td:nth-child(5) {
   width: 1%;
   min-width: 15ch;
-  text-align: left;
+  text-align: center;
   white-space: normal;
 }
 
@@ -1059,12 +1070,12 @@
 #transactions-table-purchases td:nth-child(6) {
   width: 1%;
   min-width: 9ch;
-  text-align: left;
+  text-align: center;
 }
 
 #transactions-table-purchases th:nth-child(n+7),
 #transactions-table-purchases td:nth-child(n+7) {
-  text-align: right;
+  text-align: center;
 }
 
 #transactions-table-purchases th:nth-child(7),
@@ -1118,12 +1129,12 @@
 #transactions-table-purchase-history td:nth-child(5) {
   width: 1%;
   min-width: 9ch;
-  text-align: left;
+  text-align: center;
 }
 
 #transactions-table-purchase-history th:nth-child(n+6),
 #transactions-table-purchase-history td:nth-child(n+6) {
-  text-align: right;
+  text-align: center;
 }
 
 #transactions-table-purchase-history th:nth-child(6),
@@ -1187,11 +1198,13 @@
 #analytics-table th:first-child,
 #analytics-table td:first-child {
   min-width: 280px;
+  text-align: center;
 }
 
 #analytics-table th:not(:first-child),
 #analytics-table td:not(:first-child) {
   width: 112px;
+  text-align: center;
 }
 
 @media (min-width: 1600px) {

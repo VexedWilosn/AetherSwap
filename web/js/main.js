@@ -517,6 +517,12 @@ function getInventoryCache() {
     return { name: tds[0]?.textContent.trim() || "" };
   });
 }
+function txEmptyValue() {
+  return '<span class="tx-empty-value">—</span>';
+}
+function txEmptyText() {
+  return '<span class="tx-empty-value">—</span>';
+}
 function aggregateByItemName(purchases, resellRatio = 0.85) {
   const ratio = Math.max(0.01, Math.min(1, Number(resellRatio) || 0.85));
   const byName = new Map();
@@ -590,10 +596,81 @@ function aggregateByItemName(purchases, resellRatio = 0.85) {
     }))
     .sort((a, b) => b.count - a.count);
 }
+function getAnalyticsStatus(t) {
+  if (typeof getHistoryStatus === "function") return getHistoryStatus(t);
+  if (t.pending_receipt) return "pending";
+  if (String(t.listing_status || "").toLowerCase() === "error") return "error";
+  if (t.sale_price != null && Number(t.sale_price) > 0) return "sold";
+  if (t.listing) return "listing";
+  return "holding";
+}
+function getAnalyticsEventTime(t) {
+  return getAnalyticsStatus(t) === "sold" ? (Number(t.sold_at) || Number(t.at) || 0) : (Number(t.at) || 0);
+}
+function getAnalyticsProfitMetric(t, resellRatio = 0.85) {
+  if (typeof getHistoryMetrics === "function") {
+    const metrics = getHistoryMetrics(t, resellRatio);
+    if (metrics.cashProfit != null) return metrics.cashProfit;
+  }
+  const ratio = Math.max(0.01, Math.min(1, Number(resellRatio) || 0.85));
+  const cost = Number(t.price) || 0;
+  if (t.sale_price != null && Number(t.sale_price) > 0) return (Number(t.sale_price) / 1.15) * ratio - cost;
+  if (t.current_market_price != null && Number(t.current_market_price) > 0) return (Number(t.current_market_price) / 1.15) * ratio - cost;
+  return null;
+}
+function readAnalyticsFiltersFromUI() {
+  return {
+    search: (el("analytics-filter-search")?.value || "").trim().toLowerCase(),
+    status: el("analytics-filter-status")?.value || "all",
+    period: el("analytics-filter-period")?.value || "all",
+    result: el("analytics-filter-result")?.value || "all",
+  };
+}
+function filterAnalyticsList(list, resellRatio = 0.85) {
+  const filters = readAnalyticsFiltersFromUI();
+  const nowSeconds = Date.now() / 1000;
+  return list.filter((t) => {
+    if (filters.search) {
+      const hay = [t.name, t.assetid, t.goods_id].filter((v) => v != null && v !== "").join(" ").toLowerCase();
+      if (!hay.includes(filters.search)) return false;
+    }
+    const status = getAnalyticsStatus(t);
+    if (filters.status !== "all" && status !== filters.status) return false;
+    const eventTime = getAnalyticsEventTime(t);
+    if (filters.period === "sold" && status !== "sold") return false;
+    if (filters.period === "today") {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      if (eventTime < d.getTime() / 1000) return false;
+    }
+    if (filters.period === "7d" && eventTime < nowSeconds - 7 * 24 * 60 * 60) return false;
+    if (filters.period === "30d" && eventTime < nowSeconds - 30 * 24 * 60 * 60) return false;
+    const profit = getAnalyticsProfitMetric(t, resellRatio);
+    if (filters.result === "profit" && !(profit != null && profit > 0)) return false;
+    if (filters.result === "loss" && !(profit != null && profit < 0)) return false;
+    if (filters.result === "even" && !(profit != null && Math.abs(profit) < 0.005)) return false;
+    if (filters.result === "unpriced" && profit != null) return false;
+    return true;
+  });
+}
+function refreshAnalyticsFilterUI(total, filtered) {
+  const countEl = el("analytics-filter-count");
+  if (countEl) countEl.textContent = total === filtered ? `${total} 项` : `${filtered} / ${total} 项`;
+}
+function rerenderAnalyticsFromCache() {
+  if (Array.isArray(lastEnrichData)) {
+    const purchases = lastEnrichData.filter((t) => t.type === "purchase");
+    refreshAnalytics(purchases, lastTransactionsResellRatio || 0.85);
+  } else {
+    refreshAnalytics();
+  }
+}
 function refreshAnalytics(purchases, resellRatio) {
   const tbody = document.querySelector("#analytics-table tbody");
   if (!tbody) return;
-  const render = (list, ratio) => {
+  const render = (sourceList, ratio) => {
+    const list = filterAnalyticsList(sourceList, ratio);
+    refreshAnalyticsFilterUI(sourceList.length, list.length);
     const rows = aggregateByItemName(list, ratio);
     const kpiWrap = el("analytics-kpis");
     const insightsWrap = el("analytics-insights");
@@ -664,23 +741,28 @@ function refreshAnalytics(purchases, resellRatio) {
     }
     const rowHtmls = rows.map((r) => {
       const nameHtml = typeof buildItemNameHtml === "function" ? buildItemNameHtml(r.name) : escapeHtml(r.name);
-      const avgPriceStr = r.avgPrice > 0 ? r.avgPrice.toFixed(2) : "—";
-      const avgMpStr = r.avgMp != null ? r.avgMp.toFixed(2) : "—";
-      const avgCurrentStr = r.avgCurrentPrice != null ? r.avgCurrentPrice.toFixed(2) : "—";
-      const totalSaleStr = r.totalSaleAmount != null ? r.totalSaleAmount.toFixed(2) : "—";
-      const avgDiscountStr = r.avgDiscountRatio != null ? r.avgDiscountRatio.toFixed(4) : "—";
-      const discountRatioClass = avgDiscountStr !== "—" ? (parseFloat(avgDiscountStr) > ratio ? "text-bad" : "text-ok") : "";
-      const cashProfitStr = r.totalCashProfit != null ? (r.totalCashProfit >= 0 ? "+" : "") + r.totalCashProfit.toFixed(2) : "—";
+      const avgPriceStr = r.avgPrice > 0 ? r.avgPrice.toFixed(2) : txEmptyValue();
+      const avgMpStr = r.avgMp != null ? r.avgMp.toFixed(2) : txEmptyValue();
+      const avgCurrentStr = r.avgCurrentPrice != null ? r.avgCurrentPrice.toFixed(2) : txEmptyValue();
+      const totalSaleStr = r.totalSaleAmount != null ? r.totalSaleAmount.toFixed(2) : txEmptyValue();
+      const avgDiscountStr = r.avgDiscountRatio != null ? r.avgDiscountRatio.toFixed(4) : txEmptyValue();
+      const discountRatioClass = r.avgDiscountRatio != null ? (r.avgDiscountRatio > ratio ? "text-bad" : "text-ok") : "";
+      const cashProfitStr = r.totalCashProfit != null ? (r.totalCashProfit >= 0 ? "+" : "") + r.totalCashProfit.toFixed(2) : txEmptyValue();
       const cashClass = r.totalCashProfit != null ? (r.totalCashProfit > 0 ? "text-ok" : r.totalCashProfit < 0 ? "text-bad" : "") : "";
       const avgDevPctStr = r.avgDeviationPct != null ? (r.avgDeviationPct >= 0 ? "+" : "") + r.avgDeviationPct.toFixed(2) + "%" : "";
-      const avgDevStr = r.avgDeviation != null ? (r.avgDeviation >= 0 ? "+" : "") + r.avgDeviation.toFixed(2) + (avgDevPctStr ? " (" + avgDevPctStr + ")" : "") : "—";
+      const avgDevStr = r.avgDeviation != null ? (r.avgDeviation >= 0 ? "+" : "") + r.avgDeviation.toFixed(2) + (avgDevPctStr ? " (" + avgDevPctStr + ")" : "") : txEmptyValue();
       const devClass = r.avgDeviation != null ? (r.avgDeviation > 0 ? "text-ok" : r.avgDeviation < 0 ? "text-bad" : "") : "";
       return `<tr><td>${nameHtml}</td><td class="mono">${r.heldCount}</td><td class="mono">${r.soldCount}</td><td class="mono">${avgPriceStr}</td><td class="mono">${avgMpStr}</td><td class="mono">${avgCurrentStr}</td><td class="mono">${totalSaleStr}</td><td class="mono ${discountRatioClass}">${avgDiscountStr}</td><td class="mono ${cashClass}">${cashProfitStr}</td><td class="mono ${devClass}">${avgDevStr}</td></tr>`;
     });
     tbody.innerHTML = rowHtmls.length
       ? rowHtmls.join("")
       : (typeof txTableStateRow === "function"
-        ? txTableStateRow(10, "暂无收益分析", "有买入记录后会按物品汇总持仓、成交和收益。", "empty")
+        ? txTableStateRow(
+          10,
+          sourceList.length ? "没有匹配的收益样本" : "暂无收益分析",
+          sourceList.length ? "调整筛选条件后再试。" : "有买入记录后会按物品汇总持仓、成交和收益。",
+          "empty"
+        )
         : "<tr><td colspan='10' class='text-muted'>暂无数据</td></tr>");
   };
   if (purchases != null && resellRatio != null) {
@@ -1170,6 +1252,29 @@ function bindEvents() {
     const sortDir = el("history-sort-dir");
     if (sortDir) sortDir.value = "desc";
     if (typeof rerenderTransactionsFromCache === "function") rerenderTransactionsFromCache();
+  });
+  el("analytics-filter-search")?.addEventListener("input", () => {
+    rerenderAnalyticsFromCache();
+  });
+  el("analytics-filter-status")?.addEventListener("change", () => {
+    rerenderAnalyticsFromCache();
+  });
+  el("analytics-filter-period")?.addEventListener("change", () => {
+    rerenderAnalyticsFromCache();
+  });
+  el("analytics-filter-result")?.addEventListener("change", () => {
+    rerenderAnalyticsFromCache();
+  });
+  el("btn-reset-analytics-filter")?.addEventListener("click", () => {
+    const search = el("analytics-filter-search");
+    if (search) search.value = "";
+    const status = el("analytics-filter-status");
+    if (status) status.value = "all";
+    const period = el("analytics-filter-period");
+    if (period) period.value = "all";
+    const result = el("analytics-filter-result");
+    if (result) result.value = "all";
+    rerenderAnalyticsFromCache();
   });
   el("btn-history-batch-del")?.addEventListener("click", async () => {
     const checked = document.querySelectorAll("#transactions-table-purchase-history .history-checkbox:checked");

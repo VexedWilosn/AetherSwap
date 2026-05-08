@@ -563,6 +563,36 @@
             <span class="hint">按饰品聚合复盘表现</span>
           </div>
         </div>
+        <div class="tx-filter-bar tx-filter-bar--analytics">
+          <div class="tx-filter-search">
+            <span class="label">筛选</span>
+            <input type="search" id="analytics-filter-search" placeholder="搜索饰品名或 assetid" />
+          </div>
+          <select id="analytics-filter-status" title="按交易状态筛选">
+            <option value="all">全部状态</option>
+            <option value="holding">持仓中</option>
+            <option value="sold">已出售</option>
+            <option value="listing">出售中</option>
+            <option value="pending">待收货</option>
+            <option value="error">异常</option>
+          </select>
+          <select id="analytics-filter-period" title="按交易时间筛选">
+            <option value="all">全部时间</option>
+            <option value="today">今天</option>
+            <option value="7d">近 7 天</option>
+            <option value="30d">近 30 天</option>
+            <option value="sold">仅已售</option>
+          </select>
+          <select id="analytics-filter-result" title="按收益结果筛选">
+            <option value="all">全部收益</option>
+            <option value="profit">盈利样本</option>
+            <option value="loss">亏损样本</option>
+            <option value="even">持平样本</option>
+            <option value="unpriced">无收益样本</option>
+          </select>
+          <button id="btn-reset-analytics-filter" class="btn btn-sm btn-secondary" type="button">重置</button>
+          <span id="analytics-filter-count" class="tx-filter-count"></span>
+        </div>
         <div id="analytics-kpis" class="analytics-kpi-grid"></div>
         <div id="analytics-insights" class="analytics-insights-grid"></div>
         <div class="table-container table-card">
