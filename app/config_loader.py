@@ -2,12 +2,8 @@ import threading
 import time as _time
 from app.config_schema import DEFAULTS, merge, validate_and_fill
 from config import (
-    get_buff,
-    get_steam,
     load_app_config,
     save_app_config,
-    update_buff_credentials,
-    update_steam_credentials,
 )
 _config_cache: dict = {}
 _config_cache_ts: float = 0.0
@@ -18,14 +14,18 @@ def _invalidate_config_cache() -> None:
     with _config_cache_lock:
         _config_cache = {}
         _config_cache_ts = 0.0
-def get_steam_credentials() -> dict:
-    return get_steam()
-def get_buff_credentials() -> dict:
-    return get_buff()
-def update_steam_creds(cookies: str, session_id: str) -> None:
-    update_steam_credentials(cookies, session_id)
-def update_buff_creds(cookies: str) -> None:
-    update_buff_credentials(cookies)
+def get_steam_credentials(account_id: str = "") -> dict:
+    from app.account_sessions import get_steam_session
+    return get_steam_session(account_id or None)
+def get_buff_credentials(account_id: str = "") -> dict:
+    from app.account_sessions import get_buff_session
+    return get_buff_session(account_id or None)
+def update_steam_creds(cookies: str, session_id: str, account_id: str = "", steam_id: str = None) -> None:
+    from app.account_sessions import set_steam_session
+    set_steam_session(cookies, session_id, account_id=account_id or None, steam_id=steam_id)
+def update_buff_creds(cookies: str, account_id: str = "") -> None:
+    from app.account_sessions import set_buff_session
+    set_buff_session(cookies, account_id=account_id or None)
 def load_app_config_validated() -> dict:
     global _config_cache, _config_cache_ts
     now = _time.monotonic()

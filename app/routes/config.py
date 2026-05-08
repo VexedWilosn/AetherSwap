@@ -12,6 +12,7 @@ from app.state import (
 from app.config_loader import load_app_config_validated, save_app_config_validated
 from config import load_app_config, save_app_config, save_credentials, get_all_credentials
 from app.accounts import list_accounts, replace_all as accounts_replace_all
+from app.account_sessions import list_account_sessions
 router = APIRouter()
 class ConfigBody(BaseModel):
     config: dict
@@ -20,6 +21,7 @@ class ImportFullBody(BaseModel):
     credentials: dict = {}
     transactions: dict = {}
     accounts: dict = {}
+    account_sessions: list = []
     log: list = []
 @router.get("/api/config")
 def api_get_config():
@@ -89,6 +91,8 @@ def api_data_init():
     # 删除历史文件及缓存
     config_dir = Path("config")
     files_to_remove = [
+        "accounts.json",
+        "accounts.json.bak",
         "exchange_rate.json",
         "holdings_report_last.json",
         "steam_userdata.json",
@@ -159,6 +163,7 @@ def api_export_full():
         "credentials": get_all_credentials(),
         "transactions": {"purchases": get_purchases(), "sales": get_sales()},
         "accounts": {"accounts": list_accounts(), "current_id": get_current_id()},
+        "account_sessions": list_account_sessions(),
         "log": get_log(0),
     }
     return data
@@ -176,6 +181,7 @@ def api_export_full_download():
         "credentials": get_all_credentials(),
         "transactions": {"purchases": get_purchases(), "sales": get_sales()},
         "accounts": {"accounts": list_accounts(), "current_id": get_current_id()},
+        "account_sessions": list_account_sessions(),
         "log": get_log(0),
     }
     ts = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
@@ -198,6 +204,9 @@ def api_import_full(body: ImportFullBody):
         replace_transactions(tx.get("purchases", []), tx.get("sales", []))
         if body.accounts:
             accounts_replace_all(body.accounts)
+        if body.account_sessions:
+            from app.account_sessions import replace_account_sessions
+            replace_account_sessions(body.account_sessions)
         if body.log is not None:
             replace_log(body.log)
         return {"ok": True}

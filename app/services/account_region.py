@@ -10,7 +10,7 @@ def sync_account_currency_region(account_id: Optional[str] = None, cookies_str: 
     account = get_account(account_id) if account_id else get_current_account()
     if not account:
         return {"ok": False, "error": "账号不存在"}
-    cookies = cookies_str or (get_steam_credentials().get("cookies") or "")
+    cookies = cookies_str or (get_steam_credentials(account.get("id")).get("cookies") or "")
     if not cookies:
         return {"ok": False, "error": "缺少 Steam Cookie"}
     from app.gift_engine import get_base_auth_status, get_wallet_balance

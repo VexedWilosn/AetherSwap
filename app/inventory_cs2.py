@@ -3,7 +3,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from app.accounts import get_current_account
-from config import get_steam
+from app.config_loader import get_steam_credentials
 from steam.inventory import CS2_APP_ID, fetch_cs2_inventory
 from steam.session import create_market_session
 def _safe_iso(ts: float) -> Optional[str]:
@@ -34,7 +34,7 @@ def _parse_cooldown(owner_descriptions: List[dict]) -> Tuple[str, float]:
         break
     return text, ts
 def scan_cs2_inventory() -> Tuple[bool, List[Dict[str, Any]], str]:
-    cred = get_steam()
+    cred = get_steam_credentials()
     steam_id = cred.get("steam_id")
     cookies = cred.get("cookies")
     if not steam_id or not cookies:

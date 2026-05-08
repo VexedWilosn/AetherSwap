@@ -3,7 +3,7 @@ import re
 import time
 from typing import Any, Callable, Dict, Optional, Tuple
 import requests
-from config import get_steam
+from app.config_loader import get_steam_credentials
 from steam.session import create_market_session
 from utils.delay import jittered_sleep
 try:
@@ -178,7 +178,7 @@ def _get_assetids_by_class_instance(
         pass
     return result
 def delist_item(assetid: str, name: str, log_fn: Optional[Callable[[str, str], None]] = None) -> Tuple[bool, Optional[str], Optional[str]]:
-    cred = get_steam()
+    cred = get_steam_credentials()
     cookies_str = cred.get("cookies", "")
     steam_id = cred.get("steam_id", "")
     if not cookies_str or not steam_id:

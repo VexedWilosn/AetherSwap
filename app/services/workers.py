@@ -23,7 +23,7 @@ from app.config_loader import (
 )
 from app.notify import send_pushplus, build_holdings_report_content, compute_holdings_stats
 from app.inventory_cs2 import scan_cs2_inventory
-from app.accounts import get_current_account, update_account
+from app.accounts import get_current_account, list_accounts, update_account
 _HOLDINGS_REPORT_LAST_FILE = Path(__file__).resolve().parent.parent.parent / "config" / "holdings_report_last.json"
 _HOLDINGS_REPORT_WAIT_INTERVAL = 60
 _HOLDINGS_REPORT_WAIT_MAX = 30 * 60
@@ -393,7 +393,7 @@ def _detect_account_currency_from_history() -> Optional[str]:
 def _sync_account_profile_and_region(acc: dict) -> None:
     from app.services.steam_auth import fetch_steam_profile_via_api
     account_id = acc.get("id")
-    cred = get_steam_credentials()
+    cred = get_steam_credentials(account_id)
     cred_steam_id = (cred.get("steam_id") or "").strip()
     acc_steam_id = (acc.get("steam_id") or "").strip()
     cookies_str = cred.get("cookies") or ""
@@ -483,11 +483,19 @@ def session_keepalive_worker() -> None:
             else:
                 log(f"keepalive: Buff 保活成功: {buff_msg}", "info", category="keepalive")
             time.sleep(10) 
-            steam_ok, steam_status, steam_msg = try_steam_auto_relogin()
-            if not steam_ok:
-                log(f"keepalive: Steam 保活失败: {steam_msg}", "warn", category="keepalive")
-            else:
-                log(f"keepalive: Steam 保活成功: {steam_msg}", "info", category="keepalive")
+            accounts = [a for a in list_accounts() if a.get("enabled", True)]
+            if not accounts:
+                log("keepalive: 无启用 Steam 账号，跳过 Steam 保活", "warn", category="keepalive")
+            for idx, acc in enumerate(accounts):
+                account_id = acc.get("id") or ""
+                label = acc.get("display_name") or acc.get("username") or acc.get("steam_id") or account_id
+                steam_ok, steam_status, steam_msg = try_steam_auto_relogin(account_id=account_id)
+                if not steam_ok:
+                    log(f"keepalive: Steam 保活失败 account={label}: {steam_msg}", "warn", category="keepalive")
+                else:
+                    log(f"keepalive: Steam 保活成功 account={label}: {steam_msg}", "info", category="keepalive")
+                if idx < len(accounts) - 1:
+                    time.sleep(10)
             log("keepalive: 本轮后台会话保活已完成", "info", category="keepalive")
         except Exception as e:
             log(f"keepalive: worker 异常 {e}, 15 分钟后重试", "error", category="keepalive")

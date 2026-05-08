@@ -16,6 +16,7 @@ from app.config_loader import load_app_config_validated
 from app.services.steam_auth import verify_steam_auto_login
 router = APIRouter()
 class AccountBody(BaseModel):
+    enabled: bool = True
     username: str = ""
     password: str = ""
     steam_id: str = ""
@@ -24,6 +25,7 @@ class AccountBody(BaseModel):
     avatar_url: str = ""
     steam_guard: Optional[dict[str, Any]] = None
 class AccountUpdateBody(BaseModel):
+    enabled: Optional[bool] = None
     username: Optional[str] = None
     password: Optional[str] = None
     steam_id: Optional[str] = None
@@ -51,10 +53,14 @@ def api_add_account(body: AccountBody):
     )
     if body.steam_guard is not None:
         acc = update_account(acc["id"], steam_guard=body.steam_guard) or acc
+    if body.enabled is not True:
+        acc = update_account(acc["id"], enabled=body.enabled) or acc
     return {"ok": True, "account": public_account(acc, load_app_config_validated())}
 @router.put("/api/accounts/{account_id}")
 def api_update_account(account_id: str, body: AccountUpdateBody):
     kwargs = {}
+    if body.enabled is not None:
+        kwargs["enabled"] = body.enabled
     if body.username is not None:
         kwargs["username"] = body.username
     if body.password is not None and body.password:

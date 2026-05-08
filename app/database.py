@@ -45,6 +45,42 @@ class Sale(SQLModel, table=True):
     price: float = 0.0
     at: float = 0.0
     assetid: Optional[str] = None
+class AccountRecord(SQLModel, table=True):
+    id: str = Field(primary_key=True)
+    enabled: bool = True
+    username: str = ""
+    password: str = ""
+    steam_id: str = ""
+    display_name: str = ""
+    account_note: str = ""
+    avatar_url: str = ""
+    currency_code: Optional[str] = None
+    region_code: Optional[str] = None
+    steam_guard_json: str = "{}"
+    trade_config_json: str = "{}"
+    wallet_balance: Optional[float] = None
+    balance: Optional[float] = None
+    balance_display: Optional[str] = None
+    wallet_currency_id: Optional[str] = None
+    wallet_currency_symbol: Optional[str] = None
+    balance_synced_at: Optional[float] = None
+    created_at: float = 0.0
+    updated_at: float = 0.0
+class AppSetting(SQLModel, table=True):
+    key: str = Field(primary_key=True)
+    value: str = ""
+class AccountSession(SQLModel, table=True):
+    id: str = Field(primary_key=True)
+    account_id: str = Field(index=True)
+    provider: str = Field(index=True)
+    cookies: str = ""
+    session_id: Optional[str] = None
+    steam_id: Optional[str] = None
+    status: str = ""
+    error: Optional[str] = None
+    last_validated_at: Optional[float] = None
+    created_at: float = 0.0
+    updated_at: float = 0.0
 class ItemNameId(SQLModel, table=True):
     market_hash_name: str = Field(primary_key=True)
     item_nameid: str
@@ -127,6 +163,7 @@ def init_db() -> None:
             "ALTER TABLE purchase ADD COLUMN account_id TEXT",
             "ALTER TABLE purchase ADD COLUMN account_label TEXT",
             "ALTER TABLE purchase ADD COLUMN account_note TEXT",
+            "ALTER TABLE accountrecord ADD COLUMN enabled BOOLEAN DEFAULT 1",
         ):
             try:
                 conn.execute(sa_text(ddl))

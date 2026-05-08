@@ -18,7 +18,7 @@ from app.state import (
     update_purchase,
     update_purchase_by_id,
 )
-from config import get_buff
+from app.config_loader import get_buff_credentials
 from pydantic import BaseModel
 router = APIRouter()
 class ConfirmBody(BaseModel):
@@ -27,7 +27,7 @@ class ConfirmBody(BaseModel):
 @router.get("/api/status")
 def api_status():
     st = get_status()
-    buff_creds = get_buff()
+    buff_creds = get_buff_credentials()
     st["buff_no_cookie"] = not bool((buff_creds.get("cookies") or "").strip())
     st["receive"] = get_receive_status()
     try:

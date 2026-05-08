@@ -18,6 +18,7 @@ from app.state import (
     update_sale,
 )
 from app.config_loader import (
+    get_buff_credentials,
     get_steam_credentials,
     load_app_config_validated,
 )
@@ -305,8 +306,7 @@ def api_stats():
             "display_name": account.get("display_name") or account.get("username", ""),
             "cookie_valid": bool((steam_creds.get("cookies") or "").strip()),
         }
-        from config import get_buff
-        buff_creds = get_buff()
+        buff_creds = get_buff_credentials()
         account_info["buff_valid"] = bool((buff_creds.get("cookies") or "").strip())
     except Exception:
         account_info = {}

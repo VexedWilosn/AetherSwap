@@ -20,7 +20,6 @@ from app.accounts import (
     get_account_steam_guard,
     get_current_account,
     get_profile_dir,
-    set_current,
     update_account,
 )
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -249,7 +248,7 @@ def _extract_creds_from_cookie_dict(cookie_dict: dict) -> Tuple[str, str, str]:
     return cookie_str, session_id, steam_id
 _auto_relogin_lock = threading.Lock()
 _auto_relogin_last_success = 0.0
-def try_steam_auto_relogin() -> tuple:
+def try_steam_auto_relogin(account_id: str = "") -> tuple:
     global _auto_relogin_last_success
     if not _auto_relogin_lock.acquire(blocking=False):
         log("auto_relogin: 另一个自动登录正在进行，跳过", "info", category="steam")
@@ -257,12 +256,12 @@ def try_steam_auto_relogin() -> tuple:
             return True, "auto_ok", "另一个自动登录刚刚完成"
         return False, "busy", "另一个自动登录正在进行"
     try:
-        return _try_steam_auto_relogin_impl()
+        return _try_steam_auto_relogin_impl(account_id=account_id)
     finally:
         _auto_relogin_lock.release()
-def _try_steam_auto_relogin_impl() -> tuple:
+def _try_steam_auto_relogin_impl(account_id: str = "") -> tuple:
     global _auto_relogin_last_success
-    cur = get_current_account()
+    cur = get_account(account_id) if account_id else get_current_account()
     if not cur:
         log("auto_relogin: 未设置当前账号", "warn", category="steam")
         return False, "no_account", "未设置当前 Steam 账号，无法自动登录"
@@ -272,8 +271,7 @@ def _try_steam_auto_relogin_impl() -> tuple:
     if not username or not password:
         log("auto_relogin: 无账号或密码", "warn", category="steam")
         return False, "no_creds", "未保存账号或密码，无法自动登录"
-    set_current(account_id)
-    existing = get_steam_credentials()
+    existing = get_steam_credentials(account_id)
     existing_cookies = existing.get("cookies") or existing.get("cookie") or ""
     if existing_cookies and "steamLoginSecure" in existing_cookies:
         log("auto_relogin: 检测到现有 steamLoginSecure cookie，用 HTTP API 验证是否仍有效…", "info", category="steam")
@@ -292,7 +290,7 @@ def _try_steam_auto_relogin_impl() -> tuple:
     ok, err_code, cookie_dict = _do_steampy_login(username, password, steam_guard_dict)
     if ok and cookie_dict.get("steamLoginSecure"):
         cookie_str, session_id, steam_id = _extract_creds_from_cookie_dict(cookie_dict)
-        update_steam_creds(cookie_str, session_id or "")
+        update_steam_creds(cookie_str, session_id or "", account_id=account_id, steam_id=steam_id or None)
         try:
             dn, av = fetch_steam_profile_via_api(steam_id or cur.get("steam_id", ""), cookie_str)
             update_account(account_id,
@@ -333,13 +331,12 @@ def verify_steam_auto_login(account_id: str) -> dict:
     password = (acc.get("password") or "").strip()
     if not username or not password:
         return {"ok": False, "status": "no_creds", "message": "未保存账号或密码，无法验证"}
-    set_current(account_id)
     cfg = load_app_config_validated()
     steam_guard_dict = _build_steam_guard_dict(acc, cfg)
     ok, err_code, cookie_dict = _do_steampy_login(username, password, steam_guard_dict)
     if ok and cookie_dict.get("steamLoginSecure"):
         cookie_str, session_id, steam_id = _extract_creds_from_cookie_dict(cookie_dict)
-        update_steam_creds(cookie_str, session_id or "")
+        update_steam_creds(cookie_str, session_id or "", account_id=account_id, steam_id=steam_id or None)
         cur_acc = get_account(account_id)
         if cur_acc:
             try:
