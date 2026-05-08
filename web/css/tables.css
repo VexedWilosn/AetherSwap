@@ -725,16 +725,9 @@
 }
 
 #panel-transactions .tx-unlock-cell {
-  display: inline-flex;
-  flex-direction: column;
-  gap: 2px;
+  display: inline-block;
   min-width: 118px;
-  line-height: 1.15;
-}
-
-#panel-transactions .tx-unlock-cell small {
-  color: var(--text-secondary);
-  font-size: 11px;
+  line-height: 1.2;
 }
 
 #panel-transactions .tx-unlock-cell.is-ready span {
@@ -845,16 +838,16 @@
 }
 .tx-actions-menu {
   display: none;
-  position: absolute;
-  right: 0;
-  top: 100%;
+  position: fixed;
+  left: 0;
+  top: 0;
   margin-top: 4px;
   min-width: 120px;
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
-  z-index: 100;
+  z-index: 300;
   padding: 4px 0;
   animation: overlayFadeIn 0.15s ease;
 }

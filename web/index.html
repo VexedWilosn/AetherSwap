@@ -1778,9 +1778,9 @@
   </div>
 
   <div id="add-purchase-overlay" class="relogin-overlay hidden">
-    <div class="relogin-modal">
+    <div class="relogin-modal tx-entry-modal">
       <h3>手动入账</h3>
-      <div class="form-grid" style="margin:12px 0">
+      <div class="form-grid tx-entry-form">
         <div class="field">
           <label for="add-purchase-name">物品名称</label>
           <input type="text" id="add-purchase-name" placeholder="物品名称" />
@@ -1799,7 +1799,7 @@
           <input type="number" id="add-purchase-quantity" value="1" min="1" placeholder="数量" title="批量添加条数" />
         </div>
       </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <div class="tx-entry-actions">
         <button type="button" id="add-purchase-cancel" class="btn btn-secondary">取消</button>
         <button type="button" id="btn-add-purchase" class="btn btn-primary">添加</button>
       </div>

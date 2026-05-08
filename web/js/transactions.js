@@ -366,6 +366,75 @@ function renderTradeAction(t, state, type, idx, multiSelectMode) {
   const primaryLabel = state.key === "auto" ? "自动上架" : "记录售出";
   return `<button type="button" class="btn btn-sm btn-primary ${primaryClass}" data-type="${escapeHtml(type)}" data-idx="${idx}">${primaryLabel}</button><div class="tx-actions-dropdown"><button type="button" class="tx-actions-trigger" title="更多">⋮</button><div class="tx-actions-menu"><button type="button" class="tx-action-item tx-btn-edit" data-type="${escapeHtml(type)}" data-idx="${idx}">编辑</button><button type="button" class="tx-action-item tx-action-danger tx-btn-del" data-type="${escapeHtml(type)}" data-idx="${idx}">删除</button></div></div>`;
 }
+function getTransactionFromCache(type, idx) {
+  if (!Array.isArray(lastEnrichData)) return null;
+  return lastEnrichData.find((t) => t.type === type && Number(t.idx) === Number(idx)) || null;
+}
+function openTransactionEditor(t) {
+  if (!t) return;
+  const type = t.type;
+  const idx = Number(t.idx);
+  const overlay = el("edit-tx-overlay");
+  if (!overlay || !Number.isFinite(idx)) return;
+  el("edit-tx-name").value = t.name || "";
+  el("edit-tx-price").value = t.price ?? "";
+  el("edit-tx-goods-id").value = t.goods_id ?? "";
+  const mpWrap = el("edit-tx-market-price-wrap");
+  if (mpWrap) mpWrap.style.display = type === "purchase" ? "" : "none";
+  const mpEl = el("edit-tx-market-price");
+  if (mpEl) mpEl.value = type === "purchase" ? (t.market_price ?? "") : "";
+  const assetidWrap = el("edit-tx-assetid-wrap");
+  if (assetidWrap) assetidWrap.style.display = type === "purchase" ? "" : "none";
+  const assetidEl = el("edit-tx-assetid");
+  if (assetidEl) assetidEl.value = type === "purchase" ? (t.assetid ?? "") : "";
+  const listingWrap = el("edit-tx-listing-wrap");
+  if (listingWrap) listingWrap.style.display = type === "purchase" ? "" : "none";
+  const listingEl = el("edit-tx-listing");
+  if (listingEl) {
+    if (type !== "purchase") listingEl.value = "0";
+    else if (t.pending_receipt) listingEl.value = "2";
+    else if (t.listing) listingEl.value = "1";
+    else listingEl.value = "0";
+  }
+  overlay.dataset.editType = type;
+  overlay.dataset.editIdx = String(idx);
+  overlay.classList.remove("hidden");
+}
+async function deleteTransactionFromButton(btn) {
+  if (!confirm("确定删除这条记录？")) return;
+  const type = btn.dataset.type;
+  const idx = parseInt(btn.dataset.idx, 10);
+  try {
+    const r = await fetchJson(API + "/transaction?" + new URLSearchParams({ type, idx }), { method: "DELETE" });
+    if (r.ok) {
+      toast("已删除");
+      refreshTransactions();
+    } else {
+      toast("删除失败", r.error || "");
+    }
+  } catch (e) {
+    toast("删除失败", e.message || "");
+  }
+}
+function positionTxActionsMenu(dropdown) {
+  if (!dropdown?.classList.contains("open")) return;
+  const trigger = dropdown.querySelector(".tx-actions-trigger");
+  const menu = dropdown.querySelector(".tx-actions-menu");
+  if (!trigger || !menu) return;
+  const rect = trigger.getBoundingClientRect();
+  const menuWidth = Math.max(menu.offsetWidth || 120, 120);
+  const gap = 4;
+  const left = Math.min(
+    Math.max(8, rect.right - menuWidth),
+    Math.max(8, window.innerWidth - menuWidth - 8)
+  );
+  const top = Math.min(rect.bottom + gap, Math.max(8, window.innerHeight - menu.offsetHeight - 8));
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+}
+function repositionOpenTxActionMenus() {
+  document.querySelectorAll(".tx-actions-dropdown.open").forEach(positionTxActionsMenu);
+}
 function getSelectedCount(selector) {
   return document.querySelectorAll(selector + ":checked").length;
 }
@@ -883,7 +952,8 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
       const state = getAutomationState(t, accountCapability);
       const actHtml = renderTradeAction(t, state, type, idx, multiSelectMode);
       const accountCell = `<td data-col="account"><span class="tx-account-cell" title="${escapeHtml(accountName)}">${escapeHtml(accountName)}</span></td>`;
-      const unlockCell = `<td data-col="unlock"><span class="tx-unlock-cell ${state.unlock.locked ? "is-locked" : "is-ready"}"><span>${escapeHtml(state.unlock.detail)}</span><small>${escapeHtml(state.unlock.label)}</small></span></td>`;
+      const unlockTitle = state.unlock.label && state.unlock.label !== state.unlock.detail ? ` title="${escapeHtml(state.unlock.label)}"` : "";
+      const unlockCell = `<td data-col="unlock"><span class="tx-unlock-cell ${state.unlock.locked ? "is-locked" : "is-ready"}"${unlockTitle}><span>${escapeHtml(state.unlock.detail)}</span></span></td>`;
       const automationCell = `<td data-col="automation">${renderAutomationBadge(state)}</td>`;
       const mp = t.market_price != null ? Number(t.market_price).toFixed(2) : "—";
       const cur = t.current_market_price != null ? Number(t.current_market_price) : null;
@@ -951,55 +1021,6 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
       } finally {
         btn.disabled = false;
       }
-    });
-  });
-  tbody.querySelectorAll(".tx-btn-del").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      if (!confirm("确定删除这条记录？")) return;
-      const type = btn.dataset.type;
-      const idx = parseInt(btn.dataset.idx, 10);
-      try {
-        const r = await fetchJson(API + "/transaction?" + new URLSearchParams({ type, idx }), { method: "DELETE" });
-        if (r.ok) {
-          toast("已删除");
-          refreshTransactions();
-        } else {
-          toast("删除失败", r.error || "");
-        }
-      } catch (e) {
-        toast("删除失败", e.message || "");
-      }
-    });
-  });
-  tbody.querySelectorAll(".tx-btn-edit").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const type = btn.dataset.type;
-      const idx = parseInt(btn.dataset.idx, 10);
-      const t = list.find(x => x.type === type && x.idx === idx);
-      if (!t) return;
-      el("edit-tx-name").value = t.name || "";
-      el("edit-tx-price").value = t.price ?? "";
-      el("edit-tx-goods-id").value = t.goods_id ?? "";
-      const mpWrap = el("edit-tx-market-price-wrap");
-      if (mpWrap) mpWrap.style.display = type === "purchase" ? "" : "none";
-      const mpEl = el("edit-tx-market-price");
-      if (mpEl) mpEl.value = type === "purchase" ? (t.market_price ?? "") : "";
-      const assetidWrap = el("edit-tx-assetid-wrap");
-      if (assetidWrap) assetidWrap.style.display = type === "purchase" ? "" : "none";
-      const assetidEl = el("edit-tx-assetid");
-      if (assetidEl) assetidEl.value = type === "purchase" ? (t.assetid ?? "") : "";
-      const listingWrap = el("edit-tx-listing-wrap");
-      if (listingWrap) listingWrap.style.display = type === "purchase" ? "" : "none";
-      const listingEl = el("edit-tx-listing");
-      if (listingEl) {
-        if (type !== "purchase") listingEl.value = "0";
-        else if (t.pending_receipt) listingEl.value = "2";
-        else if (t.listing) listingEl.value = "1";
-        else listingEl.value = "0";
-      }
-      el("edit-tx-overlay").dataset.editType = type;
-      el("edit-tx-overlay").dataset.editIdx = String(idx);
-      el("edit-tx-overlay").classList.remove("hidden");
     });
   });
   tbody.querySelectorAll(".tx-btn-sell").forEach(btn => {
@@ -1446,6 +1467,25 @@ async function clearMarketPriceCircuit() {
 
 // --- Phase 3.2: Dropdown menu toggle ---
 document.addEventListener("click", function(e) {
+  var editBtn = e.target.closest(".tx-btn-edit");
+  if (editBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    var editIdx = parseInt(editBtn.dataset.idx, 10);
+    openTransactionEditor(getTransactionFromCache(editBtn.dataset.type, editIdx));
+    var editDropdown = editBtn.closest(".tx-actions-dropdown");
+    if (editDropdown) editDropdown.classList.remove("open");
+    return;
+  }
+  var delBtn = e.target.closest(".tx-btn-del");
+  if (delBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    var delDropdown = delBtn.closest(".tx-actions-dropdown");
+    if (delDropdown) delDropdown.classList.remove("open");
+    deleteTransactionFromButton(delBtn);
+    return;
+  }
   document.querySelectorAll(".tx-actions-dropdown.open").forEach(function(d) {
     if (!d.contains(e.target)) d.classList.remove("open");
   });
@@ -1455,7 +1495,10 @@ document.addEventListener("click", function(e) {
     var dropdown = trigger.closest(".tx-actions-dropdown");
     var wasOpen = dropdown.classList.contains("open");
     document.querySelectorAll(".tx-actions-dropdown.open").forEach(function(d) { d.classList.remove("open"); });
-    if (!wasOpen) dropdown.classList.add("open");
+    if (!wasOpen) {
+      dropdown.classList.add("open");
+      requestAnimationFrame(function() { positionTxActionsMenu(dropdown); });
+    }
   }
   var actionItem = e.target.closest(".tx-action-item");
   if (actionItem) {
@@ -1463,3 +1506,5 @@ document.addEventListener("click", function(e) {
     if (dropdown2) setTimeout(function() { dropdown2.classList.remove("open"); }, 100);
   }
 });
+window.addEventListener("resize", repositionOpenTxActionMenus);
+window.addEventListener("scroll", repositionOpenTxActionMenus, true);

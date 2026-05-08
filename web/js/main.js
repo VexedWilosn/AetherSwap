@@ -769,6 +769,8 @@ function bindEvents() {
     el("tx-more-actions")?.classList.remove("open");
     const trigger = el("btn-tx-more-actions");
     if (trigger) trigger.setAttribute("aria-expanded", "false");
+    el("edit-tx-overlay")?.classList.add("hidden");
+    el("sell-tx-overlay")?.classList.add("hidden");
     el("add-purchase-overlay")?.classList.remove("hidden");
     el("add-purchase-name")?.focus();
   });
