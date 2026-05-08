@@ -50,6 +50,7 @@ DEFAULTS = {
         "retry_interval_seconds": 300,
         "buff_retry_delay_seconds": 5,
         "current_price_refresh_minutes": 10,
+        "market_price_circuit_enabled": True,
         "resell_ratio": 0.85,
         "safe_purchase_hard_qty_cap": 50,
         "safe_purchase_liquidity_ratio": 0.05,

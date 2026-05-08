@@ -200,6 +200,18 @@
   pointer-events: none;
 }
 
+.market-price-notice-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.market-price-notice-more {
+  position: relative;
+  flex: 0 0 auto;
+}
+
 .market-price-notice-action {
   flex: 0 0 auto;
   padding: 4px 9px;
@@ -213,14 +225,56 @@
   cursor: pointer;
 }
 
+.market-price-notice-more-trigger {
+  flex: 0 0 auto;
+  padding: 4px 9px;
+  border: 1px solid color-mix(in srgb, var(--warning) 18%, transparent);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
 .market-price-notice-action:hover {
   background: var(--bg-input);
   border-color: var(--warning);
 }
 
+.market-price-notice-more-trigger:hover {
+  background: var(--bg-input);
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 36%, transparent);
+}
+
 .market-price-notice-action:disabled {
   cursor: wait;
   opacity: 0.6;
+}
+
+.market-price-notice-action.hidden,
+.market-price-notice-more.hidden {
+  display: none;
+}
+
+.market-price-notice-more-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 130;
+  min-width: 132px;
+  padding: 5px 0;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.market-price-notice-more.open .market-price-notice-more-menu {
+  display: block;
 }
 
 @media (max-width: 900px) {
@@ -236,6 +290,7 @@
   .market-price-notice {
     align-items: stretch;
     flex-direction: column;
+    cursor: default;
     margin-top: -2px;
   }
 
@@ -252,9 +307,14 @@
   .market-price-notice-detail {
     white-space: normal;
   }
+
+  .market-price-notice-actions {
+    align-self: stretch;
+    justify-content: flex-end;
+  }
 }
 
-.add-purchase-bar {
+.tx-filter-bar {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -268,7 +328,7 @@
   max-width: 100%;
 }
 
-.add-purchase-bar .label {
+.tx-filter-bar .label {
   color: var(--text-main);
   font-size: 13px;
   font-weight: 700;
@@ -276,21 +336,61 @@
   white-space: nowrap;
 }
 
-.add-purchase-bar input[type="text"] {
-  width: 170px;
+.tx-filter-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 360px;
+  min-width: 220px;
 }
 
-.add-purchase-bar input[type="number"] {
-  width: 110px;
+.tx-filter-bar input,
+.tx-filter-bar select {
+  height: 40px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  color: var(--text-main);
+  font-size: 13px;
+  padding: 0 12px;
 }
 
-.add-purchase-bar #add-purchase-steam-link {
-  min-width: 360px;
+.tx-filter-search input {
   flex: 1;
+  min-width: 0;
 }
 
-.add-purchase-bar #add-purchase-quantity {
-  width: 76px;
+.tx-filter-bar select {
+  width: 132px;
+}
+
+.tx-filter-count {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.tx-toolbar-more {
+  position: relative;
+}
+
+.tx-toolbar-more-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 120;
+  min-width: 160px;
+  padding: 5px 0;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.tx-toolbar-more.open .tx-toolbar-more-menu {
+  display: block;
 }
 
 #panel-transactions .table-card {
@@ -304,8 +404,12 @@
 
 #panel-transactions table {
   width: 100%;
-  min-width: max(1360px, 100%);
-  table-layout: fixed;
+  min-width: max(1120px, 100%);
+  table-layout: auto;
+}
+
+#panel-transactions table.show-extra-cols {
+  min-width: max(1480px, 100%);
 }
 
 #panel-transactions th,
@@ -331,6 +435,55 @@
 
 #panel-transactions tbody tr:hover {
   background: var(--bg-input);
+}
+
+#panel-transactions .tx-table-state-row:hover {
+  background: transparent;
+}
+
+#panel-transactions .tx-table-state-row td {
+  height: 132px;
+  padding: 24px;
+  text-align: center;
+  white-space: normal;
+}
+
+#panel-transactions .tx-table-state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 520px;
+  color: var(--text-secondary);
+}
+
+#panel-transactions .tx-table-state-title {
+  color: var(--text-main);
+  font-weight: 700;
+}
+
+#panel-transactions .tx-table-state-detail {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+#panel-transactions .tx-table-state-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, var(--primary) 18%, transparent);
+  border-top-color: var(--primary);
+  border-radius: 999px;
+  animation: txStateSpin 0.75s linear infinite;
+}
+
+#panel-transactions .tx-table-state-row.is-error .tx-table-state-title {
+  color: var(--danger);
+}
+
+@keyframes txStateSpin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 #panel-transactions .mono {
@@ -484,7 +637,7 @@
 }
 
 .tx-table-compact:not(.show-extra-cols) .tx-extra-col {
-  display: none;
+  display: none !important;
 }
 
 .panel-toolbar--accounts {
@@ -553,110 +706,185 @@
   background: var(--danger-soft);
 }
 
-/* === Canonical column widths & alignment (table-layout: fixed) === */
+/* === Content-weighted transaction columns === */
 
-/* Default: all columns auto width, left-aligned */
 #transactions-table-purchases th,
 #transactions-table-purchases td,
 #transactions-table-purchase-history th,
 #transactions-table-purchase-history td {
+  width: auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* Col 1: Checkbox select */
 #transactions-table-purchases th:nth-child(1),
 #transactions-table-purchases td:nth-child(1),
 #transactions-table-purchase-history th:nth-child(1),
 #transactions-table-purchase-history td:nth-child(1) {
-  width: 48px;
+  width: 1%;
+  min-width: 48px;
   overflow: visible;
 }
 
-/* Col 2: 时间 */
 #transactions-table-purchases th:nth-child(2),
 #transactions-table-purchases td:nth-child(2),
 #transactions-table-purchase-history th:nth-child(2),
 #transactions-table-purchase-history td:nth-child(2) {
-  width: 136px;
+  width: 1%;
+  min-width: 13ch;
   color: var(--text-secondary);
 }
 
-/* Col 3: 物品/说明 — flexible, ellipsis */
 #transactions-table-purchases th:nth-child(3),
 #transactions-table-purchases td:nth-child(3),
 #transactions-table-purchase-history th:nth-child(3),
 #transactions-table-purchase-history td:nth-child(3) {
-  /* auto width in fixed layout = take remaining space */
+  width: 36%;
+  min-width: 280px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* === Holdings table specific columns === */
-/* Col 4: 账号 — center */
 #transactions-table-purchases th:nth-child(4),
 #transactions-table-purchases td:nth-child(4) {
-  width: 88px;
+  width: 1%;
+  min-width: 7ch;
   text-align: center;
 }
 
-/* Col 5: 解禁时间 — left */
 #transactions-table-purchases th:nth-child(5),
 #transactions-table-purchases td:nth-child(5) {
-  width: 138px;
+  width: 1%;
+  min-width: 15ch;
   text-align: left;
   white-space: normal;
 }
 
-/* Col 6: 自动化 — left */
 #transactions-table-purchases th:nth-child(6),
 #transactions-table-purchases td:nth-child(6) {
-  width: 100px;
+  width: 1%;
+  min-width: 9ch;
   text-align: left;
 }
 
-/* Col 7+: assetid, 购入价, 购入市场价, 现市场价, 税后价格, 实际折扣, 变现收益, 自用收益, 市场变动 — right */
 #transactions-table-purchases th:nth-child(n+7),
 #transactions-table-purchases td:nth-child(n+7) {
   text-align: right;
 }
 
-/* Col last: 操作 — center */
+#transactions-table-purchases th:nth-child(7),
+#transactions-table-purchases td:nth-child(7),
+#transactions-table-purchases th:nth-child(9),
+#transactions-table-purchases td:nth-child(9),
+#transactions-table-purchases th:nth-child(11),
+#transactions-table-purchases td:nth-child(11),
+#transactions-table-purchases th:nth-child(14),
+#transactions-table-purchases td:nth-child(14) {
+  width: 7%;
+  min-width: 9ch;
+}
+
+#transactions-table-purchases th:nth-child(8),
+#transactions-table-purchases td:nth-child(8),
+#transactions-table-purchases th:nth-child(10),
+#transactions-table-purchases td:nth-child(10),
+#transactions-table-purchases th:nth-child(13),
+#transactions-table-purchases td:nth-child(13) {
+  width: 8%;
+  min-width: 8ch;
+}
+
+#transactions-table-purchases th:nth-child(12),
+#transactions-table-purchases td:nth-child(12),
+#transactions-table-purchases th:nth-child(15),
+#transactions-table-purchases td:nth-child(15) {
+  width: 9%;
+  min-width: 11ch;
+}
+
 #transactions-table-purchases th:last-child,
 #transactions-table-purchases td:last-child {
-  width: 120px;
+  width: 1%;
+  min-width: 10ch;
   text-align: center;
   overflow: visible;
 }
 
-/* === History table specific columns === */
-/* Col 4: 账号 — center */
 #transactions-table-purchase-history th:nth-child(4),
 #transactions-table-purchase-history td:nth-child(4) {
-  width: 88px;
+  width: 1%;
+  min-width: 7ch;
   text-align: center;
 }
 
-/* Col 5: 自动化 — left */
 #transactions-table-purchase-history th:nth-child(5),
 #transactions-table-purchase-history td:nth-child(5) {
-  width: 100px;
+  width: 1%;
+  min-width: 9ch;
   text-align: left;
 }
 
-/* Col 6+: right-aligned numeric columns */
 #transactions-table-purchase-history th:nth-child(n+6),
 #transactions-table-purchase-history td:nth-child(n+6) {
   text-align: right;
 }
 
-/* Col last: 操作 — center */
+#transactions-table-purchase-history th:nth-child(6),
+#transactions-table-purchase-history td:nth-child(6),
+#transactions-table-purchase-history th:nth-child(8),
+#transactions-table-purchase-history td:nth-child(8),
+#transactions-table-purchase-history th:nth-child(11),
+#transactions-table-purchase-history td:nth-child(11),
+#transactions-table-purchase-history th:nth-child(14),
+#transactions-table-purchase-history td:nth-child(14) {
+  width: 7%;
+  min-width: 9ch;
+}
+
+#transactions-table-purchase-history th:nth-child(7),
+#transactions-table-purchase-history td:nth-child(7),
+#transactions-table-purchase-history th:nth-child(10),
+#transactions-table-purchase-history td:nth-child(10),
+#transactions-table-purchase-history th:nth-child(13),
+#transactions-table-purchase-history td:nth-child(13) {
+  width: 8%;
+  min-width: 8ch;
+}
+
+#transactions-table-purchase-history th:nth-child(9),
+#transactions-table-purchase-history td:nth-child(9),
+#transactions-table-purchase-history th:nth-child(12),
+#transactions-table-purchase-history td:nth-child(12),
+#transactions-table-purchase-history th:nth-child(15),
+#transactions-table-purchase-history td:nth-child(15) {
+  width: 9%;
+  min-width: 11ch;
+}
+
 #transactions-table-purchase-history th:last-child,
 #transactions-table-purchase-history td:last-child {
-  width: 80px;
+  width: 1%;
+  min-width: 6ch;
   text-align: center;
   overflow: visible;
+}
+
+#panel-transactions td.tx-actions {
+  display: table-cell;
+}
+
+#panel-transactions td.tx-actions > * + * {
+  margin-left: 6px;
+}
+
+#panel-transactions .tx-table-state-row td {
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  overflow: visible;
+  text-align: center;
+  white-space: normal;
 }
 
 /* === Analytics table columns === */
@@ -679,6 +907,7 @@
   #transactions-table-purchases td:nth-child(3),
   #transactions-table-purchase-history th:nth-child(3),
   #transactions-table-purchase-history td:nth-child(3) {
+    width: 40%;
     min-width: 360px;
   }
 }
@@ -700,20 +929,132 @@
     min-width: 1320px;
   }
 
-  .add-purchase-bar {
+  .tx-filter-bar {
     align-items: stretch;
   }
 
-  .add-purchase-bar input[type="text"],
-  .add-purchase-bar input[type="number"],
-  .add-purchase-bar #add-purchase-steam-link,
-  .add-purchase-bar #add-purchase-quantity {
+  .tx-filter-search,
+  .tx-filter-bar input,
+  .tx-filter-bar select,
+  .tx-filter-bar #btn-reset-holdings-filter {
     flex: 1 1 100%;
     width: 100%;
     min-width: 0;
   }
 
-  .add-purchase-bar #btn-add-purchase {
+  .tx-filter-count {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 680px) {
+  #panel-transactions #transactions-table-purchases {
+    display: block;
     width: 100%;
+    min-width: 0;
+  }
+
+  #panel-transactions #transactions-table-purchases thead {
+    display: none;
+  }
+
+  #panel-transactions #transactions-table-purchases tbody {
+    display: grid;
+    gap: 10px;
+    padding: 8px;
+  }
+
+  #transactions-table-purchases tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px 12px;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-surface);
+  }
+
+  #transactions-table-purchases .tx-table-state-row {
+    display: block;
+  }
+
+  #panel-transactions #transactions-table-purchases th,
+  #panel-transactions #transactions-table-purchases td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: auto;
+    min-width: 0;
+    height: auto;
+    padding: 0;
+    border-bottom: 0;
+    white-space: normal;
+  }
+
+  #panel-transactions #transactions-table-purchases .tx-table-state-row td {
+    display: block;
+    height: auto;
+    padding: 18px 12px;
+  }
+
+  #panel-transactions #transactions-table-purchases .tx-table-state {
+    display: flex;
+    flex-wrap: wrap;
+    text-align: center;
+  }
+
+  #panel-transactions #transactions-table-purchases .tx-table-state-detail {
+    flex-basis: 100%;
+  }
+
+  #transactions-table-purchases td::before {
+    flex: 0 0 auto;
+    margin-right: 8px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  #transactions-table-purchases td:nth-child(1) {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  #transactions-table-purchases td:nth-child(2)::before { content: "时间"; }
+  #transactions-table-purchases td:nth-child(4)::before { content: "账号"; }
+  #transactions-table-purchases td:nth-child(5)::before { content: "解禁"; }
+  #transactions-table-purchases td:nth-child(6)::before { content: "自动化"; }
+  #transactions-table-purchases td:nth-child(8)::before { content: "购入"; }
+  #transactions-table-purchases td:nth-child(10)::before { content: "市场"; }
+  #transactions-table-purchases td:nth-child(12)::before { content: "折扣"; }
+  #transactions-table-purchases td:nth-child(13)::before { content: "收益"; }
+
+  #transactions-table-purchases.show-extra-cols td:nth-child(7)::before { content: "assetid"; }
+  #transactions-table-purchases.show-extra-cols td:nth-child(9)::before { content: "买入市场"; }
+  #transactions-table-purchases.show-extra-cols td:nth-child(11)::before { content: "税后"; }
+  #transactions-table-purchases.show-extra-cols td:nth-child(14)::before { content: "自用"; }
+  #transactions-table-purchases.show-extra-cols td:nth-child(15)::before { content: "变动"; }
+
+  #transactions-table-purchases td:nth-child(3) {
+    grid-column: 1 / -1;
+    order: -2;
+  }
+
+  #panel-transactions #transactions-table-purchases td:last-child {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+    padding-top: 4px;
+  }
+
+  #transactions-table-purchases .item-name-cell span:last-child {
+    white-space: normal;
+  }
+
+  #transactions-table-purchases .tx-unlock-cell {
+    min-width: 0;
+    align-items: flex-end;
+    text-align: right;
   }
 }

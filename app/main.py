@@ -15,6 +15,7 @@ import uvicorn
 HOST = "127.0.0.1"
 PORT = 28472
 URL = f"http://{HOST}:{PORT}"
+WEBVIEW_URL = f"{URL}?shell=webview"
 _server = None
 _window = None
 _shutdown_requested = threading.Event()
@@ -105,7 +106,7 @@ def main():
     t.start()
     time.sleep(1.2)
     if HAS_WEBVIEW:
-        _window = webview.create_window("aetherswap", URL, width=1280, height=800, zoomable=True, maximized=True)
+        _window = webview.create_window("aetherswap", WEBVIEW_URL, width=1280, height=800, zoomable=True, maximized=True)
         webview.start()
         if _shutdown_requested.is_set():
             t.join(timeout=5)

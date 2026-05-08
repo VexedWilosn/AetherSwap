@@ -7,6 +7,7 @@ const TX_PRICE_REFRESH_RECORD_KEY = "aetherswap_price_refresh_record";
 const TX_TRADE_COOLDOWN_DAYS = 7;
 let txAccountsCapabilityCache = null;
 let txAccountsCapabilityAt = 0;
+let txHoldingsFilters = { search: "", status: "all", price: "all" };
 function readTxColumnPreference(key, defaultValue = false) {
   try {
     const raw = localStorage.getItem(key);
@@ -40,10 +41,34 @@ let holdingsShowMoreColumns = readTxColumnPreference(TX_HOLDINGS_COLUMNS_KEY);
 let historyShowMoreColumns = readTxColumnPreference(TX_HISTORY_COLUMNS_KEY, true);
 let lastEnrichTime = 0;
 let lastEnrichData = null;
+let lastTransactionsResellRatio = 0.85;
 let lastMarketPriceHintKey = "";
 let lastMarketPriceMeta = null;
 let smartPriceRetrying = false;
+let marketCircuitClearing = false;
+let marketCircuitDeadlineMs = 0;
+let marketCircuitTimer = null;
 let lastMarketPriceRefreshRecord = readMarketPriceRefreshRecord();
+function txTableStateRow(colspan, title, detail = "", state = "empty") {
+  const spinner = state === "loading" ? '<span class="tx-table-state-spinner" aria-hidden="true"></span>' : "";
+  const detailHtml = detail ? `<span class="tx-table-state-detail">${escapeHtml(detail)}</span>` : "";
+  return `<tr class="tx-table-state-row is-${escapeHtml(state)}"><td colspan="${colspan}"><div class="tx-table-state">${spinner}<span class="tx-table-state-title">${escapeHtml(title)}</span>${detailHtml}</div></td></tr>`;
+}
+function tbodyHasOnlyState(tbody) {
+  return !!tbody && tbody.children.length === 1 && tbody.firstElementChild?.classList.contains("tx-table-state-row");
+}
+function setTxTableLoading(tbody, colspan, title, detail = "") {
+  if (!tbody) return;
+  if (tbody.children.length === 0 || tbodyHasOnlyState(tbody)) {
+    tbody.innerHTML = txTableStateRow(colspan, title, detail, "loading");
+  }
+}
+function setTxTableError(tbody, colspan, title, detail = "") {
+  if (!tbody) return;
+  if (tbody.children.length === 0 || tbodyHasOnlyState(tbody)) {
+    tbody.innerHTML = txTableStateRow(colspan, title, detail, "error");
+  }
+}
 function formatDateTime(tsSeconds) {
   if (!tsSeconds) return "—";
   const d = new Date(tsSeconds * 1000);
@@ -104,6 +129,53 @@ function getUnlockState(t) {
   const label = remainingDays > 1 ? `${remainingDays}天后` : `${remainingHours}小时后`;
   return { unlockTs, locked: true, label, detail: formatDateTime(unlockTs) };
 }
+function getHoldingFilterStatus(t) {
+  if (t.pending_receipt) return "pending";
+  if (String(t.listing_status || "").toLowerCase() === "error") return "error";
+  if (t.listing) return "listing";
+  return getUnlockState(t).locked ? "locked" : "ready";
+}
+function readHoldingsFiltersFromUI() {
+  txHoldingsFilters = {
+    search: (el("holdings-filter-search")?.value || "").trim().toLowerCase(),
+    status: el("holdings-filter-status")?.value || "all",
+    price: el("holdings-filter-price")?.value || "all",
+  };
+  return txHoldingsFilters;
+}
+function filterHoldingsList(holdings) {
+  const filters = txHoldingsFilters || {};
+  return holdings.filter((t) => {
+    const search = filters.search || "";
+    if (search) {
+      const hay = [t.name, t.assetid, t.goods_id].filter((v) => v != null && v !== "").join(" ").toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    if (filters.status && filters.status !== "all" && getHoldingFilterStatus(t) !== filters.status) return false;
+    if (filters.price && filters.price !== "all") {
+      const source = t.current_market_price_source || "";
+      if (filters.price === "smart" && source !== "smart") return false;
+      if (filters.price === "fallback" && source !== "steam_lowest") return false;
+      if (filters.price === "missing" && t.current_market_price != null) return false;
+    }
+    return true;
+  });
+}
+function refreshHoldingsFilterUI(total, filtered) {
+  const countEl = el("holdings-filter-count");
+  if (countEl) countEl.textContent = total === filtered ? `${total} 项` : `${filtered} / ${total} 项`;
+}
+function rerenderTransactionsFromCache() {
+  if (!Array.isArray(lastEnrichData)) return;
+  readHoldingsFiltersFromUI();
+  applyTransactionsToUI(
+    lastEnrichData,
+    el("purchases-summary"),
+    document.querySelector("#transactions-table-purchases tbody"),
+    document.querySelector("#transactions-table-purchase-history tbody"),
+    lastTransactionsResellRatio
+  );
+}
 function getAutomationState(t, accountCapability) {
   const account = accountCapability?.current || null;
   const guardStatus = account?.steam_guard_status || {};
@@ -161,6 +233,78 @@ function summarizeMarketPriceSources(holdings) {
     total: list.length,
   };
 }
+function getMarketPriceIssueCounts(holdings) {
+  const counts = summarizeMarketPriceSources(holdings);
+  return {
+    ...counts,
+    hasIssue: counts.missing > 0 || counts.fallback > 0,
+  };
+}
+function getLiveMarketCircuit(circuit = {}) {
+  const live = { ...(circuit || {}) };
+  if (marketCircuitDeadlineMs > 0) {
+    const remaining = Math.max(0, Math.ceil((marketCircuitDeadlineMs - Date.now()) / 1000));
+    live.remaining_seconds = remaining;
+    live.open = remaining > 0;
+  }
+  return live;
+}
+function stopMarketCircuitTimer() {
+  if (marketCircuitTimer) {
+    clearInterval(marketCircuitTimer);
+    marketCircuitTimer = null;
+  }
+}
+function syncMarketCircuitTimer(meta) {
+  const circuit = meta?.circuit || {};
+  const remaining = Number(circuit.remaining_seconds || 0);
+  if (!circuit.open || remaining <= 0) {
+    marketCircuitDeadlineMs = 0;
+    stopMarketCircuitTimer();
+    return;
+  }
+  marketCircuitDeadlineMs = Date.now() + remaining * 1000;
+  if (marketCircuitTimer) return;
+  marketCircuitTimer = setInterval(() => {
+    if (!lastMarketPriceMeta || marketCircuitDeadlineMs <= 0) {
+      stopMarketCircuitTimer();
+      return;
+    }
+    const holdings = Array.isArray(lastEnrichData)
+      ? lastEnrichData.filter((t) => t.type === "purchase" && !(t.sale_price != null && Number(t.sale_price) > 0))
+      : [];
+    updateMarketPriceNotice(lastMarketPriceMeta, holdings);
+    if (Date.now() >= marketCircuitDeadlineMs) stopMarketCircuitTimer();
+  }, 1000);
+}
+function buildMarketPriceIssueDetail(counts, meta = null) {
+  const parts = [];
+  const missing = Number(counts?.missing || 0);
+  const fallback = Number(counts?.fallback || 0);
+  const smart = Number(counts?.smart || 0);
+  const total = Number(counts?.total || 0);
+  const allMissing = missing > 0 && smart === 0 && fallback === 0 && total > 0;
+  if (missing > 0 && smart === 0 && fallback === 0 && total > 0) {
+    parts.push("智能价和最低/中位价摘要都没有取到");
+  } else if (missing > 0) {
+    parts.push(`${missing} 项暂无现市场价`);
+  }
+  if (fallback > 0) parts.push(`${fallback} 项使用最低/中位价摘要`);
+  const circuit = getLiveMarketCircuit(meta?.circuit || {});
+  if (circuit.open) {
+    parts.push(`Steam 智能价熔断剩余约 ${circuit.remaining_seconds || 0} 秒`);
+    parts.push("当前仅能使用最低价/中位价摘要");
+  }
+  if (meta?.proxy_enabled === false && Number(meta?.configured_proxy_count || 0) > 0) {
+    parts.push("已配置代理但代理池未启用");
+  }
+  const warning = meta?.warning ? String(meta.warning) : "";
+  const isCircuitWarning = warning.includes("熔断");
+  if (warning && !isCircuitWarning && !(allMissing && warning.includes("现市场价未获取到"))) {
+    parts.push(meta.warning);
+  }
+  return parts.join("；") || "现市场价刷新未完成";
+}
 function syncMarketPriceRefreshControls() {
   const btn = el("btn-refresh-market-price");
   if (btn) {
@@ -181,14 +325,16 @@ function syncMarketPriceRefreshControls() {
   if (record.error) {
     label = `${time} 刷新失败`;
   } else if (record.missing > 0) {
-    label = `${time} · ${record.missing} 项暂无价格`;
+    label = record.missing >= record.total
+      ? `${time} · 价格获取失败`
+      : `${time} · ${record.missing} 项暂无价格`;
   } else if (record.fallback > 0) {
     label = `${time} · 已刷新（${record.fallback} 项为参考价）`;
   } else {
     label = `${time} 已刷新`;
   }
   recordEl.textContent = label;
-  recordEl.title = `${record.mode || "刷新"}：${record.error || "刷新完成"}\n总数 ${record.total}，精准价 ${record.smart}，参考价 ${record.fallback}，缺失 ${record.missing}`;
+  recordEl.title = `${record.mode || "刷新"}：${record.error || record.warning || "刷新完成"}\n总数 ${record.total}，精准价 ${record.smart}，参考价 ${record.fallback}，缺失 ${record.missing}`;
 }
 function recordMarketPriceRefresh(holdings, meta, mode, error) {
   const counts = summarizeMarketPriceSources(holdings);
@@ -196,7 +342,10 @@ function recordMarketPriceRefresh(holdings, meta, mode, error) {
     at: Date.now(),
     mode,
     error: error || "",
-    warning: meta?.warning || "",
+    warning: error || buildMarketPriceIssueDetail(counts, meta),
+    proxy_enabled: meta?.proxy_enabled,
+    configured_proxy_count: meta?.configured_proxy_count,
+    circuit: meta?.circuit || null,
     ...counts,
   };
   writeMarketPriceRefreshRecord(lastMarketPriceRefreshRecord);
@@ -204,6 +353,7 @@ function recordMarketPriceRefresh(holdings, meta, mode, error) {
 }
 function handleMarketPriceMeta(meta) {
   lastMarketPriceMeta = meta || null;
+  syncMarketCircuitTimer(lastMarketPriceMeta);
   const holdings = Array.isArray(lastEnrichData)
     ? lastEnrichData.filter((t) => t.type === "purchase" && !(t.sale_price != null && Number(t.sale_price) > 0))
     : [];
@@ -226,33 +376,40 @@ function updateMarketPriceNotice(meta, holdings) {
   const titleEl = el("market-price-notice-title");
   const detailEl = el("market-price-notice-detail");
   const retryBtn = el("btn-retry-smart-price");
+  const clearBtn = el("btn-clear-market-circuit");
+  const moreWrap = el("market-price-notice-more");
+  const moreTrigger = el("btn-market-price-notice-more");
   const list = Array.isArray(holdings) ? holdings : [];
   const fallbackCount = list.filter((t) => t.current_market_price != null && t.current_market_price_source === "steam_lowest").length;
   const missingCount = list.filter((t) => t.current_market_price == null).length;
-  const circuit = meta?.circuit || {};
+  const circuit = getLiveMarketCircuit(meta?.circuit || {});
   const shouldShow = list.length > 0 && (fallbackCount > 0 || missingCount > 0 || !!meta?.warning || !!meta?.fallback_used || !!circuit.open);
   if (!shouldShow) {
     notice.classList.add("hidden");
     notice.classList.remove("is-loading");
     if (retryBtn) {
       retryBtn.disabled = false;
-      retryBtn.textContent = "重新获取智能挂单价";
+      retryBtn.textContent = "重试获取现市场价";
+    }
+    if (clearBtn) {
+      clearBtn.disabled = false;
+    }
+    if (moreWrap) {
+      moreWrap.classList.add("hidden");
+      moreWrap.classList.remove("open");
+    }
+    if (moreTrigger) {
+      moreTrigger.setAttribute("aria-expanded", "false");
     }
     return;
   }
-  const parts = [];
-  if (fallbackCount > 0) parts.push(`${fallbackCount} 条使用摘要价`);
-  if (missingCount > 0) parts.push(`${missingCount} 条暂未取到现市场价`);
-  if (circuit.open) parts.push(`智能价熔断剩余约 ${circuit.remaining_seconds || 0} 秒`);
-  if (meta?.warning) parts.push(meta.warning);
-  if ((fallbackCount > 0 || missingCount > 0 || circuit.open) && meta?.proxy_hint) parts.push(meta.proxy_hint);
-  const detail = parts.length
-    ? parts.join("；")
-    : "当前价格不是智能挂单价，收益测算仅作临时参考。";
+  const counts = summarizeMarketPriceSources(list);
+  const detail = buildMarketPriceIssueDetail(counts, meta);
   if (titleEl) {
-    if (fallbackCount > 0 || meta?.fallback_used) titleEl.textContent = "当前现市场价使用最低价/中位价摘要";
+    if (circuit.open) titleEl.textContent = "Steam 智能价熔断中";
+    else if (missingCount > 0 && counts.smart === 0 && fallbackCount === 0) titleEl.textContent = "现市场价获取失败";
     else if (missingCount > 0) titleEl.textContent = "现市场价未完整获取";
-    else if (circuit.open) titleEl.textContent = "Steam 智能价熔断中";
+    else if (fallbackCount > 0 || meta?.fallback_used) titleEl.textContent = "当前现市场价使用最低价/中位价摘要";
     else titleEl.textContent = "Steam 智能价提示";
   }
   if (detailEl) detailEl.textContent = detail;
@@ -260,7 +417,19 @@ function updateMarketPriceNotice(meta, holdings) {
   notice.classList.toggle("is-loading", smartPriceRetrying);
   if (retryBtn) {
     retryBtn.disabled = smartPriceRetrying;
-    retryBtn.textContent = smartPriceRetrying ? "获取中..." : "重新获取智能挂单价";
+    retryBtn.textContent = smartPriceRetrying ? "获取中..." : "重试获取现市场价";
+  }
+  if (clearBtn) {
+    clearBtn.disabled = smartPriceRetrying || marketCircuitClearing;
+    clearBtn.textContent = marketCircuitClearing ? "解除中..." : "解除熔断";
+  }
+  if (moreWrap) {
+    moreWrap.classList.toggle("hidden", !circuit.open);
+    if (!circuit.open) moreWrap.classList.remove("open");
+  }
+  if (moreTrigger) {
+    moreTrigger.disabled = smartPriceRetrying || marketCircuitClearing;
+    moreTrigger.setAttribute("aria-expanded", moreWrap?.classList.contains("open") ? "true" : "false");
   }
   syncMarketPriceRefreshControls();
 }
@@ -294,7 +463,7 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
       const cmpTitle = cmpSource ? ` title="价格来源：${escapeHtml(cmpSource)}"` : "";
       const cmpCell = cmp
         ? `<td class="mono"${cmpTitle}>${escapeHtml(cmp)}${cmpSource === "最低价/中位价摘要" ? '<span class="tx-price-source">摘</span>' : ""}</td>`
-        : '<td class="mono"></td>';
+        : '<td class="mono text-muted" title="现市场价暂未获取到">—</td>';
       const marketAtBuy = t.market_price != null ? Number(t.market_price) : null;
       let plCell = `<td class="tx-extra-col"></td>`;
       if (cur != null && marketAtBuy != null && marketAtBuy > 0) {
@@ -325,7 +494,11 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
       rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${nameHtml}</td>${assetidCell}${priceCell}<td class="tx-actions">${actHtml}</td></tr>`);
     }
   }
-  tbody.innerHTML = rowHtmls.join("");
+  if (isPurchase && !rowHtmls.length) {
+    tbody.innerHTML = txTableStateRow(16, "暂无当前持仓", "买入记录会在这里显示，已出售的记录请看交易流水。", "empty");
+  } else {
+    tbody.innerHTML = rowHtmls.join("");
+  }
   bindSelectionCount("#transactions-table-purchases .holding-checkbox", "holdings-selected-count");
   tbody.querySelectorAll(".ph-btn-delist").forEach(btn => {
     btn.addEventListener("click", async () => {
@@ -475,7 +648,9 @@ function renderPurchaseHistoryTable(tbody, list, resellRatio = 0.85, multiSelect
     const assetidStr = t.assetid ?? "—";
     rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${nameHtml}</td><td><span class="tx-account-cell" title="${escapeHtml(accountName)}">${escapeHtml(accountName)}</span></td><td>${renderAutomationBadge(sold ? { className: "is-sold", label: "已完成", hint: "该记录已出售" } : state)}</td><td class="mono tx-extra-col">${escapeHtml(assetidStr)}</td><td class="mono">${escapeHtml(Number(t.price).toFixed(2))}</td><td class="mono tx-extra-col">${escapeHtml(mp)}</td><td class="status-cell ${statusCellClass}">${escapeHtml(statusStr)}</td><td class="mono">${escapeHtml(salePriceStr)}</td><td class="mono tx-extra-col">${escapeHtml(soldTimeStr)}</td><td class="mono ${discountRatioClass}">${escapeHtml(discountRatioStr)}</td><td class="mono ${cashClass}">${escapeHtml(cashProfitStr)}</td><td class="mono tx-extra-col ${selfUseClass}">${escapeHtml(selfUseStr)}</td>${deviationCell}<td class="tx-actions">${actHtml}</td></tr>`);
   }
-  tbody.innerHTML = rowHtmls.join("");
+  tbody.innerHTML = rowHtmls.length
+    ? rowHtmls.join("")
+    : txTableStateRow(16, "暂无交易流水", "买入、出售和下架记录会在这里显示。", "empty");
   bindSelectionCount("#transactions-table-purchase-history .history-checkbox", "history-selected-count");
   tbody.querySelectorAll(".ph-btn-delist").forEach(btn => {
     btn.addEventListener("click", async () => {
@@ -521,21 +696,36 @@ function renderPurchaseHistoryTable(tbody, list, resellRatio = 0.85, multiSelect
 function applyTransactionsToUI(all, summaryEl, tbodyP, tbodyHistory, resellRatio = 0.85) {
   const purchases = all.filter((t) => t.type === "purchase");
   const holdings = purchases.filter((t) => !(t.sale_price != null && Number(t.sale_price) > 0));
+  const filteredHoldings = filterHoldingsList(holdings);
   const ratio = Math.max(0.01, Math.min(1, Number(resellRatio) || 0.85));
+  lastTransactionsResellRatio = ratio;
   const holdingsCountEl = el("tx-tab-count-purchases");
   const historyCountEl = el("tx-tab-count-history");
   if (holdingsCountEl) holdingsCountEl.textContent = String(holdings.length);
   if (historyCountEl) historyCountEl.textContent = String(purchases.length);
   refreshTxAccountCapability().then(() => {
     if (lastEnrichData === all) {
-      if (tbodyP) renderTxTable(tbodyP, holdings, true, ratio, holdingsMultiSelectMode);
+      if (tbodyP) {
+        if (holdings.length && !filteredHoldings.length) {
+          tbodyP.innerHTML = txTableStateRow(16, "没有匹配的持仓", "调整筛选条件后再试。", "empty");
+        } else {
+          renderTxTable(tbodyP, filteredHoldings, true, ratio, holdingsMultiSelectMode);
+        }
+      }
       if (tbodyHistory) renderPurchaseHistoryTable(tbodyHistory, purchases, ratio, historyMultiSelectMode);
     }
   });
   syncTxColumnToggleUI();
-  if (tbodyP) renderTxTable(tbodyP, holdings, true, ratio, holdingsMultiSelectMode);
+  if (tbodyP) {
+    if (holdings.length && !filteredHoldings.length) {
+      tbodyP.innerHTML = txTableStateRow(16, "没有匹配的持仓", "调整筛选条件后再试。", "empty");
+    } else {
+      renderTxTable(tbodyP, filteredHoldings, true, ratio, holdingsMultiSelectMode);
+    }
+  }
   if (tbodyHistory) renderPurchaseHistoryTable(tbodyHistory, purchases, ratio, historyMultiSelectMode);
   updateMarketPriceNotice(lastMarketPriceMeta, holdings);
+  refreshHoldingsFilterUI(holdings.length, filteredHoldings.length);
   syncMarketPriceRefreshControls();
   syncHistoryMultiSelectUI();
   const historySummaryEl = el("purchase-history-summary");
@@ -704,6 +894,8 @@ async function refreshTransactions(options = {}) {
   const tbodyHistory = document.querySelector("#transactions-table-purchase-history tbody");
   const summaryEl = el("purchases-summary");
   if (!tbodyP && !tbodyHistory) return;
+  setTxTableLoading(tbodyP, 16, "正在加载当前持仓", "正在读取交易记录和市场价格。");
+  setTxTableLoading(tbodyHistory, 16, "正在加载交易流水", "正在读取买入、出售和下架记录。");
   try {
     const d = await fetchJson(API + "/transactions?enrich_current_price=0");
     let all = d.transactions || [];
@@ -731,18 +923,18 @@ async function refreshTransactions(options = {}) {
         const params = new URLSearchParams({ enrich_current_price: "1" });
         if (forceSmartPrice) params.set("force_smart_price", "1");
         const enriched = await fetchJson(API + "/transactions?" + params.toString());
-        priceRefreshMeta = enriched.price_meta || null;
-        handleMarketPriceMeta(priceRefreshMeta);
         if (Array.isArray(enriched.transactions)) {
           all = enriched.transactions;
           resellRatio = enriched.resell_ratio ?? resellRatio;
           lastEnrichTime = Date.now();
         }
+        priceRefreshMeta = enriched.price_meta || null;
       } catch (e) {
         priceRefreshError = e.message || "请求失败";
       }
     }
     lastEnrichData = all;
+    if (priceRefreshMeta) handleMarketPriceMeta(priceRefreshMeta);
     if (priceRefreshAttempted) {
       const refreshedHoldings = all.filter((t) => t.type === "purchase" && !(t.sale_price != null && Number(t.sale_price) > 0));
       recordMarketPriceRefresh(refreshedHoldings, priceRefreshMeta || lastMarketPriceMeta, forceSmartPrice ? "手动刷新" : "自动刷新", priceRefreshError);
@@ -750,6 +942,8 @@ async function refreshTransactions(options = {}) {
     applyTransactionsToUI(all, summaryEl, tbodyP, tbodyHistory, resellRatio);
   } catch (e) {
     toast("加载操作记录失败", e.message || "");
+    setTxTableError(tbodyP, 16, "当前持仓加载失败", e.message || "请稍后重试。");
+    setTxTableError(tbodyHistory, 16, "交易流水加载失败", e.message || "请稍后重试。");
   }
 }
 async function retrySmartMarketPrices() {
@@ -762,11 +956,33 @@ async function retrySmartMarketPrices() {
     const holdings = Array.isArray(lastEnrichData)
       ? lastEnrichData.filter((t) => t.type === "purchase" && !(t.sale_price != null && Number(t.sale_price) > 0))
       : [];
-    const fallbackCount = holdings.filter((t) => t.current_market_price != null && t.current_market_price_source === "steam_lowest").length;
-    if (fallbackCount > 0) toast("智能价仍未完全恢复", `${fallbackCount} 条仍使用最低价/中位价摘要`);
+    const counts = getMarketPriceIssueCounts(holdings);
+    if (counts.missing > 0) toast("现市场价获取失败", buildMarketPriceIssueDetail(counts, lastMarketPriceMeta));
+    else if (counts.fallback > 0) toast("智能价仍未完全恢复", `${counts.fallback} 条使用最低价/中位价摘要`);
     else toast("智能价已更新");
   } finally {
     smartPriceRetrying = false;
+    syncMarketPriceRefreshControls();
+    const holdings = Array.isArray(lastEnrichData)
+      ? lastEnrichData.filter((t) => t.type === "purchase" && !(t.sale_price != null && Number(t.sale_price) > 0))
+      : [];
+    updateMarketPriceNotice(lastMarketPriceMeta, holdings);
+  }
+}
+async function clearMarketPriceCircuit() {
+  if (marketCircuitClearing) return;
+  marketCircuitClearing = true;
+  syncMarketPriceRefreshControls();
+  updateMarketPriceNotice(lastMarketPriceMeta, Array.isArray(lastEnrichData) ? lastEnrichData : []);
+  try {
+    const d = await fetchJson(API + "/market-price/circuit/clear", { method: "POST" });
+    lastMarketPriceMeta = d.price_meta || { ...(lastMarketPriceMeta || {}), circuit: d.circuit || { open: false, remaining_seconds: 0 } };
+    toast("已解除市场价熔断", "后台自动刷新将恢复；如果 Steam 仍失败，熔断会再次保护。");
+    await refreshTransactions({ forceSmartPrice: true });
+  } catch (e) {
+    toast("解除熔断失败", e.message || "请稍后重试");
+  } finally {
+    marketCircuitClearing = false;
     syncMarketPriceRefreshControls();
     const holdings = Array.isArray(lastEnrichData)
       ? lastEnrichData.filter((t) => t.type === "purchase" && !(t.sale_price != null && Number(t.sale_price) > 0))

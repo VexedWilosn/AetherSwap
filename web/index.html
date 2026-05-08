@@ -356,6 +356,13 @@
               </div>
               <button id="btn-holdings-toggle-cols" class="btn btn-sm btn-secondary" type="button" aria-pressed="false">显示更多列</button>
               <button id="btn-holdings-multiselect" class="btn btn-sm btn-secondary">多选</button>
+              <div class="tx-toolbar-more" id="tx-more-actions">
+                <button id="btn-tx-more-actions" class="btn btn-sm btn-secondary tx-toolbar-more-trigger" type="button" aria-haspopup="menu" aria-expanded="false">更多操作</button>
+                <div class="tx-toolbar-more-menu" role="menu">
+                  <button id="btn-open-add-purchase" class="tx-action-item" type="button" role="menuitem">手动入账</button>
+                  <button id="btn-sync-sold" class="tx-action-item" type="button" role="menuitem">同步持仓状态</button>
+                </div>
+              </div>
             </div>
             <div id="holdings-batch-actions" class="tx-batch-bar hidden" style="display:none;">
               <span class="tx-batch-count">已选择 <strong id="holdings-selected-count">0</strong> 项</span>
@@ -365,21 +372,42 @@
           </div>
           <div id="purchases-summary" class="purchases-summary"></div>
         </div>
-        <div class="add-purchase-bar">
-          <span class="label">手动入账</span>
-          <input type="text" id="add-purchase-name" placeholder="物品名称" />
-          <input type="text" id="add-purchase-steam-link" placeholder="或 Steam 市场链接（优先取英文名）"
-            title="粘贴 steamcommunity.com/market/listings/730/... 将用链接中的英文名作为记录名称" />
-          <input type="number" id="add-purchase-price" step="0.01" min="0.01" placeholder="价格" />
-          <input type="number" id="add-purchase-quantity" value="1" min="1" placeholder="数量" title="批量添加条数" />
-          <button id="btn-add-purchase" class="btn btn-primary">添加</button>
+        <div class="tx-filter-bar">
+          <div class="tx-filter-search">
+            <span class="label">筛选</span>
+            <input type="search" id="holdings-filter-search" placeholder="搜索物品名或 assetid" />
+          </div>
+          <select id="holdings-filter-status" title="按持仓状态筛选">
+            <option value="all">全部状态</option>
+            <option value="locked">冷却中</option>
+            <option value="ready">可出售</option>
+            <option value="listing">出售中</option>
+            <option value="pending">待收货</option>
+            <option value="error">异常</option>
+          </select>
+          <select id="holdings-filter-price" title="按现市场价来源筛选">
+            <option value="all">全部价格</option>
+            <option value="smart">智能价</option>
+            <option value="fallback">摘要价</option>
+            <option value="missing">价格缺失</option>
+          </select>
+          <button id="btn-reset-holdings-filter" class="btn btn-sm btn-secondary" type="button">重置</button>
+          <span id="holdings-filter-count" class="tx-filter-count"></span>
         </div>
         <div id="market-price-notice" class="market-price-notice hidden" role="button" tabindex="0" aria-live="polite">
           <div class="market-price-notice-main">
             <span id="market-price-notice-title" class="market-price-notice-title">当前现市场价使用最低价/中位价摘要</span>
             <span id="market-price-notice-detail" class="market-price-notice-detail"></span>
           </div>
-          <button id="btn-retry-smart-price" class="market-price-notice-action" type="button">重取智能价</button>
+          <div class="market-price-notice-actions">
+            <button id="btn-retry-smart-price" class="market-price-notice-action" type="button">重试获取现市场价</button>
+            <div id="market-price-notice-more" class="market-price-notice-more hidden">
+              <button id="btn-market-price-notice-more" class="market-price-notice-more-trigger" type="button" aria-haspopup="menu" aria-expanded="false">更多</button>
+              <div class="market-price-notice-more-menu" role="menu">
+                <button id="btn-clear-market-circuit" class="tx-action-item tx-action-danger" type="button" role="menuitem">解除熔断</button>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="table-container table-card">
           <table id="transactions-table-purchases" class="tx-table-compact">
@@ -952,6 +980,14 @@
                   <input type="number" id="cfg-current-price-refresh-minutes" min="1" placeholder="10"
                     title="仅在此间隔过后再次打开/刷新操作记录时才请求 Steam 现价" />
                 </div>
+                <div class="field field--switch">
+                  <label class="checkbox-wrapper">
+                    <input type="checkbox" id="cfg-market-price-circuit-enabled" checked
+                      title="连续 5 轮 Steam 智能价接口失败后暂停智能价 5 分钟，期间使用最低价/中位价摘要兜底" />
+                    <span>启用智能价熔断保护</span>
+                  </label>
+                  <span class="field-hint">连续 5 轮智能价请求全部失败后暂停 5 分钟，避免 Steam 限流或代理异常时持续重试；暂停期间仍会尝试最低价/中位价摘要。关闭后每次刷新都会继续请求智能价接口。</span>
+                </div>
                 <div class="field">
                   <label for="cfg-exchange-refresh-hours">汇率刷新间隔(小时)</label>
                   <input type="number" id="cfg-exchange-refresh-hours" min="0" step="0.5" placeholder="0"
@@ -1010,7 +1046,6 @@
               <input id="cfg-import-file" type="file" accept=".json" hidden />
             </label>
             <button id="btn-data-init" class="btn btn-danger" type="button">恢复出厂设置</button>
-            <button id="btn-sync-sold" class="btn btn-secondary" type="button">同步售出/持有</button>
             <button id="btn-repair-error" class="btn btn-danger-outline" type="button">紧急修复</button>
             <button id="btn-save-config" class="btn btn-primary">保存所有设置</button>
           </div>
@@ -1694,6 +1729,35 @@
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
         <button type="button" id="sell-tx-cancel" class="btn btn-secondary">取消</button>
         <button type="button" id="sell-tx-confirm" class="btn btn-primary">确定售出</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="add-purchase-overlay" class="relogin-overlay hidden">
+    <div class="relogin-modal">
+      <h3>手动入账</h3>
+      <div class="form-grid" style="margin:12px 0">
+        <div class="field">
+          <label for="add-purchase-name">物品名称</label>
+          <input type="text" id="add-purchase-name" placeholder="物品名称" />
+        </div>
+        <div class="field">
+          <label for="add-purchase-steam-link">Steam 市场链接</label>
+          <input type="text" id="add-purchase-steam-link" placeholder="可选，优先取链接中的英文名"
+            title="粘贴 steamcommunity.com/market/listings/730/... 将用链接中的英文名作为记录名称" />
+        </div>
+        <div class="field">
+          <label for="add-purchase-price">购入价</label>
+          <input type="number" id="add-purchase-price" step="0.01" min="0.01" placeholder="价格" />
+        </div>
+        <div class="field">
+          <label for="add-purchase-quantity">数量</label>
+          <input type="number" id="add-purchase-quantity" value="1" min="1" placeholder="数量" title="批量添加条数" />
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+        <button type="button" id="add-purchase-cancel" class="btn btn-secondary">取消</button>
+        <button type="button" id="btn-add-purchase" class="btn btn-primary">添加</button>
       </div>
     </div>
   </div>

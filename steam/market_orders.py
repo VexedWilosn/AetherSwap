@@ -82,16 +82,34 @@ _cb_open_until = 0.0
 _CB_FAIL_THRESHOLD = 5       
 _CB_COOLDOWN_SEC = 300       
 
+def _is_market_circuit_enabled() -> bool:
+    try:
+        from app.config_loader import load_app_config_validated
+        cfg = load_app_config_validated().get("pipeline", {})
+        return cfg.get("market_price_circuit_enabled", True) is not False
+    except Exception:
+        return True
+
 def get_market_circuit_state() -> dict:
+    enabled = _is_market_circuit_enabled()
     with _cb_lock:
-        remaining = max(0, int(_cb_open_until - time.time()))
+        remaining = max(0, int(_cb_open_until - time.time())) if enabled else 0
         return {
-            "open": remaining > 0,
+            "enabled": enabled,
+            "open": enabled and remaining > 0,
             "remaining_seconds": remaining,
             "fail_streak": _cb_fail_streak,
             "threshold": _CB_FAIL_THRESHOLD,
             "cooldown_seconds": _CB_COOLDOWN_SEC,
         }
+
+def clear_market_circuit_state() -> dict:
+    global _cb_fail_streak, _cb_open_until
+    with _cb_lock:
+        was_open = time.time() < _cb_open_until
+        _cb_fail_streak = 0
+        _cb_open_until = 0.0
+    return {**get_market_circuit_state(), "was_open": was_open}
 
 def fetch_item_orders_histogram(
     session,
@@ -104,8 +122,9 @@ def fetch_item_orders_histogram(
     ignore_circuit: bool = False,
 ) -> Optional[dict]:
     global _cb_fail_streak, _cb_open_until
+    circuit_enabled = _is_market_circuit_enabled()
     with _cb_lock:
-        if time.time() < _cb_open_until and not ignore_circuit:
+        if circuit_enabled and time.time() < _cb_open_until and not ignore_circuit:
             return None
     url = "https://steamcommunity.com/market/itemordershistogram"
     params = {
@@ -139,7 +158,8 @@ def fetch_item_orders_histogram(
                 data = r.json()
                 if isinstance(data, dict) and data.get("success") == 1:
                     with _cb_lock:
-                        _cb_fail_streak = 0  
+                        _cb_fail_streak = 0
+                        _cb_open_until = 0.0
                     return data
                 
                 logger.debug("直方图 success非1 resp=%s", str(data)[:150])
@@ -150,6 +170,11 @@ def fetch_item_orders_histogram(
             
         if attempt < 2:
             jittered_sleep(1.0)
+    if not circuit_enabled:
+        with _cb_lock:
+            _cb_fail_streak = 0
+            _cb_open_until = 0.0
+        return None
     with _cb_lock:
         _cb_fail_streak += 1
         if _cb_fail_streak >= _CB_FAIL_THRESHOLD:

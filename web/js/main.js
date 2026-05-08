@@ -607,11 +607,18 @@ function refreshAnalytics(purchases, resellRatio) {
       const devClass = r.avgDeviation != null ? (r.avgDeviation > 0 ? "text-ok" : r.avgDeviation < 0 ? "text-bad" : "") : "";
       return `<tr><td>${nameHtml}</td><td class="mono">${r.heldCount}</td><td class="mono">${r.soldCount}</td><td class="mono">${avgPriceStr}</td><td class="mono">${avgMpStr}</td><td class="mono">${avgCurrentStr}</td><td class="mono">${totalSaleStr}</td><td class="mono ${discountRatioClass}">${avgDiscountStr}</td><td class="mono ${cashClass}">${cashProfitStr}</td><td class="mono ${devClass}">${avgDevStr}</td></tr>`;
     });
-    tbody.innerHTML = rowHtmls.length ? rowHtmls.join("") : "<tr><td colspan='10' class='text-muted'>暂无数据</td></tr>";
+    tbody.innerHTML = rowHtmls.length
+      ? rowHtmls.join("")
+      : (typeof txTableStateRow === "function"
+        ? txTableStateRow(10, "暂无收益分析", "有买入记录后会按物品汇总持仓、成交和收益。", "empty")
+        : "<tr><td colspan='10' class='text-muted'>暂无数据</td></tr>");
   };
   if (purchases != null && resellRatio != null) {
     render(purchases, resellRatio);
   } else {
+    if (typeof setTxTableLoading === "function") {
+      setTxTableLoading(tbody, 10, "正在加载收益分析", "正在汇总交易记录。");
+    }
     fetchJson(API + "/transactions?enrich_current_price=0")
       .then((d) => {
         const list = (d.transactions || []).filter((t) => t.type === "purchase");
@@ -620,7 +627,11 @@ function refreshAnalytics(purchases, resellRatio) {
       })
       .catch((e) => {
         toast("加载数据分析失败", e.message || "");
-        tbody.innerHTML = "<tr><td colspan='10' class='text-muted'>加载失败</td></tr>";
+        if (typeof setTxTableError === "function") {
+          setTxTableError(tbody, 10, "收益分析加载失败", e.message || "请稍后重试。");
+        } else {
+          tbody.innerHTML = "<tr><td colspan='10' class='text-muted'>加载失败</td></tr>";
+        }
       });
   }
 }
@@ -698,6 +709,47 @@ function bindEvents() {
     e.stopPropagation();
     if (typeof retrySmartMarketPrices === "function") retrySmartMarketPrices();
   });
+  el("btn-clear-market-circuit")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (typeof clearMarketPriceCircuit === "function") clearMarketPriceCircuit();
+  });
+  el("btn-market-price-notice-more")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const wrap = el("market-price-notice-more");
+    const open = !wrap?.classList.contains("open");
+    if (wrap) wrap.classList.toggle("open", open);
+    e.currentTarget.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  el("btn-tx-more-actions")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const wrap = el("tx-more-actions");
+    const open = !wrap?.classList.contains("open");
+    document.querySelectorAll(".tx-toolbar-more.open").forEach((node) => node.classList.remove("open"));
+    if (wrap) wrap.classList.toggle("open", open);
+    e.currentTarget.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  document.addEventListener("click", (e) => {
+    if (e.target.closest(".tx-toolbar-more")) return;
+    document.querySelectorAll(".tx-toolbar-more.open").forEach((node) => {
+      node.classList.remove("open");
+      node.querySelector("[aria-expanded]")?.setAttribute("aria-expanded", "false");
+    });
+    if (e.target.closest(".market-price-notice-more")) return;
+    document.querySelectorAll(".market-price-notice-more.open").forEach((node) => {
+      node.classList.remove("open");
+      node.querySelector("[aria-expanded]")?.setAttribute("aria-expanded", "false");
+    });
+  });
+  el("btn-open-add-purchase")?.addEventListener("click", () => {
+    el("tx-more-actions")?.classList.remove("open");
+    const trigger = el("btn-tx-more-actions");
+    if (trigger) trigger.setAttribute("aria-expanded", "false");
+    el("add-purchase-overlay")?.classList.remove("hidden");
+    el("add-purchase-name")?.focus();
+  });
+  el("add-purchase-cancel")?.addEventListener("click", () => {
+    el("add-purchase-overlay")?.classList.add("hidden");
+  });
   el("btn-refresh-market-price")?.addEventListener("click", () => {
     if (typeof retrySmartMarketPrices === "function") retrySmartMarketPrices();
   });
@@ -710,6 +762,24 @@ function bindEvents() {
     if (typeof retrySmartMarketPrices === "function") retrySmartMarketPrices();
   });
   el("btn-add-account")?.addEventListener("click", () => openAccountForm());
+  el("holdings-filter-search")?.addEventListener("input", () => {
+    if (typeof rerenderTransactionsFromCache === "function") rerenderTransactionsFromCache();
+  });
+  el("holdings-filter-status")?.addEventListener("change", () => {
+    if (typeof rerenderTransactionsFromCache === "function") rerenderTransactionsFromCache();
+  });
+  el("holdings-filter-price")?.addEventListener("change", () => {
+    if (typeof rerenderTransactionsFromCache === "function") rerenderTransactionsFromCache();
+  });
+  el("btn-reset-holdings-filter")?.addEventListener("click", () => {
+    const search = el("holdings-filter-search");
+    const status = el("holdings-filter-status");
+    const price = el("holdings-filter-price");
+    if (search) search.value = "";
+    if (status) status.value = "all";
+    if (price) price.value = "all";
+    if (typeof rerenderTransactionsFromCache === "function") rerenderTransactionsFromCache();
+  });
   el("accounts-search")?.addEventListener("input", (e) => {
     accountsSearchTerm = e.target?.value || "";
     renderAccountsUI(accountsCache || [], accountsCurrentId);
@@ -757,6 +827,7 @@ function bindEvents() {
       if (priceEl) priceEl.value = "";
       if (qtyEl) qtyEl.value = "1";
       if (goodsIdEl) goodsIdEl.value = "";
+      el("add-purchase-overlay")?.classList.add("hidden");
       await refreshTransactions();
       refreshStatus();
       toast(res.added > 1 ? `已添加 ${res.added} 条操作记录` : "已添加操作记录");
@@ -814,7 +885,8 @@ function bindEvents() {
     const btn = el("btn-sync-sold");
     if (btn?.disabled) return;
     btn.disabled = true;
-    toast("正在同步", "请稍候…");
+    el("tx-more-actions")?.classList.remove("open");
+    toast("正在同步持仓状态", "请稍候…");
     try {
       const r = await fetchJson(API + "/sync_sold_from_history", { method: "POST" });
       if (r.ok) {
@@ -822,13 +894,13 @@ function bindEvents() {
         await refreshStatus();
         const u = r.updated ?? 0;
         const f = r.filled ?? 0;
-        if (u || f) toast("同步成功", `售出更新 ${u} 条，填充 assetid ${f} 条`);
-        else toast("同步成功", "无变更");
+        if (u || f) toast("同步持仓状态完成", `售出更新 ${u} 条，填充 assetid ${f} 条`);
+        else toast("同步持仓状态完成", "无变更");
       } else {
-        toast("同步失败", r.error || "接口请求未返回 error 字段");
+        toast("同步持仓状态失败", r.error || "接口请求未返回 error 字段");
       }
     } catch (e) {
-      toast("同步失败", e.message || "请求异常");
+      toast("同步持仓状态失败", e.message || "请求异常");
     } finally {
       btn.disabled = false;
     }

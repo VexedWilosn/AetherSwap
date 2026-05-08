@@ -82,6 +82,14 @@ def _enrich_purchases_with_current_prices(transactions: list, force_smart_price:
 @router.get("/api/purchases")
 def api_purchases():
     return {"purchases": get_purchases()}
+
+@router.post("/api/market-price/circuit/clear")
+def api_clear_market_price_circuit():
+    from steam.market_orders import clear_market_circuit_state
+    state = clear_market_circuit_state()
+    log("用户手动解除 Steam 市场价熔断保护", "warn", category="market_price")
+    return {"ok": True, "circuit": state, "price_meta": get_market_price_context()}
+
 @router.post("/api/purchase")
 def api_add_purchase(body: AddPurchaseBody):
     name = (body.name or "").strip()
@@ -148,9 +156,33 @@ def api_transactions(enrich_current_price: bool = False, force_smart_price: bool
         price_meta["force_smart_price"] = True
     if enrich_current_price and is_steam_background_allowed():
         price_details = _enrich_purchases_with_current_prices(out, force_smart_price=force_smart_price)
+        price_meta.update(get_market_price_context())
+        if force_smart_price:
+            price_meta["force_smart_price"] = True
         if any(d.get("source") == "steam_lowest" for d in price_details.values()):
             price_meta["fallback_used"] = True
             price_meta["warning"] = price_meta.get("warning") or "部分现市场价使用 Steam 最低价/中位价摘要兜底，不等同智能挂单价。"
+        unsold_names = {
+            (t.get("name") or "").strip()
+            for t in out
+            if t.get("type") == "purchase" and t.get("sale_price") is None and (t.get("name") or "").strip()
+        }
+        price_meta["requested_count"] = len(unsold_names)
+        price_meta["resolved_count"] = len(price_details)
+        price_meta["missing_count"] = max(0, len(unsold_names) - len(price_details))
+        if unsold_names and not price_details:
+            price_meta["warning"] = "现市场价未获取到；Steam 智能价与最低价/中位价摘要均暂不可用。"
+    elif enrich_current_price:
+        unsold_names = {
+            (t.get("name") or "").strip()
+            for t in out
+            if t.get("type") == "purchase" and t.get("sale_price") is None and (t.get("name") or "").strip()
+        }
+        price_meta["requested_count"] = len(unsold_names)
+        price_meta["resolved_count"] = 0
+        price_meta["missing_count"] = len(unsold_names)
+        if unsold_names:
+            price_meta["warning"] = "系统正在运行任务，暂不刷新 Steam 现市场价。"
     cfg = load_app_config_validated().get("pipeline", {})
     resell_ratio = float(cfg.get("resell_ratio", 0.85))
     if resell_ratio <= 0:

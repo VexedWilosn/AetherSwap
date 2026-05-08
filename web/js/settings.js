@@ -3,6 +3,20 @@ let inventoryRefreshSeconds = 60;
 let inventoryTimer = null;
 let currentPriceRefreshMinutes = 10;
 let currentPriceTimer = null;
+function isInternalWebviewShell() {
+  try {
+    return new URLSearchParams(window.location.search).get("shell") === "webview";
+  } catch {
+    return false;
+  }
+}
+function applyInternalUiScale(value) {
+  if (isInternalWebviewShell()) {
+    document.documentElement.style.zoom = value || "0.7";
+  } else {
+    document.documentElement.style.zoom = "";
+  }
+}
 async function loadConfig() {
   const d = await fetchJson(API + "/config");
   const c = d.config || {};
@@ -95,6 +109,8 @@ async function loadConfig() {
   const currentPriceRefreshEl = el("cfg-current-price-refresh-minutes");
   if (currentPriceRefreshEl) currentPriceRefreshEl.value = p.current_price_refresh_minutes ?? "";
   currentPriceRefreshMinutes = parseInt(p.current_price_refresh_minutes, 10) || currentPriceRefreshMinutes || 10;
+  const marketCircuitEnabled = el("cfg-market-price-circuit-enabled");
+  if (marketCircuitEnabled) marketCircuitEnabled.checked = p.market_price_circuit_enabled !== false;
   const gStartTimeLimitEnabled = el("cfg-start-time-limit-enabled");
   if (gStartTimeLimitEnabled) gStartTimeLimitEnabled.checked = !!p.start_time_limit_enabled;
   const gStartTimeHour = el("cfg-start-time-hour");
@@ -144,9 +160,9 @@ async function loadConfig() {
   const gUiScale = el("cfg-ui_scale");
   if (gUiScale) {
     gUiScale.value = sys.ui_scale || "0.7";
-    document.documentElement.style.zoom = sys.ui_scale || "0.7";
+    applyInternalUiScale(sys.ui_scale || "0.7");
     gUiScale.addEventListener("change", (e) => {
-      document.documentElement.style.zoom = e.target.value;
+      applyInternalUiScale(e.target.value);
     });
   }
   const sd = c.steam_deals || {};
@@ -210,6 +226,7 @@ function formToConfig() {
       sell_pressure_orders_n: el("cfg-sell_pressure_orders_n") ? parseInt(el("cfg-sell_pressure_orders_n").value, 10) : undefined,
       sell_pressure_threshold: el("cfg-sell_pressure_threshold") ? parseFloat(el("cfg-sell_pressure_threshold").value) : undefined,
       current_price_refresh_minutes: el("cfg-current-price-refresh-minutes") ? parseInt(el("cfg-current-price-refresh-minutes").value, 10) || undefined : undefined,
+      market_price_circuit_enabled: el("cfg-market-price-circuit-enabled") ? el("cfg-market-price-circuit-enabled").checked : undefined,
       start_time_limit_enabled: !!el("cfg-start-time-limit-enabled")?.checked,
       start_time_hour: el("cfg-start-time-hour") ? (parseInt(el("cfg-start-time-hour").value, 10) >= 0 && parseInt(el("cfg-start-time-hour").value, 10) <= 23 ? parseInt(el("cfg-start-time-hour").value, 10) : undefined) : undefined,
       end_time_hour: el("cfg-end-time-hour") ? (parseInt(el("cfg-end-time-hour").value, 10) >= 0 && parseInt(el("cfg-end-time-hour").value, 10) <= 23 ? parseInt(el("cfg-end-time-hour").value, 10) : undefined) : undefined,

@@ -141,6 +141,21 @@
   .sidebar {
     width: 100vw;
     max-width: none;
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 0;
+    height: auto;
+    position: fixed;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    border-right: none;
+    border-top: 1px solid var(--border-color);
+    overflow-x: auto;
+    overflow-y: hidden;
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.06);
   }
 
   .nav-menu {
