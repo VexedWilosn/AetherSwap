@@ -53,7 +53,7 @@ let txHoldingsSort = readHoldingsSortPreference();
 let txHistorySort = readHistorySortPreference();
 let txHoldingsColumnOrder = readHoldingsColumnOrderPreference();
 let txHoldingsExtraColumns = readHoldingsExtraColumnsPreference();
-let txHoldingsFilters = { search: "", status: "all", price: "all" };
+let txHoldingsFilters = { search: "", status: "all", account: "all", price: "all" };
 let txHistoryFilters = { search: "", status: "all", period: "all" };
 function txEmptyText() {
   return '<span class="tx-empty-value">—</span>';
@@ -218,6 +218,38 @@ function normalizeAccountLabel(acc) {
   if (!acc) return "当前账号";
   return acc.display_name || acc.username || acc.steam_id || "当前账号";
 }
+function getTransactionAccountId(t, accountCapability = getTxAccountCapability()) {
+  const id = (t.account_id || "").toString().trim();
+  if (id) return id;
+  return (accountCapability?.currentId || "").toString().trim();
+}
+function getTransactionAccountLabel(t, accountCapability = getTxAccountCapability()) {
+  const id = getTransactionAccountId(t, accountCapability);
+  const accounts = accountCapability?.accounts || [];
+  const account = id ? accounts.find((a) => a.id === id) : null;
+  return account ? normalizeAccountLabel(account) : (t.account_label || id || "当前账号");
+}
+function renderHoldingsAccountFilterOptions(holdings = []) {
+  const select = el("holdings-filter-account");
+  if (!select) return;
+  const selected = select.value || txHoldingsFilters.account || "all";
+  const accountCapability = getTxAccountCapability();
+  const options = new Map();
+  (accountCapability.accounts || []).forEach((acc) => {
+    if (!acc?.id) return;
+    options.set(String(acc.id), normalizeAccountLabel(acc));
+  });
+  holdings.forEach((t) => {
+    const id = getTransactionAccountId(t, accountCapability);
+    if (!id || options.has(id)) return;
+    options.set(id, t.account_label || id);
+  });
+  select.innerHTML = [
+    '<option value="all">全部账号</option>',
+    ...Array.from(options.entries()).map(([id, label]) => `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`),
+  ].join("");
+  select.value = selected === "all" || options.has(selected) ? selected : "all";
+}
 async function refreshTxAccountCapability() {
   const now = Date.now();
   if (txAccountsCapabilityCache && now - txAccountsCapabilityAt < 30000) return txAccountsCapabilityCache;
@@ -270,6 +302,7 @@ function readHoldingsFiltersFromUI() {
   txHoldingsFilters = {
     search: (el("holdings-filter-search")?.value || "").trim().toLowerCase(),
     status: el("holdings-filter-status")?.value || "all",
+    account: el("holdings-filter-account")?.value || "all",
     price: el("holdings-filter-price")?.value || "all",
   };
   const sortBy = el("holdings-sort-by")?.value || txHoldingsSort.by;
@@ -290,6 +323,7 @@ function filterHoldingsList(holdings) {
       if (!hay.includes(search)) return false;
     }
     if (filters.status && filters.status !== "all" && getHoldingFilterStatus(t) !== filters.status) return false;
+    if (filters.account && filters.account !== "all" && getTransactionAccountId(t) !== filters.account) return false;
     if (filters.price && filters.price !== "all") {
       const source = t.current_market_price_source || "";
       if (filters.price === "smart" && source !== "smart") return false;
@@ -307,7 +341,7 @@ function getHoldingSortValue(t, key, resellRatio = 0.85) {
   const ratio = Math.max(0.01, Math.min(1, Number(resellRatio) || 0.85));
   if (key === "time") return Number(t.at) || 0;
   if (key === "name") return (t.name || "").toString().toLowerCase();
-  if (key === "account") return normalizeAccountLabel(getTxAccountCapability().current).toLowerCase();
+  if (key === "account") return getTransactionAccountLabel(t).toLowerCase();
   if (key === "unlock") return getUnlockState(t).unlockTs || 0;
   if (key === "automation") return getAutomationState(t, getTxAccountCapability()).key || "";
   if (key === "assetid") return t.assetid || "";
@@ -1077,9 +1111,9 @@ function renderHoldingsColumnSortBar() {
 function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, multiSelectMode = false) {
   const ratio = Math.max(0.01, Math.min(1, Number(resellRatio) || 0.85));
   const accountCapability = getTxAccountCapability();
-  const accountName = normalizeAccountLabel(accountCapability.current);
   const rowHtmls = [];
   for (const t of list) {
+    const accountName = getTransactionAccountLabel(t, accountCapability);
     const timeStr = formatDateTime(t.at);
     const nameText = (t.name || "—").toString();
     const nameHtml = buildItemNameHtml(nameText);
@@ -1187,9 +1221,9 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
 function renderPurchaseHistoryTable(tbody, list, resellRatio = 0.85, multiSelectMode = false) {
   const ratio = Math.max(0.01, Math.min(1, Number(resellRatio) || 0.85));
   const accountCapability = getTxAccountCapability();
-  const accountName = normalizeAccountLabel(accountCapability.current);
   const rowHtmls = [];
   for (const t of list) {
+    const accountName = getTransactionAccountLabel(t, accountCapability);
     const timeStr = formatDateTime(t.at);
     const soldTimeStr = t.sold_at ? formatDateTime(t.sold_at) : "";
     const nameText = (t.name || "—").toString();
@@ -1285,6 +1319,8 @@ function applyTransactionsToUI(all, summaryEl, tbodyP, tbodyHistory, resellRatio
   const purchases = all.filter((t) => t.type === "purchase");
   const holdings = purchases.filter((t) => !(t.sale_price != null && Number(t.sale_price) > 0));
   const ratio = Math.max(0.01, Math.min(1, Number(resellRatio) || 0.85));
+  renderHoldingsAccountFilterOptions(holdings);
+  readHoldingsFiltersFromUI();
   readHistoryFiltersFromUI();
   const filteredHoldings = sortHoldingsList(filterHoldingsList(holdings), ratio);
   const filteredHistory = sortHistoryList(filterHistoryList(purchases), ratio);
@@ -1557,6 +1593,7 @@ async function refreshTransactions(options = {}) {
       const refreshedHoldings = all.filter((t) => t.type === "purchase" && !(t.sale_price != null && Number(t.sale_price) > 0));
       recordMarketPriceRefresh(refreshedHoldings, priceRefreshMeta || lastMarketPriceMeta, forceSmartPrice ? "手动刷新" : "自动刷新", priceRefreshError);
     }
+    await refreshTxAccountCapability();
     applyTransactionsToUI(all, summaryEl, tbodyP, tbodyHistory, resellRatio);
   } catch (e) {
     toast("加载操作记录失败", e.message || "");

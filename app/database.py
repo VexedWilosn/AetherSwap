@@ -28,6 +28,8 @@ class Purchase(SQLModel, table=True):
     goods_id: int = 0
     price: float = 0.0
     at: float = 0.0
+    account_id: Optional[str] = None
+    account_label: Optional[str] = None
     market_price: Optional[float] = None
     sale_price: Optional[float] = None
     sold_at: Optional[float] = None
@@ -120,6 +122,16 @@ def init_db() -> None:
         except Exception:
             pass  
     with engine.connect() as conn:
+        for ddl in (
+            "ALTER TABLE purchase ADD COLUMN account_id TEXT",
+            "ALTER TABLE purchase ADD COLUMN account_label TEXT",
+        ):
+            try:
+                conn.execute(sa_text(ddl))
+                conn.commit()
+            except Exception:
+                pass
+    with engine.connect() as conn:
         rows = conn.execute(
             sa_text("SELECT id, positive_rate, total_reviews FROM steamdealgame WHERE wilson_score IS NULL")
         ).fetchall()
@@ -137,6 +149,8 @@ def _purchase_from_dict(d: dict) -> Purchase:
         goods_id=int(d.get("goods_id", 0) or 0),
         price=float(d.get("price", 0)),
         at=float(d.get("at", 0)),
+        account_id=str(d["account_id"]) if d.get("account_id") is not None else None,
+        account_label=str(d["account_label"]) if d.get("account_label") is not None else None,
         market_price=float(d["market_price"]) if d.get("market_price") is not None else None,
         sale_price=float(d["sale_price"]) if d.get("sale_price") is not None else None,
         sold_at=float(d["sold_at"]) if d.get("sold_at") is not None else None,
@@ -163,6 +177,10 @@ def _purchase_to_dict(p: Purchase) -> dict:
     }
     if p.market_price is not None:
         d["market_price"] = p.market_price
+    if p.account_id is not None:
+        d["account_id"] = p.account_id
+    if p.account_label is not None:
+        d["account_label"] = p.account_label
     if p.sale_price is not None:
         d["sale_price"] = p.sale_price
     if p.sold_at is not None:
@@ -220,6 +238,7 @@ def migrate_from_json() -> bool:
 _PURCHASE_UPDATABLE = frozenset({
     "name", "price", "goods_id", "market_price", "sale_price",
     "sold_at", "pending_receipt", "assetid", "listing", "listing_status",
+    "account_id", "account_label",
 })
 _SALE_UPDATABLE = frozenset({"name", "price", "goods_id", "assetid", "at"})
 def db_append_purchase(p: dict) -> None:

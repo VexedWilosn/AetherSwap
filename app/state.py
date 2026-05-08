@@ -63,6 +63,22 @@ class State:
         self._next_progress_item = ""
 
     def append_purchase(self, p: dict) -> None:
+        if not p.get("account_id"):
+            try:
+                from app.accounts import get_current_account
+                account = get_current_account() or {}
+                account_id = (account.get("id") or "").strip()
+                if account_id:
+                    p = dict(p)
+                    p["account_id"] = account_id
+                    p["account_label"] = (
+                        account.get("display_name")
+                        or account.get("username")
+                        or account.get("steam_id")
+                        or account_id
+                    )
+            except Exception:
+                pass
         db_append_purchase(p)
     def get_purchases(self) -> list:
         return db_get_purchases()

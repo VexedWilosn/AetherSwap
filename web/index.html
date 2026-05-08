@@ -388,6 +388,9 @@
             <option value="pending">待收货</option>
             <option value="error">异常</option>
           </select>
+          <select id="holdings-filter-account" title="按账号筛选">
+            <option value="all">全部账号</option>
+          </select>
           <select id="holdings-filter-price" title="按现市场价来源筛选">
             <option value="all">全部价格</option>
             <option value="smart">智能价</option>
@@ -1166,21 +1169,60 @@
       </section>
 
       <section id="panel-inventory" class="panel">
-        <div class="panel-toolbar">
-          <div class="toolbar-stat">
-            <span class="label">库存总数</span>
-            <span class="value" id="inv-count">0</span>
+        <div class="panel-toolbar panel-toolbar--inventory">
+          <div class="panel-toolbar-row">
+            <div class="toolbar-title">
+              <span class="label">库存管理</span>
+              <span class="hint">Steam 库存、交易冷却与最低价</span>
+            </div>
+            <div class="panel-toolbar-actions">
+              <button id="btn-refresh-inventory" class="btn btn-sm btn-secondary">立即刷新</button>
+              <span id="inv-cache-note" class="inventory-cache-note"></span>
+            </div>
           </div>
-          <div class="toolbar-stat">
-            <span class="label">库存价值</span>
-            <span class="value mono" id="inv-total-value">0.00</span>
+          <div class="purchases-summary inventory-summary">
+            <span class="summary-stat"><span class="summary-label">展示库存</span><span class="summary-value" id="inv-count">0</span></span>
+            <span class="summary-stat"><span class="summary-label">库存价值</span><span class="summary-value mono" id="inv-total-value">0.00</span></span>
+            <span class="summary-stat"><span class="summary-label">税后价值</span><span class="summary-value mono" id="inv-tax-value">0.00</span></span>
+            <span class="summary-stat"><span class="summary-label">可出售</span><span class="summary-value" id="inv-sellable-count">0</span></span>
+            <span class="summary-stat"><span class="summary-label">冷却中</span><span class="summary-value" id="inv-locked-count">0</span></span>
+            <span class="summary-stat"><span class="summary-label">缺价</span><span class="summary-value" id="inv-missing-price-count">0</span></span>
           </div>
-          <div class="toolbar-stat">
-            <span class="label">税后价值</span>
-            <span class="value mono" id="inv-tax-value">0.00</span>
+        </div>
+        <div class="tx-filter-bar tx-filter-bar--inventory">
+          <div class="tx-filter-search">
+            <span class="label">筛选</span>
+            <input type="search" id="inventory-filter-search" placeholder="搜索物品名或市场名" />
           </div>
-          <button id="btn-refresh-inventory" class="btn btn-sm btn-secondary">立即刷新</button>
-          <span id="inv-cache-note" class="muted small"></span>
+          <select id="inventory-filter-sell" title="按出售状态筛选">
+            <option value="all">全部出售</option>
+            <option value="sellable">可出售</option>
+            <option value="blocked">不可出售</option>
+          </select>
+          <select id="inventory-filter-trade" title="按交易状态筛选">
+            <option value="all">全部交易</option>
+            <option value="tradable">可交易</option>
+            <option value="locked">冷却中</option>
+            <option value="blocked">不可交易</option>
+          </select>
+          <select id="inventory-filter-price" title="按最低价筛选">
+            <option value="all">全部价格</option>
+            <option value="priced">有价格</option>
+            <option value="missing">价格缺失</option>
+          </select>
+          <select id="inventory-sort-by" title="库存排序字段">
+            <option value="price">按最低价</option>
+            <option value="unlock">按解禁时间</option>
+            <option value="name">按物品</option>
+            <option value="sell">按可出售</option>
+            <option value="trade">按可交易</option>
+          </select>
+          <select id="inventory-sort-dir" title="库存排序方向">
+            <option value="desc">降序</option>
+            <option value="asc">升序</option>
+          </select>
+          <button id="btn-reset-inventory-filter" class="btn btn-sm btn-secondary" type="button">重置</button>
+          <span id="inventory-filter-count" class="tx-filter-count"></span>
         </div>
         <div class="table-container table-card">
           <table id="inv-table">

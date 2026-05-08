@@ -339,6 +339,9 @@ async function refreshStatus() {
 }
 let reloginType = "steam";
 let inventoryRefreshInFlight = false;
+let lastInventoryItems = [];
+let inventoryFilters = { search: "", sell: "all", trade: "all", price: "all" };
+let inventorySort = { by: "price", dir: "desc" };
 function showReloginModal(type, opts = {}) {
   reloginType = type || "steam";
   const overlay = el("relogin-overlay");
@@ -365,6 +368,193 @@ function hideReloginModal() {
   const overlay = el("relogin-overlay");
   if (overlay) overlay.classList.add("hidden");
 }
+function inventoryFlag(value, fallback = false) {
+  if (value == null) return fallback;
+  return value === true || value === 1 || value === "1" || value === "true";
+}
+function getInventoryUnlockInfo(it) {
+  if (it.cooldown_at_iso) {
+    const date = new Date(it.cooldown_at_iso);
+    if (!Number.isNaN(date.getTime())) {
+      return {
+        display: date.toLocaleString(),
+        ts: date.getTime(),
+        locked: date.getTime() > Date.now(),
+      };
+    }
+  }
+  return { display: "", ts: null, locked: false };
+}
+function getInventoryState(it) {
+  const canSell = inventoryFlag(it.can_sell);
+  const marketable = inventoryFlag(it.marketable, canSell);
+  const canTrade = inventoryFlag(it.can_trade);
+  const tradable = inventoryFlag(it.tradable, canTrade);
+  const unlock = getInventoryUnlockInfo(it);
+  const rawCooldownText = String(it.cooldown_text || "").trim();
+  const looksLikeCooldown = !!rawCooldownText && !canTrade && tradable;
+  const sell = canSell && marketable
+    ? { key: "sellable", label: "可出售", hint: "可在 Steam 市场上架", className: "is-auto" }
+    : !marketable
+      ? { key: "blocked", label: "不可上架", hint: "Steam 标记为不可上架", className: "is-error" }
+      : { key: "blocked", label: "暂不可售", hint: unlock.display || "当前不可出售", className: "is-cooldown" };
+  const trade = canTrade && tradable
+    ? { key: "tradable", label: "可交易", hint: "可发起 Steam 交易", className: "is-auto" }
+    : unlock.locked || looksLikeCooldown
+      ? { key: "locked", label: "冷却中", hint: unlock.display ? `${unlock.display} 后可交易` : rawCooldownText, className: "is-cooldown" }
+      : !tradable
+        ? { key: "blocked", label: "不可交易", hint: "Steam 标记为不可交易", className: "is-error" }
+        : { key: "blocked", label: "暂不可交易", hint: "当前不可交易", className: "is-cooldown" };
+  return { sell, trade, unlock };
+}
+function renderInventoryPill(state) {
+  return `<span class="tx-state-pill ${escapeHtml(state.className)}" title="${escapeHtml(state.hint)}">${escapeHtml(state.label)}</span>`;
+}
+function getInventoryLowest(it) {
+  const lowest = Number(it.lowest_price);
+  return Number.isFinite(lowest) && lowest > 0 ? lowest : 0;
+}
+function getInventorySearchName(it) {
+  return [it.name, it.market_hash_name].filter(Boolean).join(" ").toLowerCase();
+}
+function readInventoryFiltersFromUI() {
+  inventoryFilters = {
+    search: (el("inventory-filter-search")?.value || "").trim().toLowerCase(),
+    sell: el("inventory-filter-sell")?.value || "all",
+    trade: el("inventory-filter-trade")?.value || "all",
+    price: el("inventory-filter-price")?.value || "all",
+  };
+  const sortBy = el("inventory-sort-by")?.value || inventorySort.by;
+  const sortDir = el("inventory-sort-dir")?.value || inventorySort.dir;
+  const allowedSort = ["price", "unlock", "name", "sell", "trade"];
+  inventorySort = {
+    by: allowedSort.includes(sortBy) ? sortBy : "price",
+    dir: sortDir === "asc" ? "asc" : "desc",
+  };
+  return inventoryFilters;
+}
+function filterInventoryItems(items) {
+  const filters = inventoryFilters || {};
+  return items.filter((it) => {
+    const state = getInventoryState(it);
+    if (filters.search && !getInventorySearchName(it).includes(filters.search)) return false;
+    if (filters.sell === "sellable" && state.sell.key !== "sellable") return false;
+    if (filters.sell === "blocked" && state.sell.key === "sellable") return false;
+    if (filters.trade && filters.trade !== "all" && state.trade.key !== filters.trade) return false;
+    const priced = getInventoryLowest(it) > 0;
+    if (filters.price === "priced" && !priced) return false;
+    if (filters.price === "missing" && priced) return false;
+    return true;
+  });
+}
+function getInventorySortValue(it, key) {
+  const state = getInventoryState(it);
+  if (key === "name") return (it.name || it.market_hash_name || "").toString().toLowerCase();
+  if (key === "unlock") return state.unlock.ts || null;
+  if (key === "sell") return state.sell.key === "sellable" ? 1 : 0;
+  if (key === "trade") return state.trade.key === "tradable" ? 2 : state.trade.key === "locked" ? 1 : 0;
+  return getInventoryLowest(it);
+}
+function sortInventoryItems(items) {
+  const sort = inventorySort || { by: "price", dir: "desc" };
+  const dir = sort.dir === "asc" ? 1 : -1;
+  return items.slice().sort((a, b) => {
+    const av = getInventorySortValue(a, sort.by);
+    const bv = getInventorySortValue(b, sort.by);
+    if (typeof av === "string" || typeof bv === "string") {
+      const cmp = String(av).localeCompare(String(bv), "zh-Hans-CN", { numeric: true });
+      return cmp * dir;
+    }
+    const aMissing = av == null;
+    const bMissing = bv == null;
+    if (aMissing && bMissing) return 0;
+    if (aMissing) return 1;
+    if (bMissing) return -1;
+    const cmp = Number(av) - Number(bv);
+    if (cmp !== 0) return cmp * dir;
+    return String(a.name || "").localeCompare(String(b.name || ""), "zh-Hans-CN", { numeric: true });
+  });
+}
+function getInventoryStatusNote(it, state) {
+  if (state.unlock.display && state.trade.key === "locked") return `交易保护至 ${state.unlock.display}`;
+  if (state.sell.key === "sellable" && state.trade.key === "tradable") return "可出售与交易";
+  if (state.sell.key !== "sellable" && state.trade.key !== "tradable") return `${state.sell.label} / ${state.trade.label}`;
+  if (state.sell.key !== "sellable") return state.sell.label;
+  if (state.trade.key !== "tradable") return state.trade.label;
+  return it.cooldown_text || "状态正常";
+}
+function syncInventoryFilterUI(total, filtered) {
+  const countEl = el("inventory-filter-count");
+  if (countEl) countEl.textContent = total === filtered ? `${total} 项` : `${filtered} / ${total} 项`;
+  const sortBy = el("inventory-sort-by");
+  const sortDir = el("inventory-sort-dir");
+  if (sortBy) sortBy.value = inventorySort.by;
+  if (sortDir) sortDir.value = inventorySort.dir;
+}
+function renderInventoryFromCache() {
+  const tbody = document.querySelector("#inv-table tbody");
+  if (!tbody) return;
+  readInventoryFiltersFromUI();
+  const filtered = sortInventoryItems(filterInventoryItems(lastInventoryItems));
+  const metrics = filtered.reduce((acc, it) => {
+    const state = getInventoryState(it);
+    const lowest = getInventoryLowest(it);
+    acc.totalValue += lowest;
+    if (state.sell.key === "sellable") acc.sellable += 1;
+    if (state.trade.key === "locked") acc.locked += 1;
+    if (lowest <= 0) acc.missing += 1;
+    return acc;
+  }, { totalValue: 0, sellable: 0, locked: 0, missing: 0 });
+  if (filtered.length === 0) {
+    tbody.innerHTML = typeof txTableStateRow === "function"
+      ? txTableStateRow(7, lastInventoryItems.length ? "没有匹配的库存" : "暂无库存", lastInventoryItems.length ? "调整筛选条件后再看" : "刷新后会显示 Steam 库存", "empty")
+      : `<tr><td colspan="7">暂无库存</td></tr>`;
+  } else {
+    tbody.innerHTML = filtered.map((it) => {
+      const state = getInventoryState(it);
+      const lowest = getInventoryLowest(it);
+      const lowestHtml = lowest > 0 ? escapeHtml(lowest.toFixed(2)) : txEmptyValue();
+      const mhn = (it.market_hash_name || it.name || "").trim();
+      const steamUrl = mhn ? "https://steamcommunity.com/market/listings/730/" + encodeURIComponent(mhn) : "";
+      const buffUrl = mhn ? "https://buff.163.com/market/csgo?tab=selling&search=" + encodeURIComponent(mhn) : "";
+      const linksHtml = mhn
+        ? `<a href="${steamUrl}" target="_blank" rel="noopener" class="link-steam">Steam</a><a href="${buffUrl}" target="_blank" rel="noopener" class="link-buff">Buff</a>`
+        : txEmptyValue();
+      const iconHtml = it.icon_url && typeof getIconUrl === "function"
+        ? `<img class="item-icon" src="${getIconUrl(it.icon_url)}" alt="" loading="lazy" onerror="this.style.display='none'" />`
+        : "";
+      const unlockHtml = state.unlock.display
+        ? `<span class="inventory-unlock ${state.unlock.locked ? "is-locked" : "is-ready"}">${escapeHtml(state.unlock.display)}</span>`
+        : txEmptyValue();
+      const statusNote = getInventoryStatusNote(it, state);
+      const fullNote = it.cooldown_text || statusNote;
+      return `
+        <tr>
+          <td class="item-name-cell">${iconHtml}<span title="${escapeHtml(it.name || mhn)}">${escapeHtml(it.name || mhn || "—")}</span></td>
+          <td class="inv-links">${linksHtml}</td>
+          <td>${renderInventoryPill(state.sell)}</td>
+          <td>${renderInventoryPill(state.trade)}</td>
+          <td>${unlockHtml}</td>
+          <td class="mono">${lowestHtml}</td>
+          <td><span class="inventory-status-note" title="${escapeHtml(fullNote)}">${escapeHtml(statusNote)}</span></td>
+        </tr>
+      `;
+    }).join("");
+  }
+  const c = el("inv-count");
+  if (c) c.textContent = filtered.length;
+  const v = el("inv-total-value");
+  if (v) v.textContent = metrics.totalValue.toFixed(2);
+  const taxEl = el("inv-tax-value");
+  if (taxEl) taxEl.textContent = (metrics.totalValue / 1.15).toFixed(2);
+  const sellableEl = el("inv-sellable-count");
+  if (sellableEl) sellableEl.textContent = metrics.sellable;
+  const lockedEl = el("inv-locked-count");
+  if (lockedEl) lockedEl.textContent = metrics.locked;
+  const missingEl = el("inv-missing-price-count");
+  if (missingEl) missingEl.textContent = metrics.missing;
+  syncInventoryFilterUI(lastInventoryItems.length, filtered.length);
+}
 async function refreshInventory(forceRefresh = true) {
   if (inventoryRefreshInFlight) return;
   inventoryRefreshInFlight = true;
@@ -375,70 +565,21 @@ async function refreshInventory(forceRefresh = true) {
       return;
     }
     const items = d.items || [];
+    lastInventoryItems = items;
     const note = el("inv-cache-note");
     if (note) {
       if (d.cached) {
         note.textContent = d.message || "当前显示缓存库存";
+        note.title = "Steam 实时库存获取失败或未强制刷新时，会先展示本地缓存库存。点击立即刷新可重新拉取。";
         note.classList.add("text-bad");
       } else {
         const ts = d.inventory_meta && d.inventory_meta.updated_at ? new Date(d.inventory_meta.updated_at * 1000) : null;
         note.textContent = ts && !isNaN(ts.getTime()) ? "实时刷新于 " + ts.toLocaleTimeString() : "";
+        note.title = "";
         note.classList.remove("text-bad");
       }
     }
-    const tbody = document.querySelector("#inv-table tbody");
-    if (!tbody) return;
-    let totalValue = 0;
-    const rowHtmls = [];
-    for (const it of items) {
-      const sellHtml =
-        `<span class="${it.can_sell ? "text-ok" : "text-bad"}">${it.can_sell ? "是" : "否"}</span>` +
-        (it.marketable ? "" : ' <span class="text-bad">(不可上架)</span>');
-      const tradeHtml =
-        `<span class="${it.can_trade ? "text-ok" : "text-bad"}">${it.can_trade ? "是" : "否"}</span>` +
-        (it.tradable ? "" : ' <span class="text-bad">(不可交易)</span>');
-      const rawTime = it.cooldown_at_iso || it.cooldown_text || "";
-      let displayTime = rawTime;
-      if (it.cooldown_at_iso) {
-        const d = new Date(it.cooldown_at_iso);
-        if (!isNaN(d.getTime())) {
-          displayTime = d.toLocaleString();
-        }
-      }
-      const timeHtml = displayTime ? `<span class="text-bad">${escapeHtml(displayTime)}</span>` : "—";
-      const lowest = Number(it.lowest_price) || 0;
-      totalValue += lowest;
-      const lowestStr = lowest > 0 ? lowest.toFixed(2) : "—";
-      const mhn = (it.market_hash_name || it.name || "").trim();
-      const steamUrl = mhn
-        ? "https://steamcommunity.com/market/listings/730/" + encodeURIComponent(mhn)
-        : "";
-      const buffUrl = mhn
-        ? "https://buff.163.com/market/csgo?tab=selling&search=" + encodeURIComponent(mhn)
-        : "";
-      const linksHtml = mhn
-        ? `<a href="${steamUrl}" target="_blank" rel="noopener" class="link-steam">Steam</a> <a href="${buffUrl}" target="_blank" rel="noopener" class="link-buff">Buff</a>`
-        : "—";
-      const iconHtml = it.icon_url && typeof getIconUrl === 'function'
-        ? `<img class="item-icon" src="${getIconUrl(it.icon_url)}" alt="" loading="lazy" onerror="this.style.display='none'" />`
-        : '';
-      rowHtmls.push(`
-        <tr><td class="item-name-cell">${iconHtml}<span>${escapeHtml(it.name || "")}</span></td>
-        <td class="inv-links">${linksHtml}</td>
-        <td>${sellHtml}</td>
-        <td>${tradeHtml}</td>
-        <td>${timeHtml}</td>
-        <td class="mono">${escapeHtml(lowestStr)}</td>
-        <td class="muted small">${escapeHtml(it.cooldown_text || "")}</td></tr>
-      `);
-    }
-    tbody.innerHTML = rowHtmls.join("");
-    const c = el("inv-count");
-    if (c) c.textContent = items.length;
-    const v = el("inv-total-value");
-    if (v) v.textContent = totalValue.toFixed(2);
-    const taxEl = el("inv-tax-value");
-    if (taxEl) taxEl.textContent = (totalValue / 1.15).toFixed(2);
+    renderInventoryFromCache();
     // Update icon cache (07)
     if (typeof setIconCache === 'function') {
       var iconMap = {};
@@ -461,32 +602,14 @@ async function refreshMarketPrices() {
     const prices = d.prices || {};
     const sources = d.sources || {};
     if (Object.keys(prices).length === 0) return;
-    const invItems = getInventoryCache();
-    if (invItems && invItems.length > 0) {
-      let totalValue = 0;
-      const tbody = document.querySelector("#inv-table tbody");
-      if (tbody) {
-        const rows = tbody.querySelectorAll("tr");
-        rows.forEach((row) => {
-          const nameTd = row.querySelector("td:first-child");
-          const priceTd = row.querySelectorAll("td")[5];
-          if (!nameTd || !priceTd) return;
-          const name = nameTd.textContent.trim();
-          const price = prices[name];
-          if (price != null) {
-            priceTd.textContent = price.toFixed(2);
-          }
-        });
-        rows.forEach((row) => {
-          const priceTd = row.querySelectorAll("td")[5];
-          const v = parseFloat(priceTd?.textContent);
-          if (!isNaN(v)) totalValue += v;
-        });
-        const v = el("inv-total-value");
-        if (v) v.textContent = totalValue.toFixed(2);
-        const taxEl = el("inv-tax-value");
-        if (taxEl) taxEl.textContent = (totalValue / 1.15).toFixed(2);
-      }
+    if (lastInventoryItems && lastInventoryItems.length > 0) {
+      lastInventoryItems = lastInventoryItems.map((it) => {
+        const name = (it.market_hash_name || it.name || "").trim();
+        const displayName = (it.name || "").trim();
+        const price = prices[name] ?? prices[displayName];
+        return price != null ? { ...it, lowest_price: price } : it;
+      });
+      renderInventoryFromCache();
     }
     if (!lastEnrichData) {
       await refreshTransactions();
@@ -510,12 +633,10 @@ async function refreshMarketPrices() {
   }
 }
 function getInventoryCache() {
-  const tbody = document.querySelector("#inv-table tbody");
-  if (!tbody) return [];
-  return Array.from(tbody.querySelectorAll("tr")).map((row) => {
-    const tds = row.querySelectorAll("td");
-    return { name: tds[0]?.textContent.trim() || "" };
-  });
+  if (Array.isArray(lastInventoryItems) && lastInventoryItems.length > 0) {
+    return lastInventoryItems.map((it) => ({ name: (it.market_hash_name || it.name || "").trim() }));
+  }
+  return [];
 }
 function txEmptyValue() {
   return '<span class="tx-empty-value">—</span>';
@@ -831,6 +952,32 @@ function bindEvents() {
       .catch((e) => toast("保存失败", e.message || "请稍后再试"))
   );
   el("btn-refresh-inventory")?.addEventListener("click", () => refreshInventory(true));
+  [
+    "inventory-filter-search",
+    "inventory-filter-sell",
+    "inventory-filter-trade",
+    "inventory-filter-price",
+    "inventory-sort-by",
+    "inventory-sort-dir",
+  ].forEach((id) => {
+    el(id)?.addEventListener("input", renderInventoryFromCache);
+    el(id)?.addEventListener("change", renderInventoryFromCache);
+  });
+  el("btn-reset-inventory-filter")?.addEventListener("click", () => {
+    const search = el("inventory-filter-search");
+    if (search) search.value = "";
+    const sell = el("inventory-filter-sell");
+    if (sell) sell.value = "all";
+    const trade = el("inventory-filter-trade");
+    if (trade) trade.value = "all";
+    const price = el("inventory-filter-price");
+    if (price) price.value = "all";
+    const sortBy = el("inventory-sort-by");
+    if (sortBy) sortBy.value = "price";
+    const sortDir = el("inventory-sort-dir");
+    if (sortDir) sortDir.value = "desc";
+    renderInventoryFromCache();
+  });
   el("btn-receive-now")?.addEventListener("click", async () => {
     const btn = el("btn-receive-now");
     const old = btn?.textContent;
@@ -946,6 +1093,9 @@ function bindEvents() {
   el("holdings-filter-status")?.addEventListener("change", () => {
     if (typeof rerenderTransactionsFromCache === "function") rerenderTransactionsFromCache();
   });
+  el("holdings-filter-account")?.addEventListener("change", () => {
+    if (typeof rerenderTransactionsFromCache === "function") rerenderTransactionsFromCache();
+  });
   el("holdings-filter-price")?.addEventListener("change", () => {
     if (typeof rerenderTransactionsFromCache === "function") rerenderTransactionsFromCache();
   });
@@ -958,11 +1108,13 @@ function bindEvents() {
   el("btn-reset-holdings-filter")?.addEventListener("click", () => {
     const search = el("holdings-filter-search");
     const status = el("holdings-filter-status");
+    const account = el("holdings-filter-account");
     const price = el("holdings-filter-price");
     const sortBy = el("holdings-sort-by");
     const sortDir = el("holdings-sort-dir");
     if (search) search.value = "";
     if (status) status.value = "all";
+    if (account) account.value = "all";
     if (price) price.value = "all";
     if (sortBy) sortBy.value = "time";
     if (sortDir) sortDir.value = "desc";

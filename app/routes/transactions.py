@@ -126,6 +126,10 @@ def api_transactions(enrich_current_price: bool = False, force_smart_price: bool
         row = {"type": "purchase", "idx": i, "name": p.get("name", ""), "goods_id": p.get("goods_id", ""), "price": float(p.get("price", 0)), "at": p.get("at", 0)}
         if p.get("_db_id"):
             row["db_id"] = p.get("_db_id")  
+        if p.get("account_id"):
+            row["account_id"] = p.get("account_id")
+        if p.get("account_label"):
+            row["account_label"] = p.get("account_label")
         mp = p.get("market_price")
         if mp is not None:
             row["market_price"] = round(float(mp), 2)

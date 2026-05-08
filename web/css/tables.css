@@ -88,6 +88,58 @@
   white-space: nowrap;
 }
 
+#panel-inventory {
+  max-width: none;
+  min-width: 0;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+#panel-inventory .panel-toolbar {
+  min-width: 0;
+  margin-bottom: 12px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+#panel-inventory .panel-toolbar-row {
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+#panel-inventory .panel-toolbar-actions {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+#panel-inventory .toolbar-title {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  gap: 2px;
+}
+
+#panel-inventory .toolbar-title .label {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-main);
+  line-height: 1.25;
+}
+
+#panel-inventory .toolbar-title .hint {
+  display: block;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
 .purchases-summary {
   display: flex;
   flex-wrap: wrap;
@@ -404,6 +456,10 @@
   width: 150px;
 }
 
+.tx-filter-bar #holdings-filter-account {
+  width: 140px;
+}
+
 .tx-filter-bar #history-filter-period,
 .tx-filter-bar #history-sort-by,
 .tx-filter-bar #analytics-filter-period,
@@ -411,11 +467,19 @@
   width: 150px;
 }
 
+.tx-filter-bar #inventory-filter-sell,
+.tx-filter-bar #inventory-filter-trade,
+.tx-filter-bar #inventory-filter-price,
+.tx-filter-bar #inventory-sort-by {
+  width: 136px;
+}
+
 .tx-filter-bar #holdings-sort-dir {
   width: 92px;
 }
 
-.tx-filter-bar #history-sort-dir {
+.tx-filter-bar #history-sort-dir,
+.tx-filter-bar #inventory-sort-dir {
   width: 92px;
 }
 
@@ -918,6 +982,223 @@
   color: var(--danger);
 }
 
+#panel-inventory .table-card {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+#panel-inventory table {
+  width: 100%;
+  min-width: max(980px, 100%);
+  table-layout: fixed;
+}
+
+#panel-inventory th,
+#panel-inventory td {
+  height: 50px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+  text-align: center;
+  vertical-align: middle;
+}
+
+#panel-inventory th {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+#panel-inventory td {
+  color: var(--text-main);
+  font-size: 13px;
+}
+
+#panel-inventory tbody tr:hover {
+  background: var(--bg-input);
+}
+
+#panel-inventory .mono {
+  font-variant-numeric: tabular-nums;
+}
+
+#panel-inventory .tx-empty-value {
+  display: block;
+  width: 100%;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+#panel-inventory .item-name-cell {
+  justify-content: center;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+#panel-inventory .item-name-cell span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+#panel-inventory .item-name-cell .item-icon {
+  flex: 0 0 auto;
+}
+
+#panel-inventory .tx-state-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+#panel-inventory .tx-state-pill.is-auto {
+  border-color: color-mix(in srgb, var(--success) 32%, transparent);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+#panel-inventory .tx-state-pill.is-cooldown {
+  border-color: color-mix(in srgb, var(--warning) 30%, transparent);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+#panel-inventory .tx-state-pill.is-error {
+  border-color: color-mix(in srgb, var(--danger) 28%, transparent);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+#panel-inventory .inv-links {
+  display: inline-flex;
+  justify-content: center;
+  gap: 6px;
+}
+
+#panel-inventory .inv-links a {
+  margin-right: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  line-height: 1;
+}
+
+#panel-inventory .inv-links a:hover {
+  border-color: var(--border-focus);
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+#panel-inventory .inv-links .link-buff {
+  color: var(--success);
+}
+
+#panel-inventory .inventory-unlock {
+  display: inline-block;
+  max-width: 148px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+#panel-inventory .inventory-unlock.is-locked {
+  color: var(--warning);
+  font-weight: 650;
+}
+
+#panel-inventory .inventory-unlock.is-ready {
+  color: var(--success);
+  font-weight: 650;
+}
+
+#panel-inventory .inventory-status-note {
+  display: inline-block;
+  max-width: 220px;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+#panel-inventory .inventory-cache-note {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  max-width: 260px;
+  padding: 0 10px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#panel-inventory .inventory-cache-note:empty {
+  display: none;
+}
+
+#panel-inventory .inventory-cache-note.text-bad {
+  border-color: color-mix(in srgb, var(--danger) 28%, transparent);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+#inv-table th:nth-child(1),
+#inv-table td:nth-child(1) {
+  width: 30%;
+}
+
+#inv-table th:nth-child(2),
+#inv-table td:nth-child(2) {
+  width: 12%;
+}
+
+#inv-table th:nth-child(3),
+#inv-table td:nth-child(3),
+#inv-table th:nth-child(4),
+#inv-table td:nth-child(4) {
+  width: 11%;
+}
+
+#inv-table th:nth-child(5),
+#inv-table td:nth-child(5) {
+  width: 16%;
+}
+
+#inv-table th:nth-child(6),
+#inv-table td:nth-child(6) {
+  width: 9%;
+}
+
+#inv-table th:nth-child(7),
+#inv-table td:nth-child(7) {
+  width: 11%;
+}
+
 /* Redundant first set deleted — single canonical set below (L626+) */
 
 #analytics-table {
@@ -1235,6 +1516,11 @@
     flex-direction: column;
   }
 
+  #panel-inventory .panel-toolbar-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   #panel-transactions .panel-toolbar-left-actions,
   #panel-transactions .panel-toolbar-actions,
   #panel-transactions .tx-batch-bar {
@@ -1247,8 +1533,18 @@
     flex-wrap: wrap;
   }
 
+  #panel-inventory .panel-toolbar-actions {
+    justify-content: flex-start;
+    margin-left: 0;
+    width: 100%;
+  }
+
   #panel-transactions table {
     min-width: 1320px;
+  }
+
+  #panel-inventory table {
+    min-width: 980px;
   }
 
   .tx-filter-bar {
@@ -1258,7 +1554,8 @@
   .tx-filter-search,
   .tx-filter-bar input,
   .tx-filter-bar select,
-  .tx-filter-bar #btn-reset-holdings-filter {
+  .tx-filter-bar #btn-reset-holdings-filter,
+  .tx-filter-bar #btn-reset-inventory-filter {
     flex: 1 1 100%;
     width: 100%;
     min-width: 0;
