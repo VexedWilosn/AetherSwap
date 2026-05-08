@@ -4,6 +4,7 @@ let accountsCurrentId = null;
 let selectedAccountId = null;
 let accountEditId = null;
 let accountsSearchTerm = '';
+let accountDetailTab = "basic";
 function renderAccountDetail(acc, currentId) {
   const detail = el("account-detail");
   if (!detail) return;
@@ -44,6 +45,10 @@ function renderAccountDetail(acc, currentId) {
   const guardStatus = acc.steam_guard_status || {};
   const guardConfigured = !!guardStatus.resolved_configured;
   const accountGuardConfigured = !!guardStatus.account_configured;
+  const trade = acc.trade_config || {};
+  const tradeEnabled = trade.enabled === true;
+  const tradePayMethod = trade.pay_method || "";
+  if (!["basic", "guard", "trade"].includes(accountDetailTab)) accountDetailTab = "basic";
   detail.innerHTML = `
     <div class="account-detail-header">
       <div class="account-detail-main">
@@ -61,51 +66,105 @@ function renderAccountDetail(acc, currentId) {
       </div>
     </div>
     <div class="account-detail-body">
-      <div class="kv-grid">
-        <div class="kv"><div class="k">Steam 用户名</div><div class="v mono">${escapeHtml(acc.username || "—")}</div></div>
-        <div class="kv"><div class="k">Steam ID</div><div class="v mono">${escapeHtml(acc.steam_id || "—")}</div></div>
-        <div class="kv"><div class="k">显示名</div><div class="v">${escapeHtml(acc.display_name || "—")}</div></div>
-        <div class="kv"><div class="k">头像</div><div class="v">${acc.avatar_url ? "已获取" : "未获取"}</div></div>
-        <div class="kv"><div class="k">结算币种</div><div class="v mono">${escapeHtml(currencyLabel)}</div></div>
-        <div class="kv"><div class="k">地区</div><div class="v mono">${escapeHtml(regionLabel)}</div></div>
+      <div class="account-detail-tabs" role="tablist" aria-label="账号详情">
+        <button type="button" class="account-detail-tab ${accountDetailTab === "basic" ? "active" : ""}" data-account-tab="basic">基本信息</button>
+        <button type="button" class="account-detail-tab ${accountDetailTab === "guard" ? "active" : ""}" data-account-tab="guard">Steam 令牌</button>
+        <button type="button" class="account-detail-tab ${accountDetailTab === "trade" ? "active" : ""}" data-account-tab="trade">任务配置</button>
       </div>
-      <div class="callout">
-        <svg class="callout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="M12 9v4"></path><path d="M12 17h.01"></path><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-        </svg>
-        <div class="callout-text"><strong>安全提示：</strong>若你选择保存密码，仅用于自动填充登录。建议系统环境保持可信，定期更换密码并开启 Steam 令牌等二次验证。</div>
+      <div class="account-detail-pane ${accountDetailTab === "basic" ? "active" : ""}" data-account-pane="basic">
+        <div class="kv-grid">
+          <div class="kv"><div class="k">Steam 用户名</div><div class="v mono">${escapeHtml(acc.username || "—")}</div></div>
+          <div class="kv"><div class="k">Steam ID</div><div class="v mono">${escapeHtml(acc.steam_id || "—")}</div></div>
+          <div class="kv"><div class="k">显示名</div><div class="v">${escapeHtml(acc.display_name || "—")}</div></div>
+          <div class="kv"><div class="k">头像</div><div class="v">${acc.avatar_url ? "已获取" : "未获取"}</div></div>
+          <div class="kv"><div class="k">结算币种</div><div class="v mono">${escapeHtml(currencyLabel)}</div></div>
+          <div class="kv"><div class="k">地区</div><div class="v mono">${escapeHtml(regionLabel)}</div></div>
+        </div>
+        <div class="callout">
+          <svg class="callout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M12 9v4"></path><path d="M12 17h.01"></path><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+          </svg>
+          <div class="callout-text"><strong>安全提示：</strong>若你选择保存密码，仅用于自动填充登录。建议系统环境保持可信，定期更换密码并开启 Steam 令牌等二次验证。</div>
+        </div>
       </div>
-      <div class="account-guard-section">
-        <div class="account-guard-header">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          <span>Steam 令牌</span>
-          <span class="account-guard-status ${guardConfigured ? "configured" : ""}" id="acct-guard-status-${escapeHtml(acc.id)}">${accountGuardConfigured ? "账号级" : guardConfigured ? "使用全局" : "未配置"}</span>
-        </div>
-        <div class="account-guard-code" id="acct-guard-code-${escapeHtml(acc.id)}" title="点击复制令牌">
-          <span class="guard-code-text">-----</span>
-          <span class="guard-code-hint">${guardConfigured ? "点击刷新验证码" : "填写 shared_secret 后可生成验证码"}</span>
-        </div>
-        <div class="account-guard-fields">
-          <div class="field">
-            <label>shared_secret</label>
-            <input type="password" id="acct-guard-shared" value="${escapeHtml(guard.shared_secret || "")}" autocomplete="new-password" />
+      <div class="account-detail-pane ${accountDetailTab === "guard" ? "active" : ""}" data-account-pane="guard">
+        <div class="account-guard-section">
+          <div class="account-guard-header">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <span>Steam 令牌</span>
+            <span class="account-guard-status ${guardConfigured ? "configured" : ""}" id="acct-guard-status-${escapeHtml(acc.id)}">${accountGuardConfigured ? "账号级" : guardConfigured ? "使用全局" : "未配置"}</span>
           </div>
-          <div class="field">
-            <label>identity_secret</label>
-            <input type="password" id="acct-guard-identity" value="${escapeHtml(guard.identity_secret || "")}" autocomplete="new-password" />
+          <div class="account-guard-code" id="acct-guard-code-${escapeHtml(acc.id)}" title="点击复制令牌">
+            <span class="guard-code-text">-----</span>
+            <span class="guard-code-hint">${guardConfigured ? "点击刷新验证码" : "填写 shared_secret 后可生成验证码"}</span>
           </div>
-          <div class="field">
-            <label>device_id</label>
-            <input type="text" id="acct-guard-device" value="${escapeHtml(guard.device_id || "")}" placeholder="android:..." />
+          <div class="account-guard-fields">
+            <div class="field">
+              <label>shared_secret</label>
+              <input type="password" id="acct-guard-shared" value="${escapeHtml(guard.shared_secret || "")}" autocomplete="new-password" />
+            </div>
+            <div class="field">
+              <label>identity_secret</label>
+              <input type="password" id="acct-guard-identity" value="${escapeHtml(guard.identity_secret || "")}" autocomplete="new-password" />
+            </div>
+            <div class="field">
+              <label>device_id</label>
+              <input type="text" id="acct-guard-device" value="${escapeHtml(guard.device_id || "")}" placeholder="android:..." />
+            </div>
+          </div>
+          <div class="account-guard-actions">
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-acct-guard-refresh" data-id="${escapeHtml(acc.id)}">刷新验证码</button>
+            <button type="button" class="btn btn-primary btn-sm" id="btn-acct-guard-save" data-id="${escapeHtml(acc.id)}">保存令牌</button>
           </div>
         </div>
-        <div class="account-guard-actions">
-          <button type="button" class="btn btn-secondary btn-sm" id="btn-acct-guard-refresh" data-id="${escapeHtml(acc.id)}">刷新验证码</button>
-          <button type="button" class="btn btn-primary btn-sm" id="btn-acct-guard-save" data-id="${escapeHtml(acc.id)}">保存令牌</button>
+      </div>
+      <div class="account-detail-pane ${accountDetailTab === "trade" ? "active" : ""}" data-account-pane="trade">
+        <div class="account-trade-section">
+          <div class="account-trade-header">
+            <div>
+              <div class="account-trade-title">交易任务配置</div>
+              <div class="account-trade-desc">为多账号任务预留的账号级配置；当前主流程仍以全局设置为准。</div>
+            </div>
+            <label class="account-trade-switch">
+              <input type="checkbox" id="acct-trade-enabled" ${tradeEnabled ? "checked" : ""} />
+              <span>启用自动交易</span>
+            </label>
+          </div>
+          <div class="account-trade-grid">
+            <div class="field">
+              <label>目标余额</label>
+              <input type="number" id="acct-trade-target-balance" min="0" step="0.01" value="${escapeHtml(trade.target_balance ?? "")}" placeholder="继承全局" />
+            </div>
+            <div class="field">
+              <label>最高折扣</label>
+              <input type="number" id="acct-trade-max-discount" min="0.001" max="1" step="0.001" value="${escapeHtml(trade.max_discount ?? "")}" placeholder="继承全局" />
+            </div>
+            <div class="field">
+              <label>支付方式</label>
+              <select id="acct-trade-pay-method">
+                <option value="" ${!tradePayMethod ? "selected" : ""}>继承全局</option>
+                <option value="alipay" ${tradePayMethod === "alipay" ? "selected" : ""}>支付宝</option>
+                <option value="wechat" ${tradePayMethod === "wechat" ? "selected" : ""}>微信</option>
+              </select>
+            </div>
+          </div>
+          <div class="account-trade-actions">
+            <button type="button" class="btn btn-primary btn-sm" id="btn-acct-trade-save" data-id="${escapeHtml(acc.id)}">保存配置</button>
+          </div>
         </div>
       </div>
     </div>
   `;
+  detail.querySelectorAll(".account-detail-tab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      accountDetailTab = btn.dataset.accountTab || "basic";
+      renderAccountDetail(acc, currentId);
+    });
+  });
+  detail.querySelector("#btn-acct-trade-save")?.addEventListener("click", async (e) => {
+    const id = e.currentTarget?.dataset?.id;
+    if (id) await saveAccountTradeConfig(id);
+  });
   detail.querySelector("#btn-acct-guard-save")?.addEventListener("click", async (e) => {
     const id = e.currentTarget?.dataset?.id;
     if (id) await saveAccountGuard(id);
@@ -341,6 +400,41 @@ async function saveAccountGuard(accountId) {
       toast("令牌已保存");
       await refreshAccounts();
       await refreshAccountGuardCode(accountId);
+    } else {
+      toast("保存失败", r.error || "");
+    }
+  } catch (e) {
+    toast("保存失败", e.message || "");
+  }
+}
+
+async function saveAccountTradeConfig(accountId) {
+  const enabled = !!el("acct-trade-enabled")?.checked;
+  const targetRaw = (el("acct-trade-target-balance")?.value || "").trim();
+  const discountRaw = (el("acct-trade-max-discount")?.value || "").trim();
+  const payMethod = (el("acct-trade-pay-method")?.value || "").trim();
+  const targetBalance = targetRaw ? parseFloat(targetRaw) : NaN;
+  const maxDiscount = discountRaw ? parseFloat(discountRaw) : NaN;
+  if (targetRaw && (!Number.isFinite(targetBalance) || targetBalance < 0)) {
+    toast("保存失败", "目标余额必须为非负数字");
+    return;
+  }
+  if (discountRaw && (!Number.isFinite(maxDiscount) || maxDiscount <= 0 || maxDiscount > 1)) {
+    toast("保存失败", "最高折扣需在 0 到 1 之间");
+    return;
+  }
+  const tradeConfig = { enabled };
+  if (Number.isFinite(targetBalance)) tradeConfig.target_balance = Math.round(targetBalance * 100) / 100;
+  if (Number.isFinite(maxDiscount)) tradeConfig.max_discount = maxDiscount;
+  if (payMethod) tradeConfig.pay_method = payMethod;
+  try {
+    const r = await fetchJson(API + "/accounts/" + accountId, {
+      method: "PUT",
+      body: JSON.stringify({ trade_config: tradeConfig }),
+    });
+    if (r.ok) {
+      toast("任务配置已保存");
+      await refreshAccounts();
     } else {
       toast("保存失败", r.error || "");
     }

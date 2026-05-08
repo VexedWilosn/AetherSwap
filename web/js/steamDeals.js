@@ -19,6 +19,9 @@
     let _dealStatusFilter = '';
     let _pollTimer = null;
     let _initialized = false;
+    let _fetchRunning = false;
+    let _lastDbCount = 0;
+    let _lastGridRefreshAt = 0;
     const $ = id => document.getElementById(id);
     function timeAgo(ts) {
         if (!ts) return '从未';
@@ -92,6 +95,11 @@
         games.forEach(g => {
             const card = document.createElement('div');
             card.className = 'sg-card';
+            const storeUrl = `https://store.steampowered.com/app/${g.app_id}/`;
+            card.dataset.appid = g.app_id;
+            card.dataset.storeUrl = storeUrl;
+            card.dataset.gameName = g.name || '';
+            card.dataset.bannerUrl = g.banner_url || '';
             const rate = g.positive_rate != null ? g.positive_rate : 0;
             const rateColor = rate >= 80 ? '#10b981' : rate >= 60 ? '#f59e0b' : '#ef4444';
             const rateLabel = rate >= 95 ? '好评如潮' : rate >= 80 ? '特别好评' : rate >= 70 ? '多半好评' : rate >= 50 ? '褒贬不一' : '差评';
@@ -173,17 +181,21 @@
             }
             card.innerHTML = `
         <div class="sg-card-banner">
-          <img src="${g.banner_url}" alt="${g.name}" loading="lazy" onerror="this.style.display='none'" />
+          <img src="${g.banner_url}" alt="${g.name}" loading="lazy" onerror="this.closest('.sg-card-banner').classList.add('sg-card-banner--error')" onload="this.closest('.sg-card-banner').classList.remove('sg-card-banner--error')" />
+          <button type="button" class="sg-img-retry" title="重新加载封面">
+            ${REFRESH_SVG}
+            重新加载图片
+          </button>
           ${discBadge}
         </div>
         <div class="sg-card-content">
-          <a class="sg-card-title" href="https://store.steampowered.com/app/${g.app_id}/" target="_blank" rel="noopener" title="${g.name}">${g.name}</a>
+          <a class="sg-card-title" href="${storeUrl}" target="_blank" rel="noopener" title="${g.name}">${g.name}</a>
           <div class="sg-card-review" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             <div class="sg-review-track"><div class="sg-review-bar-fill" style="width:${rate}%;background:${rateColor}"></div></div>
             <span style="color:${rateColor};font-weight:600;font-size:12px">${rate}%</span>
             <span class="sg-review-tag">${rateLabel}</span>
             <span class="sg-review-cnt">${fmtReviews(g.total_reviews)}</span>
-            <a class="sg-steam-btn" href="https://store.steampowered.com/app/${g.app_id}/" target="_blank" rel="noopener" style="margin-left:auto;padding:2px 8px;font-size:11px;">
+            <a class="sg-steam-btn" href="${storeUrl}" target="_blank" rel="noopener" style="margin-left:auto;padding:2px 8px;font-size:11px;">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.606 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.999 1.314 1.25 1.297.539 2.793-.076 3.332-1.375.263-.63.264-1.319.005-1.949s-.75-1.121-1.377-1.383c-.624-.26-1.29-.249-1.878-.03l1.523.63c.956.4 1.409 1.5 1.009 2.455-.397.957-1.497 1.41-2.455 1.012zm11.415-9.303c0-1.662-1.353-3.015-3.015-3.015-1.665 0-3.015 1.353-3.015 3.015 0 1.665 1.35 3.015 3.015 3.015 1.662 0 3.015-1.35 3.015-3.015zm-5.273-.005c0-1.252 1.013-2.266 2.265-2.266 1.249 0 2.266 1.014 2.266 2.266 0 1.251-1.017 2.265-2.266 2.265-1.252 0-2.265-1.014-2.265-2.265z"/></svg>
               Steam 商店
             </a>
@@ -224,22 +236,73 @@
         _observer.observe(sentinel);
     }
     const REFRESH_SVG = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>`;
-    async function fetchData() {
+    const STOP_SVG = `<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>`;
+    function setEmptyStateRunning(running) {
+        const emptyEl = $('steam-deals-empty');
+        const textEl = emptyEl?.querySelector('p');
+        if (!textEl) return;
+        textEl.textContent = running
+            ? '正在获取折扣数据，已保存的游戏会陆续显示在这里'
+            : '暂无数据，请点击上方「获取数据」按钮开始抓取';
+    }
+    function buildProgressText(s) {
+        const details = [];
+        if (s.total > 0) details.push(`${s.progress || 0}/${s.total}`);
+        if (s.saved > 0) details.push(`保存 ${s.saved}`);
+        if (s.failed > 0) details.push(`失败 ${s.failed}`);
+        const suffix = details.length ? ` · ${details.join(' · ')}` : '';
+        if (s.cancel_requested) return `停止中，等待已发出的请求结束${suffix}`;
+        return `${s.message || '获取中...'}${suffix}`;
+    }
+    function setFetchButtonState(running, cancelRequested = false) {
         const btn = $('steam-deals-fetch-btn');
-        if (btn) { btn.disabled = true; btn.textContent = '获取中...'; }
+        if (!btn) return;
+        if (running) {
+            btn.disabled = !!cancelRequested;
+            btn.innerHTML = cancelRequested ? '停止中...' : `${STOP_SVG} 停止获取`;
+        } else {
+            btn.disabled = false;
+            btn.innerHTML = `${REFRESH_SVG} 获取数据`;
+        }
+    }
+    async function fetchData() {
+        if (_fetchRunning) {
+            setFetchButtonState(true, true);
+            try {
+                const resp = await fetch('/api/steam-deals/cancel', { method: 'POST' });
+                const r = await resp.json();
+                if (!r.ok && typeof toast === "function") {
+                    toast("停止失败", r.message || "当前没有正在运行的抓取任务");
+                }
+                startPolling();
+            } catch (err) {
+                console.error('停止获取失败:', err);
+                if (typeof toast === "function") toast("停止失败", err.message || "");
+                setFetchButtonState(true, false);
+            }
+            return;
+        }
+        const btn = $('steam-deals-fetch-btn');
+        if (btn) { btn.disabled = true; btn.textContent = '启动中...'; }
         try {
             const resp = await fetch('/api/steam-deals/fetch', { method: 'POST' });
             const r = await resp.json();
             if (!r.ok) {
                 throw new Error(r.error || "获取失败");
             }
+            _fetchRunning = true;
+            _lastGridRefreshAt = 0;
+            setEmptyStateRunning(true);
+            setFetchButtonState(true, false);
             startPolling();
         } catch (err) {
             console.error('触发获取失败:', err);
             if (typeof toast === "function") {
                 toast("获取失败", err.message || "");
             }
-            if (btn) { btn.disabled = false; btn.innerHTML = REFRESH_SVG + ' 获取数据'; }
+            _fetchRunning = false;
+            setEmptyStateRunning(false);
+            setFetchButtonState(false);
         }
     }
     function startPolling() {
@@ -253,16 +316,44 @@
             const s = await resp.json();
             const prog = $('steam-deals-progress');
             const info = $('steam-deals-update-info');
-            const btn = $('steam-deals-fetch-btn');
             const tcEl = $('steam-deals-total-count');
+            const wasRunning = _fetchRunning;
+            _fetchRunning = !!s.running;
             if (s.running) {
-                if (prog) { prog.classList.remove('hidden'); prog.textContent = s.message || `${s.progress}/${s.total}`; }
-                if (btn) { btn.disabled = true; btn.textContent = '获取中...'; }
+                setEmptyStateRunning(true);
+                if (prog) { prog.classList.remove('hidden'); prog.textContent = buildProgressText(s); }
+                setFetchButtonState(true, !!s.cancel_requested);
+                const dbCount = Number(s.total_games_in_db || 0);
+                const shouldRefreshGrid = dbCount > 0 && (
+                    dbCount !== _lastDbCount ||
+                    Date.now() - _lastGridRefreshAt > 8000
+                );
+                if (shouldRefreshGrid && !_loading) {
+                    _lastDbCount = dbCount;
+                    _lastGridRefreshAt = Date.now();
+                    loadGames(true);
+                }
             } else {
                 if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
-                if (prog) prog.classList.add('hidden');
-                if (btn) { btn.disabled = false; btn.innerHTML = REFRESH_SVG + ' 获取数据'; }
-                loadGames(true);
+                setEmptyStateRunning(false);
+                if (prog) {
+                    if (wasRunning && s.message) {
+                        const finalMessage = s.message;
+                        prog.classList.remove('hidden');
+                        prog.textContent = finalMessage;
+                        setTimeout(() => {
+                            if (!_fetchRunning && prog.textContent === finalMessage) prog.classList.add('hidden');
+                        }, 5000);
+                    } else {
+                        prog.classList.add('hidden');
+                    }
+                }
+                setFetchButtonState(false);
+                if (wasRunning || Number(s.total_games_in_db || 0) !== _lastDbCount) {
+                    _lastDbCount = Number(s.total_games_in_db || 0);
+                    _lastGridRefreshAt = Date.now();
+                    loadGames(true);
+                }
             }
             if (info) {
                 const span = info.querySelector('span') || info;
@@ -320,6 +411,38 @@
 
         const grid = $('steam-deals-grid');
         if (grid) {
+            grid.addEventListener('click', async (e) => {
+                const retryBtn = e.target.closest('.sg-img-retry');
+                if (!retryBtn) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const card = retryBtn.closest('.sg-card');
+                const banner = retryBtn.closest('.sg-card-banner');
+                const img = banner?.querySelector('img');
+                const appId = card?.dataset.appid;
+                const fallbackUrl = card?.dataset.bannerUrl || img?.src?.split('?')[0];
+                if (!img || !appId) return;
+                retryBtn.disabled = true;
+                retryBtn.textContent = '正在刷新封面...';
+                banner.classList.remove('sg-card-banner--error');
+                try {
+                    const resp = await fetch(`/api/steam-deals/refresh-banner/${appId}`, { method: 'POST' });
+                    const data = await resp.json();
+                    if (data.ok && data.banner_url) {
+                        card.dataset.bannerUrl = data.banner_url;
+                        img.src = `${data.banner_url}${data.banner_url.includes('?') ? '&' : '?'}reload=${Date.now()}`;
+                    } else if (fallbackUrl) {
+                        img.src = `${fallbackUrl}${fallbackUrl.includes('?') ? '&' : '?'}reload=${Date.now()}`;
+                        if (typeof toast === 'function') toast('刷新封面失败', data.error || 'Steam 未返回可用封面地址');
+                    }
+                } catch (err) {
+                    if (fallbackUrl) img.src = `${fallbackUrl}${fallbackUrl.includes('?') ? '&' : '?'}reload=${Date.now()}`;
+                    if (typeof toast === 'function') toast('刷新封面失败', err.message || '');
+                } finally {
+                    retryBtn.disabled = false;
+                    retryBtn.innerHTML = `${REFRESH_SVG} 重新加载图片`;
+                }
+            });
             grid.addEventListener('contextmenu', (e) => {
                 const card = e.target.closest('.sg-card');
                 if (!card) return;
@@ -330,6 +453,8 @@
                 const match = link.href.match(/app\/(\d+)/);
                 if (!match) return;
                 const appId = match[1];
+                const gameName = card.dataset.gameName || link.textContent.trim() || appId;
+                const storeUrl = card.dataset.storeUrl || link.href;
 
                 const existing = document.getElementById('sg-ctx-portal');
                 if (existing) existing.remove();
@@ -356,7 +481,10 @@
                     'min-width:180px',
                     'white-space:nowrap',
                 ].join(';');
-                menu.innerHTML = `<div class="sg-cm-item" style="padding:8px 16px;cursor:pointer;transition:background 0.15s;">✨ 生成高质量折扣分享卡片</div>`;
+                menu.innerHTML = `
+                  <div class="sg-cm-item" data-action="gift" style="padding:8px 16px;cursor:pointer;transition:background 0.15s;">🎁 加入 Steam 赠礼候选</div>
+                  <div class="sg-cm-item" data-action="card" style="padding:8px 16px;cursor:pointer;transition:background 0.15s;">✨ 生成高质量折扣分享卡片</div>
+                `;
                 portal.appendChild(menu);
 
                 // Position after render so we can read offsetWidth/Height
@@ -369,11 +497,29 @@
                     menu.style.top = `${y}px`;
                 });
 
-                const item = menu.querySelector('.sg-cm-item');
-                item.addEventListener('mouseenter', () => item.style.background = '#334155');
-                item.addEventListener('mouseleave', () => item.style.background = 'transparent');
+                menu.querySelectorAll('.sg-cm-item').forEach(item => {
+                    item.addEventListener('mouseenter', () => item.style.background = '#334155');
+                    item.addEventListener('mouseleave', () => item.style.background = 'transparent');
+                });
 
-                item.addEventListener('click', async () => {
+                menu.querySelector('[data-action="gift"]')?.addEventListener('click', () => {
+                    portal.remove();
+                    const payload = { appId, url: storeUrl, title: gameName, autoFetch: true };
+                    if (typeof window.tabSwitch === 'function') {
+                        window.tabSwitch('gift');
+                    } else {
+                        document.querySelector('.nav-item[data-tab="gift"]')?.click();
+                    }
+                    setTimeout(() => {
+                        if (typeof window.prefillGiftFromSteamDeal === 'function') {
+                            window.prefillGiftFromSteamDeal(payload);
+                        } else {
+                            window.dispatchEvent(new CustomEvent('gift:prefill-store-url', { detail: payload }));
+                        }
+                    }, 120);
+                });
+
+                menu.querySelector('[data-action="card"]')?.addEventListener('click', async () => {
                     portal.remove();
                     if (typeof toast === 'function') toast("正在生成卡片", "这利用网络下载高清封面进行实时渲染，请稍候...", 5000);
                     try {

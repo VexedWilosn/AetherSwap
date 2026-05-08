@@ -24,8 +24,6 @@ function tabSwitch(name) {
   if (name === "transactions") { refreshTransactions(); refreshAnalytics(); }
   // analytics refresh is now handled by txSubTabSwitch
   if (name === "accounts") refreshAccounts();
-  if (name === "steam-guard") initSteamGuardPanel();
-  if (name !== "steam-guard") stopSteamGuardTimer();
   if (name === "proxy") {
     loadProxyConfig();
   }
@@ -921,16 +919,14 @@ function bindEvents() {
     refreshTransactions();
   });
   el("btn-holdings-toggle-cols")?.addEventListener("click", () => {
-    holdingsShowMoreColumns = !holdingsShowMoreColumns;
-    syncTxColumnToggleUI();
+    setHoldingsShowMoreColumns(!holdingsShowMoreColumns);
   });
   el("btn-history-multiselect")?.addEventListener("click", () => {
     historyMultiSelectMode = !historyMultiSelectMode;
     refreshTransactions();
   });
   el("btn-history-toggle-cols")?.addEventListener("click", () => {
-    historyShowMoreColumns = !historyShowMoreColumns;
-    syncTxColumnToggleUI();
+    setHistoryShowMoreColumns(!historyShowMoreColumns);
   });
   el("btn-history-batch-del")?.addEventListener("click", async () => {
     const checked = document.querySelectorAll("#transactions-table-purchase-history .history-checkbox:checked");
@@ -990,7 +986,6 @@ function bindEvents() {
     el("sell-tx-price")?.focus();
   });
   el("btn-theme")?.addEventListener("click", () => Theme.cycle());
-  el("steam-token-circle")?.addEventListener("click", handleSteamGuardClick);
 }
 function setupScrollToTop() {
   const btn = el("scroll-top-btn");

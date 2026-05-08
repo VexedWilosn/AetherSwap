@@ -33,6 +33,8 @@ _fetch_state = {
     "total": 0,           
     "failed": 0,          
     "message": "",        
+    "cancel_requested": False,
+    "saved": 0,
 }
 def get_fetch_state() -> dict:
     with _fetch_lock:
@@ -40,6 +42,16 @@ def get_fetch_state() -> dict:
 def _update_state(**kwargs):
     with _fetch_lock:
         _fetch_state.update(kwargs)
+def request_cancel_fetch() -> bool:
+    with _fetch_lock:
+        if not _fetch_state.get("running"):
+            return False
+        _fetch_state["cancel_requested"] = True
+        _fetch_state["message"] = "正在停止获取，等待已发出的请求结束..."
+        return True
+def _cancel_requested() -> bool:
+    with _fetch_lock:
+        return bool(_fetch_state.get("cancel_requested"))
 def _build_valid_proxies() -> list:
     """Read proxies from app config, test them, return sorted valid ones."""
     try:
@@ -88,6 +100,28 @@ def _build_valid_proxies() -> list:
     result = [p[0] for p in valid]
     _update_state(message=f"✅ 代理测速完成，可用 {len(result)} 个")
     return result
+def _load_configured_proxies() -> list:
+    """Read proxy pool config without testing it."""
+    try:
+        from app.config_loader import load_app_config_validated
+        cfg = load_app_config_validated()
+        proxies_raw = cfg.get("proxy_pool", {}).get("proxies", [])
+    except Exception:
+        return []
+    proxies = []
+    for p in proxies_raw:
+        host = p.get("host", "")
+        port = p.get("port", 0)
+        user = p.get("username", "")
+        pwd = p.get("password", "")
+        if not host:
+            continue
+        if user and pwd:
+            url = f"http://{user}:{pwd}@{host}:{port}/"
+        else:
+            url = f"http://{host}:{port}/"
+        proxies.append({"http": url, "https": url})
+    return proxies
 def _fetch_with_proxy(url: str, valid_proxies: list, max_retries: int = 5):
     """Fetch JSON from URL using random proxy from pool."""
     headers = {'User-Agent': random.choice(USER_AGENTS)}
@@ -125,6 +159,9 @@ def _get_discounted_appids(max_count: int = 20000, valid_proxies: Optional[list]
     )
     consecutive_empty = 0
     while len(appids) < max_count:
+        if _cancel_requested():
+            _update_state(message=f"已停止获取游戏 ID，当前 {len(appids)} 个", total=len(appids))
+            break
         url = base_url.format(count=page_size, start=start)
         try:
             data = _fetch_with_proxy(url, valid_proxies or [], max_retries=5)
@@ -188,10 +225,12 @@ def _fetch_region_data(appid: str, cc_code: str, valid_proxies: list, max_region
     original_str = None
     game_name = None
     final_cents = None  
+    header_image = None
     if data:
         app_info = data.get(str(appid), {})
         if app_info.get('success'):
             game_name = app_info['data'].get('name')
+            header_image = app_info['data'].get('header_image')
             price_info = app_info['data'].get('price_overview')
             if price_info:
                 original_str = price_info.get('initial_formatted', price_info.get('final_formatted', None))
@@ -201,7 +240,26 @@ def _fetch_region_data(appid: str, cc_code: str, valid_proxies: list, max_region
                 discount_str = f"-{discount}%" if discount > 0 else "0%"
         else:
             price_str = "锁区"
-    return cc_code, price_str, discount_str, original_str, game_name, final_cents
+    return cc_code, price_str, discount_str, original_str, game_name, final_cents, header_image
+def refresh_banner_url(appid: str, valid_proxies: Optional[list] = None) -> Optional[str]:
+    """Fetch the current Steam header image URL for an app.
+
+    Some newer apps no longer expose the legacy /steam/apps/{appid}/header.jpg
+    asset, so the frontend retry path refreshes the URL from appdetails.
+    """
+    appid = str(appid).strip()
+    if not appid:
+        return None
+    url = f"https://store.steampowered.com/api/appdetails?appids={appid}&cc=us&l=english&filters=basic"
+    proxies = valid_proxies if valid_proxies is not None else _load_configured_proxies()
+    data = _fetch_with_proxy(url, proxies or [], max_retries=5)
+    if not data:
+        return None
+    app_info = data.get(appid, {})
+    if not app_info.get("success"):
+        return None
+    header_image = app_info.get("data", {}).get("header_image")
+    return header_image if header_image else None
 def _fetch_historical_low(appid: str, valid_proxies: list) -> Optional[dict]:
     """Fetch historical low info (price in USD and timestamp) from CheapShark."""
     lookup_url = f"https://www.cheapshark.com/api/1.0/games?steamAppID={appid}"
@@ -252,6 +310,7 @@ def _process_single_game(appid: str, valid_proxies: list, max_region_threads: in
     }
     fetched_name_cn = None
     fetched_name_en = None
+    fetched_header_image = None
     review_url = f"https://store.steampowered.com/appreviews/{appid}?json=1&language=all"
     review_resp = _fetch_with_proxy(review_url, valid_proxies, max_retries=3)
     if review_resp:
@@ -271,7 +330,7 @@ def _process_single_game(appid: str, valid_proxies: list, max_region_threads: in
         ]
         for future in as_completed(futures):
             try:
-                cc, price, discount, original, name, cents = future.result()
+                cc, price, discount, original, name, cents, header_image = future.result()
                 if cc != "us":
                     game_data[f"price_{cc}"] = price
                     game_data[f"discount_{cc}"] = discount
@@ -285,6 +344,8 @@ def _process_single_game(appid: str, valid_proxies: list, max_region_threads: in
                     else:
                         if not fetched_name_en:
                             fetched_name_en = name
+                if header_image and not fetched_header_image:
+                    fetched_header_image = header_image
                 if cc == "cn" and discount and discount != "0%":
                     try:
                         game_data["discount_percent"] = int(discount.replace("%", "").replace("+", ""))
@@ -296,6 +357,8 @@ def _process_single_game(appid: str, valid_proxies: list, max_region_threads: in
     final_name_en = fetched_name_en if fetched_name_en else fetched_name_cn
     game_data["name"] = final_name or "Unknown"
     game_data["name_en"] = final_name_en or "Unknown"
+    if fetched_header_image:
+        game_data["banner_url"] = fetched_header_image
     cs_his_low = _fetch_historical_low(appid, valid_proxies)
     if cs_his_low and game_data.get("price_cents_us") is not None:
         current_us_price = game_data["price_cents_us"] / 100.0
@@ -320,26 +383,34 @@ def run_fetch(max_game_threads: int = 5, max_region_threads: int = 16):
     Main entry: build proxy pool, fetch appids, process games concurrently.
     Designed to be called in a background thread.
     """
-    from app.database import db_upsert_steam_deal, db_clear_steam_deals
+    from app.database import db_delete_steam_deals_older_than, db_upsert_steam_deal
     with _fetch_lock:
         if _fetch_state["running"]:
             return
+        run_started_at = time.time()
         _fetch_state.update({
             "running": True,
             "progress": 0,
             "total": 0,
             "failed": 0,
+            "cancel_requested": False,
+            "saved": 0,
             "message": "🚀 开始获取...",
         })
     try:
         valid_proxies = _build_valid_proxies()
         if not valid_proxies:
             _update_state(message="⚠️ 无可用代理，尝试直连...")
-        _update_state(message="🗑️ 正在清空旧数据...")
-        db_clear_steam_deals()
         appids = _get_discounted_appids(max_count=20000, valid_proxies=valid_proxies)
+        if _cancel_requested():
+            _update_state(
+                running=False,
+                cancel_requested=False,
+                message=f"已停止。已获取 {len(appids)} 个游戏 ID，未开始详情抓取",
+            )
+            return
         if not appids:
-            _update_state(running=False, message="❌ 未获取到任何游戏 ID")
+            _update_state(running=False, cancel_requested=False, message="❌ 未获取到任何游戏 ID")
             return
         _update_state(
             total=len(appids),
@@ -354,40 +425,85 @@ def run_fetch(max_game_threads: int = 5, max_region_threads: int = 16):
                     rates = json.load(f).get("rates", {})
         except Exception:
             pass
+        count = 0
+        failed = 0
+        saved = 0
+        cancelled = False
+        fused = False
+        batch_size = max(1, max_game_threads) * 2
         with ThreadPoolExecutor(max_workers=max_game_threads) as executor:
-            future_map = {
-                executor.submit(_process_single_game, appid, valid_proxies, max_region_threads, rates): appid
-                for appid in appids
-            }
-            count = 0
-            failed = 0
-            for future in as_completed(future_map):
-                count += 1
-                try:
-                    game = future.result()
-                    if game is None:
+            for start in range(0, len(appids), batch_size):
+                if _cancel_requested():
+                    cancelled = True
+                    break
+                batch = appids[start:start + batch_size]
+                future_map = {
+                    executor.submit(_process_single_game, appid, valid_proxies, max_region_threads, rates): appid
+                    for appid in batch
+                }
+                for future in as_completed(future_map):
+                    if _cancel_requested():
+                        cancelled = True
+                        break
+                    count += 1
+                    try:
+                        game = future.result()
+                        if game is None:
+                            failed += 1
+                            _update_state(
+                                progress=count,
+                                failed=failed,
+                                saved=saved,
+                                message=f"⏭️ [{count}/{len(appids)}] 质量不达标，跳过",
+                            )
+                        else:
+                            db_upsert_steam_deal(game)
+                            saved += 1
+                            _update_state(
+                                progress=count,
+                                failed=failed,
+                                saved=saved,
+                                message=f"✅ [{count}/{len(appids)}] {game['name']}",
+                            )
+                    except Exception as e:
                         failed += 1
                         _update_state(
                             progress=count,
                             failed=failed,
-                            message=f"⏭️ [{count}/{len(appids)}] 质量不达标，跳过",
+                            saved=saved,
+                            message=f"⚠️ [{count}/{len(appids)}] 处理失败: {str(e)[:60]}",
                         )
-                    else:
-                        db_upsert_steam_deal(game)
+                    if count >= 100 and failed / max(count, 1) >= 0.8 and saved < 10:
+                        fused = True
                         _update_state(
                             progress=count,
-                            message=f"✅ [{count}/{len(appids)}] {game['name']}",
+                            failed=failed,
+                            saved=saved,
+                            message=f"熔断：已处理 {count} 款，失败率 {failed / count:.0%}，请检查代理池或 Steam 访问",
                         )
-                except Exception as e:
-                    failed += 1
-                    _update_state(
-                        progress=count,
-                        failed=failed,
-                        message=f"⚠️ [{count}/{len(appids)}] 处理失败: {str(e)[:60]}",
-                    )
+                        break
+                if cancelled or fused:
+                    break
+        if cancelled:
+            _update_state(
+                running=False,
+                cancel_requested=False,
+                message=f"已停止。已处理 {count}/{len(appids)} 款，保存 {saved} 款，失败 {failed} 款",
+            )
+            return
+        if fused:
+            _update_state(
+                running=False,
+                cancel_requested=False,
+                message=f"已熔断。已处理 {count}/{len(appids)} 款，保存 {saved} 款，失败 {failed} 款",
+            )
+            return
+        removed = db_delete_steam_deals_older_than(run_started_at)
         _update_state(
             running=False,
-            message=f"🎉 完成！共处理 {count} 款游戏，失败 {failed} 款",
+            cancel_requested=False,
+            saved=saved,
+            message=f"🎉 完成！共处理 {count} 款游戏，保存 {saved} 款，失败 {failed} 款，清理旧记录 {removed} 款",
         )
     except Exception as e:
-        _update_state(running=False, message=f"❌ 抓取出错: {str(e)[:100]}")
+        _update_state(running=False, cancel_requested=False, message=f"❌ 抓取出错: {str(e)[:100]}")

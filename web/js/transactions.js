@@ -1,8 +1,23 @@
 
 let holdingsMultiSelectMode = false;
 let historyMultiSelectMode = false;
-let holdingsShowMoreColumns = false;
-let historyShowMoreColumns = false;
+const TX_HOLDINGS_COLUMNS_KEY = "aetherswap_holdings_show_extra_cols";
+const TX_HISTORY_COLUMNS_KEY = "aetherswap_history_show_extra_cols";
+function readTxColumnPreference(key) {
+  try {
+    return localStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
+function writeTxColumnPreference(key, value) {
+  try {
+    localStorage.setItem(key, value ? "1" : "0");
+  } catch {
+  }
+}
+let holdingsShowMoreColumns = readTxColumnPreference(TX_HOLDINGS_COLUMNS_KEY);
+let historyShowMoreColumns = readTxColumnPreference(TX_HISTORY_COLUMNS_KEY);
 let lastEnrichTime = 0;
 let lastEnrichData = null;
 function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, multiSelectMode = false) {
@@ -364,6 +379,16 @@ function syncTxColumnToggleUI() {
     historyBtn.textContent = historyShowMoreColumns ? "收起列" : "显示更多列";
     historyBtn.setAttribute("aria-pressed", historyShowMoreColumns ? "true" : "false");
   }
+}
+function setHoldingsShowMoreColumns(value) {
+  holdingsShowMoreColumns = !!value;
+  writeTxColumnPreference(TX_HOLDINGS_COLUMNS_KEY, holdingsShowMoreColumns);
+  syncTxColumnToggleUI();
+}
+function setHistoryShowMoreColumns(value) {
+  historyShowMoreColumns = !!value;
+  writeTxColumnPreference(TX_HISTORY_COLUMNS_KEY, historyShowMoreColumns);
+  syncTxColumnToggleUI();
 }
 function getCurrentPriceRefreshMinutes() {
   return Math.max(1, parseInt(el("cfg-current-price-refresh-minutes")?.value, 10) || 10);

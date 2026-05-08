@@ -491,7 +491,7 @@ function _showWizard(startAtBuffStep = false) {
     updateButtons(step);
 
     // 进入 Buff 步骤时重置状态
-    if (step === 3) {
+    if (step === 4) {
       _buffReloginStarted = false;
       const doneBtn = el("wiz-buff-done");
       if (doneBtn) doneBtn.disabled = true;
@@ -578,8 +578,10 @@ function _showWizard(startAtBuffStep = false) {
         });
         if (r.ok) {
           if (statusEl) statusEl.textContent = "✅ Buff Cookie 已保存！";
-          // 自动推进到下一步
-          setTimeout(() => goToStep(currentStep + 1), 800);
+          setTimeout(() => {
+            if (currentStep === TOTAL_STEPS) closeWizard("accounts");
+            else goToStep(currentStep + 1);
+          }, 800);
         } else {
           if (statusEl) statusEl.textContent = "❌ 保存失败：" + (r.error || "");
           buffDoneBtn.disabled = false;
@@ -596,6 +598,38 @@ function _showWizard(startAtBuffStep = false) {
       const d = await fetchJson(API + "/config");
       const cfg = d.config || {};
       if (currentStep === 1) {
+        const username = (el("wiz-account-username")?.value || "").trim();
+        const password = (el("wiz-account-password")?.value || "").trim();
+        const steamId = (el("wiz-account-steam-id")?.value || "").trim();
+        const displayName = (el("wiz-account-display-name")?.value || "").trim();
+        if (!username && !steamId && !displayName) return;
+        try {
+          const accData = await fetchJson(API + "/accounts");
+          const existing = (accData.accounts || []).find((a) =>
+            (steamId && a.steam_id === steamId) || (username && a.username === username)
+          );
+          if (existing) {
+            await fetchJson(API + "/accounts/" + encodeURIComponent(existing.id) + "/set_current", { method: "POST" });
+          } else {
+            const r = await fetchJson(API + "/accounts", {
+              method: "POST",
+              body: JSON.stringify({
+                username,
+                password,
+                steam_id: steamId,
+                display_name: displayName,
+                avatar_url: "",
+              }),
+            });
+            if (r.ok && r.account?.id) {
+              await fetchJson(API + "/accounts/" + encodeURIComponent(r.account.id) + "/set_current", { method: "POST" });
+            }
+          }
+          try { await refreshAccounts(); } catch { }
+        } catch (e) {
+          toast("账号保存失败", e.message || "请稍后在账号管理中添加");
+        }
+      } else if (currentStep === 2) {
         const ss = (el("wiz-shared-secret")?.value || "").trim();
         const is = (el("wiz-identity-secret")?.value || "").trim();
         if (!ss && !is) return;
@@ -633,7 +667,7 @@ function _showWizard(startAtBuffStep = false) {
         } else {
           try { await refreshAccounts(); } catch { }
         }
-      } else if (currentStep === 2) {
+      } else if (currentStep === 3) {
         const tok = (el("wiz-pushplus-token")?.value || "").trim();
         if (!tok) return;
         const notify = { ...(cfg.notify || {}), pushplus_token: tok };
@@ -644,7 +678,7 @@ function _showWizard(startAtBuffStep = false) {
         const gPush = el("cfg-pushplus_token");
         if (gPush) gPush.value = tok;
       }
-      // step 3 (Buff) is handled by its own buttons; step 4 is info-only
+      // step 4 (Buff) is handled by its own buttons
       try { updateUXStatus(((await fetchJson(API + "/config")).config || {})); } catch { }
     } catch (e) {
       toast("保存失败", e.message || "请稍后手动在设置页填写");
@@ -671,10 +705,7 @@ function _showWizard(startAtBuffStep = false) {
   }
 
   btnNext.onclick = async () => {
-    if (currentStep === 3) {
-      // Buff 步骤：「下一步」仅在未启动 relogin 时可直接跳过
-      goToStep(4);
-    } else if (currentStep < TOTAL_STEPS) {
+    if (currentStep < TOTAL_STEPS) {
       await saveCurrentStep();
       goToStep(currentStep + 1);
     } else {
@@ -685,7 +716,7 @@ function _showWizard(startAtBuffStep = false) {
   btnSkip.onclick = () => {
     if (currentStep === 0 || currentStep === TOTAL_STEPS) {
       closeWizard(null);
-    } else if (currentStep === 3 && _buffReloginStarted) {
+    } else if (currentStep === 4 && _buffReloginStarted) {
       // 已打开浏览器但选择跳过：取消 relogin
       fetchJson(API + "/auth/buff/relogin_finish", {
         method: "POST",
@@ -700,8 +731,8 @@ function _showWizard(startAtBuffStep = false) {
     }
   };
 
-  // 如果只是 buff cookie 缺失，从步骤 3 开始
-  goToStep(startAtBuffStep ? 3 : 0);
+  // 如果只是 buff cookie 缺失，从步骤 4 开始
+  goToStep(startAtBuffStep ? 4 : 0);
 }
 
 
@@ -713,6 +744,7 @@ async function updateUXStatus(cfg) {
     accounts = d.accounts || [];
   } catch (e) { }
   updateNavBadges(cfg, accounts);
+  updateLegacyGuardVisibility(accounts);
   renderGettingStartedCard(cfg, accounts);
 }
 
@@ -732,6 +764,17 @@ function updateNavBadges(cfg, accounts) {
   }
 }
 
+function updateLegacyGuardVisibility(accounts) {
+  const group = el("legacy-steam-guard-settings");
+  if (!group) return;
+  const hasAccountLevelGuard = (Array.isArray(accounts) ? accounts : []).some((a) => {
+    const status = a.steam_guard_status || {};
+    const guard = a.steam_guard || {};
+    return !!status.account_configured || !!guard.shared_secret;
+  });
+  group.style.display = hasAccountLevelGuard ? "none" : "";
+}
+
 function renderGettingStartedCard(cfg, accounts) {
   const card = el("getting-started-card");
   if (!card) return;
@@ -747,16 +790,16 @@ function renderGettingStartedCard(cfg, accounts) {
 
   const steps = [
     {
+      done: accounts.length > 0,
+      label: "添加 Steam 账号并登录（<span class='gs-link' onclick='document.querySelector(\"[data-tab=accounts]\").click()'>账号管理</span>）",
+    },
+    {
       done: guardStatus.complete,
       label: "填写账号 Steam 令牌（<span class='gs-link' onclick='document.querySelector(\"[data-tab=accounts]\").click()'>账号管理 → Steam 令牌</span>）",
     },
     {
       done: !!n.pushplus_token,
       label: "填写 PushPlus 推送 Token（<span class='gs-link' onclick='document.querySelector(\"[data-tab=settings]\").click()'>系统设置 → 推送与邮箱</span>）",
-    },
-    {
-      done: accounts.length > 0,
-      label: "添加 Steam 账号并登录（<span class='gs-link' onclick='document.querySelector(\"[data-tab=accounts]\").click()'>账号管理</span>）",
     },
     {
       done: accounts.length > 0 && guardStatus.complete && !!n.pushplus_token,

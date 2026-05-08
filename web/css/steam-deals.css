@@ -29,6 +29,47 @@
   transition: transform 0.5s var(--ease-out), filter 0.3s;
 }
 
+.sg-card-banner--error img {
+  opacity: 0;
+}
+
+.sg-img-retry {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  color: var(--text-muted);
+  background: linear-gradient(135deg, var(--bg-input), var(--bg-body));
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sg-img-retry svg {
+  width: 16px;
+  height: 16px;
+}
+
+.sg-card-banner--error .sg-img-retry {
+  display: flex;
+}
+
+.sg-card-banner--error .sg-img-retry:hover {
+  color: var(--primary);
+  background: var(--primary-light);
+}
+
+.sg-img-retry:disabled {
+  cursor: wait;
+  opacity: 0.75;
+}
+
 .sg-card:hover .sg-card-banner img {
   transform: scale(1.06);
 }

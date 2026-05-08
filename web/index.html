@@ -12,16 +12,16 @@
   <link rel="stylesheet" href="/css/sidebar.css" />
   <link rel="stylesheet" href="/css/stat-cards.css" />
   <link rel="stylesheet" href="/css/buttons.css" />
-  <link rel="stylesheet" href="/css/tables.css" />
-  <link rel="stylesheet" href="/css/forms.css" />
+  <link rel="stylesheet" href="/css/tables.css?v=2" />
+  <link rel="stylesheet" href="/css/forms.css?v=2" />
   <link rel="stylesheet" href="/css/modals.css" />
   <link rel="stylesheet" href="/css/toast.css" />
-  <link rel="stylesheet" href="/css/accounts.css" />
+  <link rel="stylesheet" href="/css/accounts.css?v=2" />
   <link rel="stylesheet" href="/css/console.css" />
   <link rel="stylesheet" href="/css/gift.css" />
-  <link rel="stylesheet" href="/css/steam-deals.css" />
+  <link rel="stylesheet" href="/css/steam-deals.css?v=3" />
   <link rel="stylesheet" href="/css/proxy.css" />
-  <link rel="stylesheet" href="/css/components-core.css" />
+  <link rel="stylesheet" href="/css/components-core.css?v=2" />
   <link rel="stylesheet" href="/css/animations.css" />
   <link rel="stylesheet" href="/css/inline-overrides.css" />
   <link rel="stylesheet" href="/css/gap-closure.css" />
@@ -770,7 +770,7 @@
 
         </div>
         <div class="settings-tab-pane" data-settab-pane="notify" style="display:none">
-          <div class="settings-group settings-group--legacy-guard">
+          <div class="settings-group settings-group--legacy-guard" id="legacy-steam-guard-settings">
             <h2>Steam 令牌（兼容旧配置）</h2>
             <p class="settings-helper">
               新方案请在「账号管理」里为每个 Steam 账号配置令牌。本区域仅作为旧配置迁移期的全局 fallback，账号未配置时才会读取。
@@ -1040,35 +1040,6 @@
           </table>
         </div>
       </section>
-
-      <section id="panel-steam-guard" class="panel">
-        <div class="steam-token-page">
-          <div class="steam-token-glow"></div>
-          <div class="steam-token-card">
-            <h2 class="steam-token-title">Steam 令牌（兼容视图）</h2>
-            <div id="steam-token-circle" class="steam-token-circle">
-              <svg class="steam-token-ring" viewBox="0 0 260 260">
-                <defs>
-                  <linearGradient id="steam-ring-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stop-color="#00a8ff"></stop>
-                    <stop offset="100%" stop-color="#005bff"></stop>
-                  </linearGradient>
-                </defs>
-                <circle cx="130" cy="130" r="110" class="steam-ring-bg"></circle>
-                <circle id="steam-progress-circle" cx="130" cy="130" r="110" class="steam-ring-fg"></circle>
-              </svg>
-              <div class="steam-token-inner" id="steam-token-inner">
-                <div class="steam-code-wrap">
-                  <span id="steam-code-text" class="steam-code-text">-----</span>
-                  <span id="steam-code-subtitle" class="steam-code-subtitle">点击显示令牌</span>
-                </div>
-              </div>
-            </div>
-            <p class="steam-token-tip" id="steam-token-tip">优先显示当前账号令牌，未配置时回退到旧全局配置</p>
-          </div>
-        </div>
-      </section>
-
 
       <section id="panel-proxy" class="panel">
 
@@ -1732,16 +1703,15 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="/js/utils.js?v=2"></script>
   <script src="/js/theme.js"></script>
-  <script src="/js/accounts.js"></script>
+  <script src="/js/accounts.js?v=2"></script>
   <script src="/js/console.js"></script>
-  <script src="/js/steamGuard.js"></script>
-  <script src="/js/transactions.js"></script>
-  <script src="/js/settings.js"></script>
+  <script src="/js/transactions.js?v=2"></script>
+  <script src="/js/settings.js?v=2"></script>
   <script src="/js/proxy.js"></script>
   <script src="/js/gap-closure.js"></script>
-  <script src="/js/main.js?v=4"></script>
-  <script src="/js/gift.js"></script>
-  <script src="/js/steamDeals.js"></script>
+  <script src="/js/main.js?v=5"></script>
+  <script src="/js/gift.js?v=2"></script>
+  <script src="/js/steamDeals.js?v=4"></script>
   <script>
     // 简单的辅助脚本，用于更新标题显示
     document.querySelectorAll('.nav-item').forEach(btn => {
@@ -1775,10 +1745,10 @@
         <h3 class="wizard-title">欢迎使用 AetherSwap</h3>
         <p class="wizard-desc">检测到您尚未完成基础配置，建议按向导快速填写关键参数。全程约需 2 分钟，也可跳过后在「设置」面板手动配置。</p>
         <div class="wizard-steps-preview">
-          <div class="wizard-preview-item"><span class="wizard-preview-num">1</span>账号 Steam 令牌</div>
-          <div class="wizard-preview-item"><span class="wizard-preview-num">2</span>推送通知 Token</div>
-          <div class="wizard-preview-item"><span class="wizard-preview-num">3</span>Buff 账号登录</div>
-          <div class="wizard-preview-item"><span class="wizard-preview-num">4</span>Steam 账号</div>
+          <div class="wizard-preview-item"><span class="wizard-preview-num">1</span>Steam 账号</div>
+          <div class="wizard-preview-item"><span class="wizard-preview-num">2</span>账号 Steam 令牌</div>
+          <div class="wizard-preview-item"><span class="wizard-preview-num">3</span>推送通知 Token</div>
+          <div class="wizard-preview-item"><span class="wizard-preview-num">4</span>Buff 账号登录</div>
         </div>
         <div class="wizard-restore-divider">
           <span>或者</span>
@@ -1795,11 +1765,37 @@
         <div id="wiz-restore-status" style="display:none; margin-top:8px; font-size:.85em; text-align:center;"></div>
       </div>
 
-      <!-- 步骤 1：Steam 令牌 -->
+      <!-- 步骤 1：Steam 账号 -->
       <div class="wizard-step" id="wizard-step-1">
+        <div class="wizard-icon">👤</div>
+        <h3 class="wizard-title">添加 Steam 账号</h3>
+        <p class="wizard-desc">先添加一个 Steam 账号，后续令牌会直接保存到该账号，避免继续依赖旧全局配置。</p>
+        <div class="field">
+          <label for="wiz-account-username">Steam 用户名</label>
+          <input type="text" id="wiz-account-username" placeholder="用于自动登录的用户名" autocomplete="username" />
+        </div>
+        <div class="field" style="margin-top:10px">
+          <label for="wiz-account-password">Steam 密码</label>
+          <input type="password" id="wiz-account-password" placeholder="可选，仅用于自动填充登录" autocomplete="new-password" />
+        </div>
+        <div class="field-row" style="margin-top:10px">
+          <div class="field">
+            <label for="wiz-account-steam-id">Steam ID</label>
+            <input type="text" id="wiz-account-steam-id" placeholder="76561198xxx" />
+          </div>
+          <div class="field">
+            <label for="wiz-account-display-name">显示名</label>
+            <input type="text" id="wiz-account-display-name" placeholder="账号备注" />
+          </div>
+        </div>
+        <p class="wizard-hint">已在「账号管理」添加过账号时可直接下一步。</p>
+      </div>
+
+      <!-- 步骤 2：Steam 令牌 -->
+      <div class="wizard-step" id="wizard-step-2">
         <div class="wizard-icon">🔑</div>
         <h3 class="wizard-title">账号 Steam 令牌</h3>
-        <p class="wizard-desc">用于当前 Steam 账号生成 Steam Guard 验证码和确认交易。已有账号时会保存到账号；尚未添加账号时先作为兼容配置保存。</p>
+        <p class="wizard-desc">用于当前 Steam 账号生成 Steam Guard 验证码和确认交易。已有账号时会保存到账号；未添加账号时才作为兼容配置保存。</p>
         <div class="field">
           <label for="wiz-shared-secret">shared_secret <span class="wizard-tag">必填</span></label>
           <input type="password" id="wiz-shared-secret" placeholder="Steam Guard 共享密钥" autocomplete="off" />
@@ -1811,8 +1807,8 @@
         <p class="wizard-hint">后续可在「账号管理 → Steam 令牌」按账号维护。</p>
       </div>
 
-      <!-- 步骤 2：推送通知 -->
-      <div class="wizard-step" id="wizard-step-2">
+      <!-- 步骤 3：推送通知 -->
+      <div class="wizard-step" id="wizard-step-3">
         <div class="wizard-icon">📲</div>
         <h3 class="wizard-title">推送通知 Token</h3>
         <p class="wizard-desc">用于在交易完成或出错时向您的微信/公众号发送通知。</p>
@@ -1823,8 +1819,8 @@
         <p class="wizard-hint">可选配置，跳过后不影响核心交易功能，但不会收到消息推送。</p>
       </div>
 
-      <!-- 步骤 3：Buff 登录 -->
-      <div class="wizard-step" id="wizard-step-3">
+      <!-- 步骤 4：Buff 登录 -->
+      <div class="wizard-step" id="wizard-step-4">
         <div class="wizard-icon">🛒</div>
         <h3 class="wizard-title">Buff 账号登录</h3>
         <p class="wizard-desc">AetherSwap 需要您的 Buff Cookie 来读取市场数据和下单。点击下方按钮将弹出浏览器，在其中完成 Buff 登录后返回点击「已完成登录」。</p>
@@ -1841,22 +1837,6 @@
         </div>
         <div id="wiz-buff-status" class="wizard-hint" style="margin-top:10px"></div>
         <p class="wizard-hint">可跳过，后续在运行过程中若 Buff 登录过期也会自动提示重新登录。</p>
-      </div>
-
-      <!-- 步骤 4：Steam 账号 -->
-      <div class="wizard-step" id="wizard-step-4">
-        <div class="wizard-icon">👤</div>
-        <h3 class="wizard-title">添加 Steam 账号</h3>
-        <p class="wizard-desc">配置完成后，需要在「账号管理」面板添加并登录一个 Steam 账号，机器人才能执行交易。</p>
-        <div class="wizard-account-hint">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-            <circle cx="9" cy="7" r="4" />
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-          </svg>
-          <span>引导结束后，点击左侧导航栏的「账号」即可添加账号。</span>
-        </div>
       </div>
 
       <!-- 底部操作栏 -->

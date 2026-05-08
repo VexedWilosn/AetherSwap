@@ -275,6 +275,34 @@
             updateSendButton();
         }
     });
+    window.prefillGiftFromSteamDeal = function prefillGiftFromSteamDeal(payload = {}) {
+        const appId = String(payload.appId || '').trim();
+        const storeUrl = String(payload.url || (appId ? `https://store.steampowered.com/app/${appId}/` : '')).trim();
+        if (!storeUrl || !elStoreUrl) {
+            showToast('无法写入赠礼候选商品：缺少 Steam 商店链接', 'error');
+            return;
+        }
+        elStoreUrl.value = storeUrl;
+        selectedEdition = null;
+        setHidden(elGamePreview, true);
+        if (elEditionsList) {
+            elEditionsList.textContent = '';
+            const pending = document.createElement('div');
+            pending.className = 'gift-editions-empty';
+            pending.textContent = payload.title
+                ? `已从 Steam 折扣加入：${payload.title}，正在解析可赠送版本...`
+                : '已从 Steam 折扣加入，正在解析可赠送版本...';
+            elEditionsList.appendChild(pending);
+        }
+        updateSendButton();
+        if (payload.autoFetch !== false && elFetchEditions) {
+            setTimeout(() => elFetchEditions.click(), 80);
+        }
+        showToast('已加入 Steam 赠礼候选商品', 'success');
+    };
+    window.addEventListener('gift:prefill-store-url', (ev) => {
+        window.prefillGiftFromSteamDeal(ev.detail || {});
+    });
     const STEP_LABELS = [
         '获取鉴权令牌',
         '清空购物车',

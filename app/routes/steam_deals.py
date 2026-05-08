@@ -15,6 +15,7 @@ from app.database import (
     db_get_steam_deals_price_snapshot,
     db_get_steam_deals_by_app_ids,
     db_get_steam_deals_review_snapshot,
+    db_update_steam_deal_banner_url,
 )
 router = APIRouter()
 _REGION_CURRENCY = {
@@ -269,10 +270,6 @@ def api_fetch_steam_deals():
     if not deals_cfg.get("enabled", False):
         return {"ok": False, "error": "Steam 折扣功能未启用，请在设置中开启该功能。"}
 
-    proxy_cfg = cfg.get("proxy_pool", {})
-    if not proxy_cfg.get("proxies"):
-        return {"ok": False, "error": "必须配置代理池才能使用此功能（请在[代理池]面板添加代理）。"}
-
     max_games = int(deals_cfg.get("max_game_threads", 5))
     max_regions = int(deals_cfg.get("max_region_threads", 16))
 
@@ -285,6 +282,17 @@ def api_fetch_steam_deals():
     )
     t.start()
     return {"ok": True, "message": "已开始获取"}
+
+@router.post("/api/steam-deals/cancel")
+def api_cancel_steam_deals():
+    from app.services.steam_deals import request_cancel_fetch
+
+    ok = request_cancel_fetch()
+    return {
+        "ok": ok,
+        "message": "已请求停止" if ok else "当前没有正在运行的抓取任务",
+    }
+
 @router.get("/api/steam-deals/status")
 def api_steam_deals_status():
     """获取抓取状态和上次更新时间."""
@@ -299,11 +307,26 @@ def api_steam_deals_status():
         "progress": state["progress"],
         "total": state["total"],
         "failed": state["failed"],
+        "saved": state.get("saved", 0),
+        "cancel_requested": state.get("cancel_requested", False),
         "message": state["message"],
         "last_update": last_update,
         "total_games_in_db": total_games,
         "auto_refresh_days": auto_refresh_days,
     }
+
+@router.post("/api/steam-deals/refresh-banner/{app_id}")
+def api_refresh_steam_deal_banner(app_id: str):
+    from app.services.steam_deals import refresh_banner_url
+
+    try:
+        banner_url = refresh_banner_url(app_id)
+        if not banner_url:
+            return {"ok": False, "error": "Steam 未返回可用封面地址"}
+        db_update_steam_deal_banner_url(app_id, banner_url)
+        return {"ok": True, "banner_url": banner_url}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 @router.post("/api/steam-deals/generate-card/{app_id}")
 def api_generate_deal_card(app_id: str):

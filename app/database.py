@@ -462,6 +462,24 @@ def db_clear_steam_deals() -> None:
     with get_session() as session:
         session.exec(sql_delete(SteamDealGame))
         session.commit()
+def db_delete_steam_deals_older_than(cutoff_ts: float) -> int:
+    """Delete rows that were not refreshed during a completed Steam deals run."""
+    from sqlmodel import delete as sql_delete
+    with get_session() as session:
+        result = session.exec(sql_delete(SteamDealGame).where(SteamDealGame.fetched_at < cutoff_ts))
+        session.commit()
+        return int(getattr(result, "rowcount", 0) or 0)
+def db_update_steam_deal_banner_url(app_id: str, banner_url: str) -> bool:
+    """Update a Steam deal banner URL after refreshing it from Steam metadata."""
+    from sqlmodel import col
+    with get_session() as session:
+        game = session.exec(select(SteamDealGame).where(col(SteamDealGame.app_id) == str(app_id))).first()
+        if not game:
+            return False
+        game.banner_url = banner_url
+        session.add(game)
+        session.commit()
+        return True
 def db_get_steam_deals_price_snapshot() -> list:
     """Lightweight fetch: only price-related columns for ALL games.
     Used to build an in-memory sort index (price_diff / discount_abs) without

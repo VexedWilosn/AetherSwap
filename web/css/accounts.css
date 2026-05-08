@@ -205,6 +205,46 @@
   padding: 24px;
 }
 
+.account-detail-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 18px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.account-detail-tab {
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.account-detail-tab:hover {
+  color: var(--text-main);
+  background: var(--bg-body);
+}
+
+.account-detail-tab.active {
+  color: var(--text-main);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-xs);
+}
+
+.account-detail-pane {
+  display: none;
+}
+
+.account-detail-pane.active {
+  display: block;
+}
+
 .account-detail-empty {
   padding: 64px 24px;
   text-align: center;
@@ -321,4 +361,75 @@
   justify-content: flex-end;
   gap: 8px;
   margin-top: 12px;
+}
+
+.account-trade-section {
+  padding: 16px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.account-trade-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.account-trade-title {
+  color: var(--text-main);
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.account-trade-desc {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.account-trade-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.account-trade-switch input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--border-focus);
+}
+
+.account-trade-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.account-trade-grid .field {
+  margin: 0;
+}
+
+.account-trade-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+@media (max-width: 900px) {
+  .account-trade-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .account-trade-header {
+    flex-direction: column;
+  }
 }
