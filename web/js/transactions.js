@@ -369,6 +369,10 @@ function applyTransactionsToUI(all, summaryEl, tbodyP, tbodyHistory, resellRatio
   const purchases = all.filter((t) => t.type === "purchase");
   const holdings = purchases.filter((t) => !(t.sale_price != null && Number(t.sale_price) > 0));
   const ratio = Math.max(0.01, Math.min(1, Number(resellRatio) || 0.85));
+  const holdingsCountEl = el("tx-tab-count-purchases");
+  const historyCountEl = el("tx-tab-count-history");
+  if (holdingsCountEl) holdingsCountEl.textContent = String(holdings.length);
+  if (historyCountEl) historyCountEl.textContent = String(purchases.length);
   syncTxColumnToggleUI();
   if (tbodyP) renderTxTable(tbodyP, holdings, true, ratio, holdingsMultiSelectMode);
   if (tbodyHistory) renderPurchaseHistoryTable(tbodyHistory, purchases, ratio, historyMultiSelectMode);

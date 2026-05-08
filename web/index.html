@@ -333,15 +333,22 @@
 
       <section id="panel-transactions" class="panel">
         <div class="tx-sub-tabs">
-          <button class="tx-sub-tab active" data-txsub="purchases" onclick="txSubTabSwitch('purchases')">持有中</button>
-          <button class="tx-sub-tab" data-txsub="purchase-history" onclick="txSubTabSwitch('purchase-history')">交易记录</button>
-          <button class="tx-sub-tab" data-txsub="analytics" onclick="txSubTabSwitch('analytics')">统计分析</button>
+          <button class="tx-sub-tab active" data-txsub="purchases" onclick="txSubTabSwitch('purchases')">
+            当前持仓 <span id="tx-tab-count-purchases" class="tx-tab-count">0</span>
+          </button>
+          <button class="tx-sub-tab" data-txsub="purchase-history" onclick="txSubTabSwitch('purchase-history')">
+            交易流水 <span id="tx-tab-count-history" class="tx-tab-count">0</span>
+          </button>
+          <button class="tx-sub-tab" data-txsub="analytics" onclick="txSubTabSwitch('analytics')">收益分析</button>
         </div>
 
       <div id="tx-pane-purchases" class="tx-pane active">
         <div class="panel-toolbar panel-toolbar--purchases">
           <div class="panel-toolbar-row">
-            <span class="label">持有饰品</span>
+            <div class="toolbar-title">
+              <span class="label">当前持仓</span>
+              <span class="hint">按最新市场价测算收益</span>
+            </div>
             <div class="panel-toolbar-actions">
               <div class="market-price-tools">
                 <button id="btn-refresh-market-price" class="btn btn-sm btn-secondary" type="button">刷新价格</button>
@@ -358,7 +365,7 @@
           <div id="purchases-summary" class="purchases-summary"></div>
         </div>
         <div class="add-purchase-bar">
-          <span class="label">手动添加购入</span>
+          <span class="label">手动入账</span>
           <input type="text" id="add-purchase-name" placeholder="物品名称" />
           <input type="text" id="add-purchase-steam-link" placeholder="或 Steam 市场链接（优先取英文名）"
             title="粘贴 steamcommunity.com/market/listings/730/... 将用链接中的英文名作为记录名称" />
@@ -400,7 +407,10 @@
       <div id="tx-pane-purchase-history" class="tx-pane">
         <div class="panel-toolbar panel-toolbar--purchase-history">
           <div class="panel-toolbar-row">
-            <span class="label">交易记录</span>
+            <div class="toolbar-title">
+              <span class="label">交易流水</span>
+              <span class="hint">买入、出售、下架与历史结果</span>
+            </div>
             <div class="panel-toolbar-actions">
               <button id="btn-history-toggle-cols" class="btn btn-sm btn-secondary" type="button" aria-pressed="false">显示更多列</button>
               <button id="btn-history-multiselect" class="btn btn-sm btn-secondary">多选</button>
@@ -437,7 +447,10 @@
 
       <div id="tx-pane-analytics" class="tx-pane">
         <div class="panel-toolbar">
-          <span class="label">饰品交易统计</span>
+          <div class="toolbar-title">
+            <span class="label">收益分析</span>
+            <span class="hint">按饰品聚合复盘表现</span>
+          </div>
         </div>
         <div class="table-container table-card">
           <table id="analytics-table">

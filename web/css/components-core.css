@@ -1310,44 +1310,61 @@ button {
 /* --- Transaction Center Sub-Tabs (Phase 1.2) --- */
 
 .tx-sub-tabs {
-  display: flex;
-  gap: 0;
-  border-bottom: 1px solid var(--border-color);
-  margin-bottom: 16px;
-  padding: 0 4px;
+  display: inline-flex;
+  gap: 4px;
+  margin-bottom: 18px;
+  padding: 4px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
 }
 
 .tx-sub-tab {
-  padding: 10px 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 8px 16px;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-secondary);
-  border: none;
-  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
   cursor: pointer;
   position: relative;
-  transition: color 0.2s;
+  transition: color 0.2s, background 0.2s, border-color 0.2s, box-shadow 0.2s;
   white-space: nowrap;
 }
 
 .tx-sub-tab:hover {
   color: var(--text-main);
+  background: var(--bg-surface);
 }
 
 .tx-sub-tab.active {
   color: var(--primary);
+  background: var(--bg-surface);
+  border-color: color-mix(in srgb, var(--primary) 18%, transparent);
   font-weight: 600;
+  box-shadow: var(--shadow-xs);
 }
 
-.tx-sub-tab.active::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: var(--primary);
-  border-radius: 2px 2px 0 0;
+.tx-tab-count {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: var(--text-secondary);
+  background: var(--bg-body);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  line-height: 1.4;
+}
+
+.tx-sub-tab.active .tx-tab-count {
+  color: var(--primary);
+  background: var(--primary-light);
 }
 
 .tx-pane {

@@ -7,12 +7,46 @@
   box-shadow: var(--shadow-xs);
 }
 
+#panel-transactions {
+  max-width: 1680px;
+}
+
+#panel-transactions .tx-pane {
+  max-width: 100%;
+}
+
+#panel-transactions .panel-toolbar {
+  margin-bottom: 12px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+#panel-transactions .panel-toolbar-row {
+  align-items: center;
+}
+
+#panel-transactions .toolbar-title {
+  min-width: 220px;
+}
+
+#panel-transactions .toolbar-title .label {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+#panel-transactions .toolbar-title .hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
 .purchases-summary {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 24px;
+  gap: 8px 18px;
   align-items: center;
-  padding: 14px 20px;
+  padding: 12px 16px;
   background: var(--bg-surface);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
@@ -23,7 +57,8 @@
 .purchases-summary .summary-stat {
   display: inline-flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .purchases-summary .summary-label {
@@ -33,7 +68,7 @@
 
 .purchases-summary .summary-value {
   font-weight: 600;
-  font-size: 15px;
+  font-size: 14px;
   color: var(--text-main);
 }
 
@@ -181,36 +216,188 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   flex-wrap: wrap;
   background: var(--bg-surface);
-  padding: 14px 20px;
+  padding: 12px 14px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
 }
 
 .add-purchase-bar .label {
   color: var(--text-main);
-  font-size: 14px;
-  font-weight: 600;
-  margin-right: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  margin-right: 4px;
+  white-space: nowrap;
 }
 
 .add-purchase-bar input[type="text"] {
-  width: 180px;
+  width: 170px;
 }
 
 .add-purchase-bar input[type="number"] {
-  width: 120px;
+  width: 110px;
 }
 
 .add-purchase-bar #add-purchase-steam-link {
-  min-width: 300px;
+  min-width: 360px;
   flex: 1;
 }
 
 .add-purchase-bar #add-purchase-quantity {
-  width: 80px;
+  width: 76px;
+}
+
+#panel-transactions .table-card {
+  overflow: auto;
+}
+
+#panel-transactions table {
+  width: 100%;
+  min-width: 1120px;
+  table-layout: fixed;
+}
+
+#panel-transactions th,
+#panel-transactions td {
+  height: 48px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+
+#panel-transactions th {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+#panel-transactions td {
+  color: var(--text-main);
+  font-size: 13px;
+}
+
+#panel-transactions tbody tr:hover {
+  background: var(--bg-input);
+}
+
+#panel-transactions .mono {
+  font-variant-numeric: tabular-nums;
+}
+
+#panel-transactions .item-name-cell {
+  min-width: 0;
+}
+
+#panel-transactions .item-name-cell span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#transactions-table-purchases th:nth-child(1),
+#transactions-table-purchases td:nth-child(1),
+#transactions-table-purchase-history th:nth-child(1),
+#transactions-table-purchase-history td:nth-child(1) {
+  width: 52px;
+}
+
+#transactions-table-purchases th:nth-child(2),
+#transactions-table-purchases td:nth-child(2),
+#transactions-table-purchase-history th:nth-child(2),
+#transactions-table-purchase-history td:nth-child(2) {
+  width: 182px;
+  color: var(--text-secondary);
+}
+
+#transactions-table-purchases th:nth-child(3),
+#transactions-table-purchases td:nth-child(3),
+#transactions-table-purchase-history th:nth-child(3),
+#transactions-table-purchase-history td:nth-child(3) {
+  width: auto;
+}
+
+#transactions-table-purchases th:nth-child(4),
+#transactions-table-purchases td:nth-child(4),
+#transactions-table-purchase-history th:nth-child(4),
+#transactions-table-purchase-history td:nth-child(4) {
+  width: 130px;
+}
+
+#transactions-table-purchases th:nth-child(5),
+#transactions-table-purchases td:nth-child(5),
+#transactions-table-purchases th:nth-child(7),
+#transactions-table-purchases td:nth-child(7),
+#transactions-table-purchase-history th:nth-child(5),
+#transactions-table-purchase-history td:nth-child(5),
+#transactions-table-purchase-history th:nth-child(8),
+#transactions-table-purchase-history td:nth-child(8) {
+  width: 96px;
+  text-align: right;
+}
+
+#transactions-table-purchases th:nth-child(6),
+#transactions-table-purchases td:nth-child(6),
+#transactions-table-purchases th:nth-child(8),
+#transactions-table-purchases td:nth-child(8),
+#transactions-table-purchase-history th:nth-child(6),
+#transactions-table-purchase-history td:nth-child(6),
+#transactions-table-purchase-history th:nth-child(11),
+#transactions-table-purchase-history td:nth-child(11) {
+  width: 116px;
+  text-align: right;
+}
+
+#transactions-table-purchases th:nth-child(9),
+#transactions-table-purchases td:nth-child(9),
+#transactions-table-purchase-history th:nth-child(9),
+#transactions-table-purchase-history td:nth-child(9) {
+  width: 132px;
+  text-align: right;
+}
+
+#transactions-table-purchases th:nth-child(10),
+#transactions-table-purchases td:nth-child(10),
+#transactions-table-purchase-history th:nth-child(10),
+#transactions-table-purchase-history td:nth-child(10) {
+  width: 112px;
+  text-align: right;
+}
+
+#transactions-table-purchases th:nth-child(11),
+#transactions-table-purchases td:nth-child(11),
+#transactions-table-purchases th:nth-child(12),
+#transactions-table-purchases td:nth-child(12),
+#transactions-table-purchase-history th:nth-child(12),
+#transactions-table-purchase-history td:nth-child(12) {
+  width: 150px;
+  text-align: right;
+}
+
+#transactions-table-purchases th:nth-child(13),
+#transactions-table-purchases td:nth-child(13),
+#transactions-table-purchase-history th:nth-child(13),
+#transactions-table-purchase-history td:nth-child(13) {
+  width: 116px;
+  text-align: right;
+}
+
+#analytics-table {
+  min-width: 980px;
+}
+
+#analytics-table th:first-child,
+#analytics-table td:first-child {
+  width: auto;
+}
+
+#analytics-table th:not(:first-child),
+#analytics-table td:not(:first-child) {
+  width: 120px;
+  text-align: right;
 }
 
 .tx-table-compact:not(.show-extra-cols) .tx-extra-col {
