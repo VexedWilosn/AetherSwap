@@ -250,3 +250,60 @@
   font-size: 11px;
   font-weight: 700;
 }
+
+/* --- Account Guard Widget (Phase 3.1) --- */
+.account-guard-section {
+  margin-top: 16px;
+  padding: 14px 16px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+.account-guard-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+.account-guard-status {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+.account-guard-status.configured {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+}
+.account-guard-code {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.account-guard-code:hover {
+  background: var(--bg-body);
+}
+.guard-code-text {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  color: var(--text-main);
+}
+.guard-code-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+}

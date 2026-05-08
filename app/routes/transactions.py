@@ -218,11 +218,52 @@ def api_stats():
             ratio_sum += cost / after_tax
             ratio_count += 1
     discount_ratio = (ratio_sum / ratio_count) if ratio_count > 0 else None
+    # --- Dashboard info cards data ---
+    held = [p for p in purchases if p.get("sale_price") is None or float(p.get("sale_price", 0) or 0) <= 0]
+    held_count = len(held)
+    pending_orders = sum(1 for p in held if p.get("pending_receipt"))
+    # #9: Recent trades = ALL transactions (purchases + sales) by time desc
+    all_trades = []
+    for p in purchases:
+        all_trades.append({"name": p.get("name", ""), "price": float(p.get("price", 0)), "at": p.get("at", 0), "type": "purchase"})
+    sales = get_sales()
+    for s in sales:
+        all_trades.append({"name": s.get("name", ""), "price": float(s.get("price", 0)), "at": s.get("at", 0), "type": "sale"})
+    all_trades.sort(key=lambda x: x.get("at", 0), reverse=True)
+    recent_purchases = all_trades[:5]
+    # #8: Inventory value from held items' market_price
+    from app.state import get_inventory
+    inv = get_inventory() or []
+    inv_count = len(inv)
+    # Compute held value from purchase records that have market_price
+    inv_value = sum(float(p.get("market_price", 0) or 0) for p in held if float(p.get("market_price", 0) or 0) > 0)
+    inv_after_tax = round(inv_value / 1.15, 2) if inv_value > 0 else 0.0
+    # Account info
+    try:
+        from app.config_loader import get_steam_credentials
+        steam_creds = get_steam_credentials()
+        account_info = {
+            "username": steam_creds.get("username", ""),
+            "display_name": steam_creds.get("display_name") or steam_creds.get("username", ""),
+            "cookie_valid": bool((steam_creds.get("cookies") or "").strip()),
+        }
+        from config import get_buff
+        buff_creds = get_buff()
+        account_info["buff_valid"] = bool((buff_creds.get("cookies") or "").strip())
+    except Exception:
+        account_info = {}
     return {
         "total_purchased": round(total_purchased, 2),
         "total_sold": round(total_sold, 2),
         "total_profit": round(total_profit, 2),
         "discount_ratio": round(discount_ratio, 4) if discount_ratio is not None else None,
+        "held_count": held_count,
+        "pending_orders": pending_orders,
+        "recent_purchases": recent_purchases,
+        "inventory_count": inv_count,
+        "inventory_value": round(inv_value, 2),
+        "inventory_after_tax": round(inv_after_tax, 2),
+        "account": account_info,
     }
 @router.post("/api/purchase/{idx}/delist")
 def api_delist_purchase(idx: int):

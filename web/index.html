@@ -24,6 +24,7 @@
   <link rel="stylesheet" href="/css/components-core.css" />
   <link rel="stylesheet" href="/css/animations.css" />
   <link rel="stylesheet" href="/css/inline-overrides.css" />
+  <link rel="stylesheet" href="/css/gap-closure.css" />
 
 </head>
 
@@ -251,6 +252,10 @@
                 <div class="payment-item-detail">
                   <span id="pay-item-name" class="payment-item-name"></span>
                   <span id="pay-item-price" class="payment-item-price"></span>
+                  <div class="payment-item-stats">
+                    <span class="badge badge-info" id="pay-ratio" style="display:none"></span>
+                    <span class="badge badge-info" id="pay-volume" style="display:none"></span>
+                  </div>
                 </div>
               </div>
               <p id="pay-type">订单待处理</p>
@@ -268,6 +273,62 @@
             <button id="btn-paid" class="btn btn-sm btn-primary">已完成支付</button>
           </div>
         </div>
+
+        <!-- Dashboard Info Cards (03 §1.3) -->
+        <div class="dashboard-cards">
+          <div class="dash-card" id="dash-recent-trades">
+            <div class="dash-card-header">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              <span>最近交易</span>
+            </div>
+            <div class="dash-card-body" id="dash-recent-trades-body">
+              <div class="empty-state" style="padding:16px 0"><div class="empty-state-icon">📋</div><div class="empty-state-desc">暂无交易记录</div></div>
+            </div>
+            <div class="dash-card-link" onclick="tabSwitch('transactions')">查看全部 →</div>
+          </div>
+
+          <div class="dash-card" id="dash-inventory">
+            <div class="dash-card-header">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+              <span>库存概况</span>
+            </div>
+            <div class="dash-card-body" id="dash-inventory-body">
+              <div class="dash-card-row"><span class="dash-card-label">库存数量</span><span class="dash-card-value" id="dash-inv-count">—</span></div>
+              <div class="dash-card-row"><span class="dash-card-label">总价值</span><span class="dash-card-value" id="dash-inv-value">—</span></div>
+              <div class="dash-card-row"><span class="dash-card-label">税后价值</span><span class="dash-card-value" id="dash-inv-after-tax">—</span></div>
+            </div>
+            <div class="dash-card-link" onclick="tabSwitch('inventory')">查看库存 →</div>
+          </div>
+
+          <div class="dash-card" id="dash-account-status">
+            <div class="dash-card-header">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <span>账号状态</span>
+            </div>
+            <div class="dash-card-body" id="dash-account-body">
+              <div class="dash-card-row"><span class="dash-card-label">当前账号</span><span class="dash-card-value" id="dash-acct-name">—</span></div>
+              <div class="dash-card-row"><span class="dash-card-label">Cookie</span><span id="dash-acct-cookie" class="badge badge-info">未知</span></div>
+              <div class="dash-card-row"><span class="dash-card-label">Buff</span><span id="dash-acct-buff" class="badge badge-info">未知</span></div>
+            </div>
+            <div class="dash-card-link" onclick="tabSwitch('accounts')">管理账号 →</div>
+          </div>
+
+          <div class="dash-card" id="dash-shortcuts">
+            <div class="dash-card-header">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+              <span>快捷操作</span>
+            </div>
+            <div class="dash-card-body">
+              <div class="dash-shortcut-grid">
+                <button class="dash-shortcut" onclick="tabSwitch('settings')">⚙️ 系统设置</button>
+                <button class="dash-shortcut" onclick="tabSwitch('proxy')">🌐 代理池</button>
+                <button class="dash-shortcut" onclick="tabSwitch('steam-deals')">🏷️ Steam 折扣</button>
+                <button class="dash-shortcut" onclick="tabSwitch('gift')">🎁 Steam 赠礼</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </section>
 
       <section id="panel-transactions" class="panel">
@@ -299,7 +360,7 @@
           <input type="number" id="add-purchase-quantity" value="1" min="1" placeholder="数量" title="批量添加条数" />
           <button id="btn-add-purchase" class="btn btn-primary">添加</button>
         </div>
-        <div class="table-container">
+        <div class="table-container table-card">
           <table id="transactions-table-purchases">
             <thead>
               <tr>
@@ -334,7 +395,7 @@
           </div>
           <div id="purchase-history-summary" class="purchases-summary"></div>
         </div>
-        <div class="table-container">
+        <div class="table-container table-card">
           <table id="transactions-table-purchase-history">
             <thead>
               <tr>
@@ -363,7 +424,7 @@
           <span class="label">上架记录</span>
           <button id="btn-refresh-sales" class="btn btn-sm btn-secondary">刷新</button>
         </div>
-        <div class="table-container">
+        <div class="table-container table-card">
           <table id="transactions-table-sales">
             <thead>
               <tr>
@@ -383,7 +444,7 @@
         <div class="panel-toolbar">
           <span class="label">饰品交易统计</span>
         </div>
-        <div class="table-container">
+        <div class="table-container table-card">
           <table id="analytics-table">
             <thead>
               <tr>
@@ -950,7 +1011,7 @@
           <button id="btn-refresh-inventory" class="btn btn-sm btn-secondary">立即刷新</button>
           <span id="inv-cache-note" class="muted small"></span>
         </div>
-        <div class="table-container">
+        <div class="table-container table-card">
           <table id="inv-table">
             <thead>
               <tr>
@@ -1144,7 +1205,7 @@
               </button>
             </div>
           </div>
-          <div class="table-container">
+          <div class="table-container table-card">
             <table id="proxy-list-table">
               <thead>
                 <tr>
@@ -1665,7 +1726,8 @@
   <script src="/js/transactions.js"></script>
   <script src="/js/settings.js"></script>
   <script src="/js/proxy.js"></script>
-  <script src="/js/main.js?v=3"></script>
+  <script src="/js/gap-closure.js"></script>
+  <script src="/js/main.js?v=4"></script>
   <script src="/js/gift.js"></script>
   <script src="/js/steamDeals.js"></script>
   <script>

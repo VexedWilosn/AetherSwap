@@ -70,6 +70,7 @@ def scan_cs2_inventory() -> Tuple[bool, List[Dict[str, Any]], str]:
             {
                 "name": name,
                 "market_hash_name": market_hash_name,
+                "icon_url": desc.get("icon_url") or "",
                 "assetid": str(asset.get("assetid", "")),
                 "appid": int(asset.get("appid", CS2_APP_ID)),
                 "contextid": str(asset.get("contextid", "")),

@@ -605,6 +605,15 @@ def _do_payment_notify_and_wait(
         "name": name,
         "order_id": order_id,
         "payment_id": payment_id,
+        "unit_price": unit_price,
+        "num": num,
+        "total_price": round(unit_price * num, 2),
+        "steam_market_name": (item.get("steam_market_name") or name).strip(),
+        "goods_id": item.get("goods_id"),
+        "icon_url": item.get("icon_url") or "",
+        "ratio": item.get("ratio"),
+        "value_ratio": item.get("value_ratio"),
+        "daily_volume": item.get("daily_volume"),
     })
     if on_entering_payment:
         on_entering_payment()

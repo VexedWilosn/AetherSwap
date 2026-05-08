@@ -10,13 +10,18 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
     const at = t.at ? new Date(t.at * 1000) : null;
     const timeStr = at ? `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, "0")}-${String(at.getDate()).padStart(2, "0")} ${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}:${String(at.getSeconds()).padStart(2, "0")}` : "—";
     const nameText = (t.name || "—").toString();
+    const iconPath = typeof getIconForName === 'function' ? getIconForName(nameText) : '';
+    const nameIconHtml = iconPath && typeof getIconUrl === 'function'
+      ? `<img class="item-icon" src="${getIconUrl(iconPath)}" alt="" loading="lazy" onerror="this.style.display='none'" />`
+      : '';
+    const nameHtml = `<span class="item-name-cell">${nameIconHtml}<span>${escapeHtml(nameText)}</span></span>`;
     const idx = t.idx;
     const type = t.type;
     const actHtml = isPurchase
       ? (multiSelectMode
         ? `<button type="button" class="btn btn-sm btn-edit tx-btn-edit" data-type="${escapeHtml(type)}" data-idx="${idx}">编辑</button>`
-        : `<button type="button" class="btn btn-sm btn-edit tx-btn-edit" data-type="${escapeHtml(type)}" data-idx="${idx}">编辑</button> <button type="button" class="btn btn-sm btn-primary tx-btn-sell" data-type="${escapeHtml(type)}" data-idx="${idx}">售出</button> <button type="button" class="btn btn-sm btn-danger-outline tx-btn-del" data-type="${escapeHtml(type)}" data-idx="${idx}">删除</button>`)
-      : `<button type="button" class="btn btn-sm btn-edit tx-btn-edit" data-type="${escapeHtml(type)}" data-idx="${idx}">编辑</button> <button type="button" class="btn btn-sm btn-danger-outline tx-btn-del" data-type="${escapeHtml(type)}" data-idx="${idx}">删除</button>`;
+        : `<button type="button" class="btn btn-sm btn-primary tx-btn-sell" data-type="${escapeHtml(type)}" data-idx="${idx}" style="margin-right:4px">💰 售出</button><div class="tx-actions-dropdown"><button type="button" class="tx-actions-trigger" title="更多">⋮</button><div class="tx-actions-menu"><button type="button" class="tx-action-item tx-btn-edit" data-type="${escapeHtml(type)}" data-idx="${idx}">✏️ 编辑</button><button type="button" class="tx-action-item tx-action-danger tx-btn-del" data-type="${escapeHtml(type)}" data-idx="${idx}">🗑️ 删除</button></div></div>`)
+      : `<div class="tx-actions-dropdown"><button type="button" class="tx-actions-trigger" title="操作">⋮</button><div class="tx-actions-menu"><button type="button" class="tx-action-item tx-btn-edit" data-type="${escapeHtml(type)}" data-idx="${idx}">✏️ 编辑</button><button type="button" class="tx-action-item tx-action-danger tx-btn-del" data-type="${escapeHtml(type)}" data-idx="${idx}">🗑️ 删除</button></div></div>`;
     const checkCell = isPurchase && multiSelectMode ? `<td class="holding-select-cell"><input type="checkbox" class="holding-checkbox" data-idx="${idx}" /></td>` : "";
     const priceCell = `<td class="mono">${escapeHtml(Number(t.price).toFixed(2))}</td>`;
     if (isPurchase) {
@@ -45,10 +50,10 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
       const profitCell = cashProfit ? `<td class="mono ${profitClass}">${escapeHtml(parseFloat(cashProfit) >= 0 ? "+" + cashProfit : cashProfit)}</td>` : "<td></td>";
       const selfUseCell = selfUseProfit ? `<td class="mono ${selfUseClass}">${escapeHtml(parseFloat(selfUseProfit) >= 0 ? "+" + selfUseProfit : selfUseProfit)}</td>` : "<td></td>";
       const assetidCell = `<td class="mono">${escapeHtml(t.assetid ?? "—")}</td>`;
-      rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${escapeHtml(nameText)}</td>${assetidCell}${priceCell}<td class="mono">${escapeHtml(mp)}</td><td class="mono">${escapeHtml(cmp)}</td>${afterTaxCell}${discountRatioCell}${profitCell}${selfUseCell}${plCell}<td class="tx-actions">${actHtml}</td></tr>`);
+      rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${nameHtml}</td>${assetidCell}${priceCell}<td class="mono">${escapeHtml(mp)}</td><td class="mono">${escapeHtml(cmp)}</td>${afterTaxCell}${discountRatioCell}${profitCell}${selfUseCell}${plCell}<td class="tx-actions">${actHtml}</td></tr>`);
     } else {
       const assetidCell = `<td class="mono">${escapeHtml(t.assetid ?? "—")}</td>`;
-      rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${escapeHtml(nameText)}</td>${assetidCell}${priceCell}<td class="tx-actions">${actHtml}</td></tr>`);
+      rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${nameHtml}</td>${assetidCell}${priceCell}<td class="tx-actions">${actHtml}</td></tr>`);
     }
   }
   tbody.innerHTML = rowHtmls.join("");
@@ -160,8 +165,9 @@ function renderPurchaseHistoryTable(tbody, list, resellRatio = 0.85, multiSelect
     } else {
       deviationCell = `<td class="mono">—</td>`;
     }
-    const delistBtn = !multiSelectMode && t.listing ? `<button type="button" class="btn btn-sm btn-warning-outline ph-btn-delist" data-type="purchase" data-idx="${idx}">下架</button> ` : "";
-    const actHtml = !multiSelectMode ? (delistBtn + `<button type="button" class="btn btn-sm btn-danger-outline ph-btn-del" data-type="purchase" data-idx="${idx}">删除</button>`) : "";
+    const hasListing = !multiSelectMode && t.listing;
+    const delistItem = hasListing ? `<button type="button" class="tx-action-item ph-btn-delist" data-type="purchase" data-idx="${idx}">⏬ 下架</button>` : "";
+    const actHtml = !multiSelectMode ? `<div class="tx-actions-dropdown"><button type="button" class="tx-actions-trigger" title="操作">⋮</button><div class="tx-actions-menu">${delistItem}<button type="button" class="tx-action-item tx-action-danger ph-btn-del" data-type="purchase" data-idx="${idx}">🗑️ 删除</button></div></div>` : "";
     const assetidStr = t.assetid ?? "—";
     rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${escapeHtml(nameText)}</td><td class="mono">${escapeHtml(assetidStr)}</td><td class="mono">${escapeHtml(Number(t.price).toFixed(2))}</td><td class="mono">${escapeHtml(mp)}</td><td class="status-cell ${statusCellClass}">${escapeHtml(statusStr)}</td><td class="mono">${escapeHtml(salePriceStr)}</td><td class="mono ${discountRatioClass}">${escapeHtml(discountRatioStr)}</td><td class="mono ${cashClass}">${escapeHtml(cashProfitStr)}</td><td class="mono ${selfUseClass}">${escapeHtml(selfUseStr)}</td>${deviationCell}<td class="tx-actions">${actHtml}</td></tr>`);
   }
@@ -379,3 +385,24 @@ async function refreshTransactions() {
     toast("加载操作记录失败", e.message || "");
   }
 }
+
+
+// --- Phase 3.2: Dropdown menu toggle ---
+document.addEventListener("click", function(e) {
+  document.querySelectorAll(".tx-actions-dropdown.open").forEach(function(d) {
+    if (!d.contains(e.target)) d.classList.remove("open");
+  });
+  var trigger = e.target.closest(".tx-actions-trigger");
+  if (trigger) {
+    e.stopPropagation();
+    var dropdown = trigger.closest(".tx-actions-dropdown");
+    var wasOpen = dropdown.classList.contains("open");
+    document.querySelectorAll(".tx-actions-dropdown.open").forEach(function(d) { d.classList.remove("open"); });
+    if (!wasOpen) dropdown.classList.add("open");
+  }
+  var actionItem = e.target.closest(".tx-action-item");
+  if (actionItem) {
+    var dropdown2 = actionItem.closest(".tx-actions-dropdown");
+    if (dropdown2) setTimeout(function() { dropdown2.classList.remove("open"); }, 100);
+  }
+});

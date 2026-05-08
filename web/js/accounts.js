@@ -71,6 +71,18 @@ function renderAccountDetail(acc, currentId) {
         </svg>
         <div class="callout-text"><strong>安全提示：</strong>若你选择保存密码，仅用于自动填充登录。建议系统环境保持可信，定期更换密码并开启 Steam 令牌等二次验证。</div>
       </div>
+      </div>
+      <div class="account-guard-section">
+        <div class="account-guard-header">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <span>Steam 令牌</span>
+          <span class="account-guard-status" id="acct-guard-status-${escapeHtml(acc.id)}">未配置</span>
+        </div>
+        <div class="account-guard-code" id="acct-guard-code-${escapeHtml(acc.id)}" title="点击复制令牌">
+          <span class="guard-code-text">-----</span>
+          <span class="guard-code-hint">需在设置中配置 shared_secret</span>
+        </div>
+      </div>
     </div>
   `;
   detail.querySelector("#btn-acc-edit")?.addEventListener("click", (e) => {

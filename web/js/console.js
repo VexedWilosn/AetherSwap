@@ -58,14 +58,18 @@ async function refreshLog() {
     if (hasLogFilter()) {
       renderLogFull();
     } else {
-      // append color-coded spans for new lines
+      // append with dedup (04 §2.3)
       const frag = document.createDocumentFragment();
-      lines.forEach((l, i) => {
-        if (i > 0) frag.appendChild(document.createTextNode("\n"));
-        const span = document.createElement("span");
-        span.className = _levelClass(l.level || "info");
-        span.textContent = `${_fmtTime(l.t)} [${l.level || "info"}] ${l.msg || ""}`;
-        frag.appendChild(span);
+      lines.forEach((l) => {
+        if (typeof appendLogWithDedup === 'function') {
+          appendLogWithDedup(frag, l);
+        } else {
+          const span = document.createElement("span");
+          span.className = _levelClass(l.level || "info");
+          span.textContent = `${_fmtTime(l.t)} [${l.level || "info"}] ${l.msg || ""}`;
+          if (frag.childNodes.length > 0) frag.appendChild(document.createTextNode("\n"));
+          frag.appendChild(span);
+        }
       });
       frag.appendChild(document.createTextNode("\n"));
       out.appendChild(frag);

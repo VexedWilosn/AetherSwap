@@ -81,3 +81,64 @@
   gap: 16px;
   margin-bottom: 24px;
 }
+
+/* --- Transaction Action Dropdown (Phase 3.2) --- */
+.tx-actions-dropdown {
+  position: relative;
+  display: inline-block;
+}
+.tx-actions-trigger {
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.tx-actions-trigger:hover {
+  background: var(--bg-input);
+  color: var(--text-main);
+}
+.tx-actions-menu {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 4px;
+  min-width: 120px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  padding: 4px 0;
+  animation: overlayFadeIn 0.15s ease;
+}
+.tx-actions-dropdown.open .tx-actions-menu {
+  display: block;
+}
+.tx-action-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 14px;
+  border: none;
+  background: none;
+  color: var(--text-main);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.1s;
+  white-space: nowrap;
+}
+.tx-action-item:hover {
+  background: var(--bg-input);
+}
+.tx-action-danger {
+  color: #ef4444;
+}
+.tx-action-danger:hover {
+  background: rgba(239, 68, 68, 0.08);
+}

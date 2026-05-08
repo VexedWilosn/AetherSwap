@@ -1,0 +1,295 @@
+/* ═══════════════════════════════════════
+   AetherSwap — Gap Closure CSS
+   Badges, Tooltip, Skeleton, Table-card,
+   Item icons, Payment timer, Dashboard cards
+   ═══════════════════════════════════════ */
+
+/* --- Status Badge Series (05 §1.3) --- */
+.badge-success {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+}
+.badge-warning {
+  background: rgba(245, 158, 11, 0.1);
+  color: #d97706;
+}
+.badge-danger {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+.badge-info {
+  background: var(--primary-light, rgba(37, 99, 235, 0.08));
+  color: var(--text-secondary);
+}
+.badge-dot::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* --- Tooltip (05 §3.5) --- */
+[data-tooltip] {
+  position: relative;
+}
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  background: var(--bg-surface);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+  z-index: 200;
+  box-shadow: var(--shadow-md);
+}
+[data-tooltip]:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* --- Button Loading State (05 §3.1) --- */
+.btn.loading {
+  pointer-events: none;
+  opacity: 0.7;
+  position: relative;
+}
+.btn.loading::after {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  margin-left: 6px;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* --- Skeleton Row (05 §3.1) --- */
+.skeleton-row {
+  height: 44px;
+  background: linear-gradient(90deg, var(--bg-input) 25%, var(--bg-surface) 50%, var(--bg-input) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 6px;
+  margin-bottom: 4px;
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* --- Table Card Wrapper (05 §1.1) --- */
+.table-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-xs);
+}
+.table-card table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.table-card thead th {
+  background: var(--bg-input);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.table-card tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* --- Item Icon in Tables (07 §3.4) --- */
+.item-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.item-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  object-fit: contain;
+  flex-shrink: 0;
+  transition: transform 0.2s var(--ease-spring);
+}
+.item-icon:hover {
+  transform: scale(1.8);
+  z-index: 10;
+  position: relative;
+  box-shadow: var(--shadow-md);
+}
+.item-icon.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+/* --- Payment Timer & Pulse (08 §4.4) --- */
+.payment-timer {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--warning, #f59e0b);
+  font-weight: 600;
+  margin-left: auto;
+}
+.payment-alert {
+  animation: payment-glow 2s ease-in-out infinite alternate;
+}
+@keyframes payment-glow {
+  from { box-shadow: 0 0 8px rgba(245, 158, 11, 0.15); }
+  to   { box-shadow: 0 0 20px rgba(245, 158, 11, 0.35); }
+}
+.payment-item-stats {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+.payment-item-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.payment-item-meta b {
+  color: var(--text-main);
+}
+
+/* --- Dashboard Info Cards (03 §1.3) --- */
+.dashboard-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+.dash-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  box-shadow: var(--shadow-xs);
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+.dash-card:hover {
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+.dash-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.dash-card-header svg {
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+.dash-card-body {
+  font-size: 13px;
+  color: var(--text-main);
+  line-height: 1.7;
+}
+.dash-card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+}
+.dash-card-row + .dash-card-row {
+  border-top: 1px solid var(--border-color);
+}
+.dash-card-label {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.dash-card-value {
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+.dash-card-link {
+  display: block;
+  text-align: center;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--primary);
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+.dash-card-link:hover {
+  opacity: 1;
+}
+.dash-shortcut-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.dash-shortcut {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-main);
+  font-size: 13px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: border-color 0.2s, background 0.2s;
+}
+.dash-shortcut:hover {
+  border-color: var(--border-focus);
+  background: var(--bg-body);
+}
+
+/* --- Cache Notice Banner (03 §3.3) --- */
+.cache-notice {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: var(--radius-sm);
+  color: var(--warning, #d97706);
+  padding: 8px 14px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+/* --- Proxy Footer Sticky (04 §4.1) --- */
+.proxy-footer-sticky {
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-body);
+  padding: 16px 0;
+  border-top: 1px solid var(--border-color);
+  z-index: 10;
+}
+
+@media (max-width: 768px) {
+  .dashboard-cards {
+    grid-template-columns: 1fr;
+  }
+  .dash-shortcut-grid {
+    grid-template-columns: 1fr;
+  }
+}

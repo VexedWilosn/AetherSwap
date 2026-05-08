@@ -73,15 +73,34 @@ function updateDashboardExtras(data) {
 }
 
 // --- Phase 2.5: Update payment item info ---
-function updatePaymentItemInfo(item_name, item_price, item_icon_url) {
+function updatePaymentItemInfo(p) {
   const nameEl = document.getElementById("pay-item-name");
   const priceEl = document.getElementById("pay-item-price");
   const iconEl = document.getElementById("pay-item-icon");
-  if (nameEl) nameEl.textContent = item_name || "";
-  if (priceEl) priceEl.textContent = item_price ? ("¥" + item_price) : "";
+  if (nameEl) nameEl.textContent = p.name || "";
+  // Price display: unit_price × num = total_price
+  if (priceEl) {
+    if (p.unit_price && p.num && p.num > 1) {
+      priceEl.textContent = "¥" + Number(p.unit_price).toFixed(2) + " × " + p.num + " = ¥" + Number(p.total_price).toFixed(2);
+    } else if (p.total_price) {
+      priceEl.textContent = "¥" + Number(p.total_price).toFixed(2);
+    } else if (p.unit_price) {
+      priceEl.textContent = "¥" + Number(p.unit_price).toFixed(2);
+    } else {
+      priceEl.textContent = "";
+    }
+  }
+  // Icon: try backend icon_url first, then cache lookup by name
   if (iconEl) {
-    if (item_icon_url) {
-      iconEl.src = item_icon_url;
+    var iconSrc = "";
+    if (p.icon_url && typeof getIconUrl === 'function') {
+      iconSrc = getIconUrl(p.icon_url);
+    } else if (typeof getIconForName === 'function') {
+      var cached = getIconForName(p.steam_market_name || p.name);
+      if (cached && typeof getIconUrl === 'function') iconSrc = getIconUrl(cached);
+    }
+    if (iconSrc) {
+      iconEl.src = iconSrc;
       iconEl.style.display = "block";
     } else {
       iconEl.style.display = "none";
@@ -229,6 +248,7 @@ async function refreshStatus() {
     if (!box) return;
     if (p && p.pay_url) {
       box.classList.remove("hidden");
+      if (typeof startPaymentTimer === 'function' && !_payTimerInterval) startPaymentTimer();
       const link = el("pay-link");
       if (link) {
         link.href = p.pay_url;
@@ -240,7 +260,19 @@ async function refreshStatus() {
       if (ps) ps.textContent = p.order_id ? "订单号: " + p.order_id : "";
       box.dataset.payUrl = p.pay_url;
       box.dataset.paymentId = p.payment_id || "";
-      updatePaymentItemInfo(p.name, p.price, p.icon_url);
+      updatePaymentItemInfo(p);
+      // Payment ratio & volume badges (08)
+      var ratioEl = el("pay-ratio");
+      if (ratioEl) {
+        var r = p.value_ratio || p.ratio;
+        if (r) { ratioEl.textContent = "折扣 " + Number(r).toFixed(4); ratioEl.style.display = "inline-flex"; }
+        else ratioEl.style.display = "none";
+      }
+      var volEl = el("pay-volume");
+      if (volEl) {
+        if (p.daily_volume) { volEl.textContent = "日成交 " + p.daily_volume; volEl.style.display = "inline-flex"; }
+        else volEl.style.display = "none";
+      }
       const qrWrap = el("pay-qrcode-wrap");
       const qrBox = el("pay-qrcode");
       if (p.pay_type === "wechat" && qrWrap && qrBox && typeof QRCode !== "undefined") {
@@ -259,6 +291,7 @@ async function refreshStatus() {
       box.classList.add("hidden");
       box.dataset.payUrl = "";
       box.dataset.paymentId = "";
+      if (typeof stopPaymentTimer === 'function') stopPaymentTimer();
       const qrWrap = el("pay-qrcode-wrap");
       const qrBox = el("pay-qrcode");
       if (qrWrap) qrWrap.classList.add("hidden");
@@ -290,6 +323,16 @@ async function refreshStatus() {
       else ratioEl.classList.add("text-bad");
     } else set("stat-ratio", "—");
       updateDashboardExtras(s);
+      // --- Dashboard info cards (03 §1.3) ---
+      if (typeof updateDashRecentTrades === 'function' && s.recent_purchases) {
+        updateDashRecentTrades(s.recent_purchases);
+      }
+      if (typeof updateDashInventory === 'function') {
+        updateDashInventory({ count: s.inventory_count, value: s.inventory_value, after_tax: s.inventory_after_tax });
+      }
+      if (typeof updateDashAccountStatus === 'function' && s.account) {
+        updateDashAccountStatus(s.account);
+      }
   } catch {
   }
 }
@@ -375,8 +418,11 @@ async function refreshInventory(forceRefresh = true) {
       const linksHtml = mhn
         ? `<a href="${steamUrl}" target="_blank" rel="noopener" class="link-steam">Steam</a> <a href="${buffUrl}" target="_blank" rel="noopener" class="link-buff">Buff</a>`
         : "—";
+      const iconHtml = it.icon_url && typeof getIconUrl === 'function'
+        ? `<img class="item-icon" src="${getIconUrl(it.icon_url)}" alt="" loading="lazy" onerror="this.style.display='none'" />`
+        : '';
       rowHtmls.push(`
-        <tr><td>${escapeHtml(it.name || "")}</td>
+        <tr><td class="item-name-cell">${iconHtml}<span>${escapeHtml(it.name || "")}</span></td>
         <td class="inv-links">${linksHtml}</td>
         <td>${sellHtml}</td>
         <td>${tradeHtml}</td>
@@ -392,6 +438,15 @@ async function refreshInventory(forceRefresh = true) {
     if (v) v.textContent = totalValue.toFixed(2);
     const taxEl = el("inv-tax-value");
     if (taxEl) taxEl.textContent = (totalValue / 1.15).toFixed(2);
+    // Update icon cache (07)
+    if (typeof setIconCache === 'function') {
+      var iconMap = {};
+      items.forEach(function(it) {
+        var name = (it.market_hash_name || it.name || '').trim();
+        if (name && it.icon_url) iconMap[name] = it.icon_url;
+      });
+      if (Object.keys(iconMap).length > 0) setIconCache(iconMap);
+    }
   } catch (e) {
     toast("刷新库存失败", humanizeError(e.message) || "请检查 Steam Cookie");
   } finally {
