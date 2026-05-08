@@ -82,6 +82,17 @@ _cb_open_until = 0.0
 _CB_FAIL_THRESHOLD = 5       
 _CB_COOLDOWN_SEC = 300       
 
+def get_market_circuit_state() -> dict:
+    with _cb_lock:
+        remaining = max(0, int(_cb_open_until - time.time()))
+        return {
+            "open": remaining > 0,
+            "remaining_seconds": remaining,
+            "fail_streak": _cb_fail_streak,
+            "threshold": _CB_FAIL_THRESHOLD,
+            "cooldown_seconds": _CB_COOLDOWN_SEC,
+        }
+
 def fetch_item_orders_histogram(
     session,
     item_nameid: str,
@@ -90,10 +101,11 @@ def fetch_item_orders_histogram(
     language: str = "english",
     currency: int = CURRENCY_CNY,
     timeout: int = 15,
+    ignore_circuit: bool = False,
 ) -> Optional[dict]:
     global _cb_fail_streak, _cb_open_until
     with _cb_lock:
-        if time.time() < _cb_open_until:
+        if time.time() < _cb_open_until and not ignore_circuit:
             return None
     url = "https://steamcommunity.com/market/itemordershistogram"
     params = {
@@ -178,9 +190,11 @@ def get_sell_orders_cny(
     language: str = "english",
     request_delay: float = 1.0,
     use_cache: bool = True,
+    force_refresh: bool = False,
+    ignore_circuit: bool = False,
 ) -> Optional[dict]:
     key = (market_hash_name.strip(), app_id)
-    if use_cache:
+    if use_cache and not force_refresh:
         with _sell_orders_cache_lock:
             entry = _sell_orders_cache.get(key)
         if entry and time.time() < entry[1]:
@@ -196,6 +210,7 @@ def get_sell_orders_cny(
         country=country,
         language=language,
         currency=CURRENCY_CNY,
+        ignore_circuit=ignore_circuit,
     )
     if not data:
         return None

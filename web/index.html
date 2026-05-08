@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="/css/sidebar.css" />
   <link rel="stylesheet" href="/css/stat-cards.css" />
   <link rel="stylesheet" href="/css/buttons.css" />
-  <link rel="stylesheet" href="/css/tables.css?v=2" />
+  <link rel="stylesheet" href="/css/tables.css?v=5" />
   <link rel="stylesheet" href="/css/forms.css?v=2" />
   <link rel="stylesheet" href="/css/modals.css" />
   <link rel="stylesheet" href="/css/toast.css" />
@@ -334,8 +334,7 @@
       <section id="panel-transactions" class="panel">
         <div class="tx-sub-tabs">
           <button class="tx-sub-tab active" data-txsub="purchases" onclick="txSubTabSwitch('purchases')">持有中</button>
-          <button class="tx-sub-tab" data-txsub="purchase-history" onclick="txSubTabSwitch('purchase-history')">全部记录</button>
-          <button class="tx-sub-tab" data-txsub="sales" onclick="txSubTabSwitch('sales')">售出记录</button>
+          <button class="tx-sub-tab" data-txsub="purchase-history" onclick="txSubTabSwitch('purchase-history')">交易记录</button>
           <button class="tx-sub-tab" data-txsub="analytics" onclick="txSubTabSwitch('analytics')">统计分析</button>
         </div>
 
@@ -344,6 +343,10 @@
           <div class="panel-toolbar-row">
             <span class="label">持有饰品</span>
             <div class="panel-toolbar-actions">
+              <div class="market-price-tools">
+                <button id="btn-refresh-market-price" class="btn btn-sm btn-secondary" type="button">刷新价格</button>
+                <span id="market-price-refresh-record" class="market-price-refresh-record">未刷新</span>
+              </div>
               <button id="btn-holdings-toggle-cols" class="btn btn-sm btn-secondary" type="button" aria-pressed="false">显示更多列</button>
               <button id="btn-holdings-multiselect" class="btn btn-sm btn-secondary">多选</button>
             </div>
@@ -362,6 +365,13 @@
           <input type="number" id="add-purchase-price" step="0.01" min="0.01" placeholder="价格" />
           <input type="number" id="add-purchase-quantity" value="1" min="1" placeholder="数量" title="批量添加条数" />
           <button id="btn-add-purchase" class="btn btn-primary">添加</button>
+        </div>
+        <div id="market-price-notice" class="market-price-notice hidden" role="button" tabindex="0" aria-live="polite">
+          <div class="market-price-notice-main">
+            <span id="market-price-notice-title" class="market-price-notice-title">当前现市场价使用最低价/中位价摘要</span>
+            <span id="market-price-notice-detail" class="market-price-notice-detail"></span>
+          </div>
+          <button id="btn-retry-smart-price" class="market-price-notice-action" type="button">重取智能价</button>
         </div>
         <div class="table-container table-card">
           <table id="transactions-table-purchases" class="tx-table-compact">
@@ -390,7 +400,7 @@
       <div id="tx-pane-purchase-history" class="tx-pane">
         <div class="panel-toolbar panel-toolbar--purchase-history">
           <div class="panel-toolbar-row">
-            <span class="label">操作记录</span>
+            <span class="label">交易记录</span>
             <div class="panel-toolbar-actions">
               <button id="btn-history-toggle-cols" class="btn btn-sm btn-secondary" type="button" aria-pressed="false">显示更多列</button>
               <button id="btn-history-multiselect" class="btn btn-sm btn-secondary">多选</button>
@@ -417,27 +427,6 @@
                 <th>变现收益</th>
                 <th class="tx-extra-col">自用收益</th>
                 <th class="tx-extra-col">价格偏离度</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div id="tx-pane-sales" class="tx-pane">
-        <div class="panel-toolbar">
-          <span class="label">上架记录</span>
-          <button id="btn-refresh-sales" class="btn btn-sm btn-secondary">刷新</button>
-        </div>
-        <div class="table-container table-card">
-          <table id="transactions-table-sales">
-            <thead>
-              <tr>
-                <th>时间</th>
-                <th>物品/说明</th>
-                <th>assetid</th>
-                <th>金额</th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -1705,11 +1694,11 @@
   <script src="/js/theme.js"></script>
   <script src="/js/accounts.js?v=2"></script>
   <script src="/js/console.js"></script>
-  <script src="/js/transactions.js?v=2"></script>
+  <script src="/js/transactions.js?v=6"></script>
   <script src="/js/settings.js?v=2"></script>
   <script src="/js/proxy.js"></script>
   <script src="/js/gap-closure.js"></script>
-  <script src="/js/main.js?v=5"></script>
+  <script src="/js/main.js?v=8"></script>
   <script src="/js/gift.js?v=2"></script>
   <script src="/js/steamDeals.js?v=4"></script>
   <script>

@@ -4,7 +4,7 @@ from app.state import get_inventory, get_inventory_meta, is_steam_background_all
 from app.inventory_cs2 import scan_cs2_inventory
 from app.pipeline import run_sell_phase_on_inventory_update
 from app.config_loader import get_steam_credentials, load_app_config_validated
-from app.shared_market import get_steam_smart_price_cny, batch_fetch_prices
+from app.shared_market import batch_fetch_price_details, batch_fetch_prices, get_market_price_context, get_steam_smart_price_cny
 router = APIRouter()
 def _inventory_response(items=None, *, cached: bool = False, message: str = "", **extra):
     out = {
@@ -137,5 +137,11 @@ def api_market_prices():
     all_names = {n for n in (inv_names | holdings_names) if n}
     if not all_names:
         return {"prices": {}}
-    prices = batch_fetch_prices(all_names)
-    return {"prices": prices}
+    details = batch_fetch_price_details(all_names)
+    prices = {name: detail["price"] for name, detail in details.items()}
+    sources = {name: detail.get("source") for name, detail in details.items()}
+    price_meta = get_market_price_context()
+    if any(detail.get("source") == "steam_lowest" for detail in details.values()):
+        price_meta["fallback_used"] = True
+        price_meta["warning"] = price_meta.get("warning") or "部分市场价使用 Steam 最低价/中位价摘要兜底，不等同智能挂单价。"
+    return {"prices": prices, "sources": sources, "price_meta": price_meta}

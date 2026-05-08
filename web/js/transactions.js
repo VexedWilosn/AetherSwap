@@ -3,6 +3,7 @@ let holdingsMultiSelectMode = false;
 let historyMultiSelectMode = false;
 const TX_HOLDINGS_COLUMNS_KEY = "aetherswap_holdings_show_extra_cols";
 const TX_HISTORY_COLUMNS_KEY = "aetherswap_history_show_extra_cols";
+const TX_PRICE_REFRESH_RECORD_KEY = "aetherswap_price_refresh_record";
 function readTxColumnPreference(key) {
   try {
     return localStorage.getItem(key) === "1";
@@ -16,10 +17,138 @@ function writeTxColumnPreference(key, value) {
   } catch {
   }
 }
+function readMarketPriceRefreshRecord() {
+  try {
+    const raw = localStorage.getItem(TX_PRICE_REFRESH_RECORD_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+function writeMarketPriceRefreshRecord(record) {
+  try {
+    localStorage.setItem(TX_PRICE_REFRESH_RECORD_KEY, JSON.stringify(record));
+  } catch {
+  }
+}
 let holdingsShowMoreColumns = readTxColumnPreference(TX_HOLDINGS_COLUMNS_KEY);
 let historyShowMoreColumns = readTxColumnPreference(TX_HISTORY_COLUMNS_KEY);
 let lastEnrichTime = 0;
 let lastEnrichData = null;
+let lastMarketPriceHintKey = "";
+let lastMarketPriceMeta = null;
+let smartPriceRetrying = false;
+let lastMarketPriceRefreshRecord = readMarketPriceRefreshRecord();
+function formatPriceRefreshTime(ts) {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  const now = new Date();
+  const hhmmss = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
+  if (d.toDateString() === now.toDateString()) return hhmmss;
+  return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${hhmmss}`;
+}
+function summarizeMarketPriceSources(holdings) {
+  const list = Array.isArray(holdings) ? holdings : [];
+  return {
+    smart: list.filter((t) => t.current_market_price != null && t.current_market_price_source === "smart").length,
+    fallback: list.filter((t) => t.current_market_price != null && t.current_market_price_source === "steam_lowest").length,
+    missing: list.filter((t) => t.current_market_price == null).length,
+    total: list.length,
+  };
+}
+function syncMarketPriceRefreshControls() {
+  const btn = el("btn-refresh-market-price");
+  if (btn) {
+    btn.disabled = smartPriceRetrying;
+    btn.textContent = smartPriceRetrying ? "刷新中..." : "刷新价格";
+  }
+  const recordEl = el("market-price-refresh-record");
+  if (!recordEl) return;
+  const record = lastMarketPriceRefreshRecord;
+  if (!record) {
+    recordEl.textContent = "未刷新";
+    recordEl.title = "尚未刷新实时现市场价";
+    return;
+  }
+  const time = formatPriceRefreshTime(record.at);
+  const status = record.error ? "失败" : record.missing > 0 ? "部分完成" : record.fallback > 0 ? "摘要价" : "智能价";
+  recordEl.textContent = `${time} · ${status} · 智 ${record.smart} / 摘 ${record.fallback} / 缺 ${record.missing}`;
+  recordEl.title = `${record.mode || "刷新"}：${record.error || "刷新完成"}；总数 ${record.total}，智能价 ${record.smart}，摘要价 ${record.fallback}，缺失 ${record.missing}`;
+}
+function recordMarketPriceRefresh(holdings, meta, mode, error) {
+  const counts = summarizeMarketPriceSources(holdings);
+  lastMarketPriceRefreshRecord = {
+    at: Date.now(),
+    mode,
+    error: error || "",
+    warning: meta?.warning || "",
+    ...counts,
+  };
+  writeMarketPriceRefreshRecord(lastMarketPriceRefreshRecord);
+  syncMarketPriceRefreshControls();
+}
+function handleMarketPriceMeta(meta) {
+  lastMarketPriceMeta = meta || null;
+  const holdings = Array.isArray(lastEnrichData)
+    ? lastEnrichData.filter((t) => t.type === "purchase" && !(t.sale_price != null && Number(t.sale_price) > 0))
+    : [];
+  updateMarketPriceNotice(lastMarketPriceMeta, holdings);
+  if (!meta || !meta.warning) return;
+  const circuit = meta.circuit || {};
+  const key = `${meta.warning}|${circuit.open ? circuit.remaining_seconds : 0}`;
+  if (key === lastMarketPriceHintKey) return;
+  lastMarketPriceHintKey = key;
+}
+function marketPriceSourceLabel(t) {
+  const source = t.current_market_price_source;
+  if (source === "steam_lowest") return "最低价/中位价摘要";
+  if (source === "smart") return "智能价";
+  return t.current_market_price_source_label || "";
+}
+function updateMarketPriceNotice(meta, holdings) {
+  const notice = el("market-price-notice");
+  if (!notice) return;
+  const titleEl = el("market-price-notice-title");
+  const detailEl = el("market-price-notice-detail");
+  const retryBtn = el("btn-retry-smart-price");
+  const list = Array.isArray(holdings) ? holdings : [];
+  const fallbackCount = list.filter((t) => t.current_market_price != null && t.current_market_price_source === "steam_lowest").length;
+  const missingCount = list.filter((t) => t.current_market_price == null).length;
+  const circuit = meta?.circuit || {};
+  const shouldShow = list.length > 0 && (fallbackCount > 0 || missingCount > 0 || !!meta?.warning || !!meta?.fallback_used || !!circuit.open);
+  if (!shouldShow) {
+    notice.classList.add("hidden");
+    notice.classList.remove("is-loading");
+    if (retryBtn) {
+      retryBtn.disabled = false;
+      retryBtn.textContent = "重新获取智能挂单价";
+    }
+    return;
+  }
+  const parts = [];
+  if (fallbackCount > 0) parts.push(`${fallbackCount} 条使用摘要价`);
+  if (missingCount > 0) parts.push(`${missingCount} 条暂未取到现市场价`);
+  if (circuit.open) parts.push(`智能价熔断剩余约 ${circuit.remaining_seconds || 0} 秒`);
+  if (meta?.warning) parts.push(meta.warning);
+  if ((fallbackCount > 0 || missingCount > 0 || circuit.open) && meta?.proxy_hint) parts.push(meta.proxy_hint);
+  const detail = parts.length
+    ? parts.join("；")
+    : "当前价格不是智能挂单价，收益测算仅作临时参考。";
+  if (titleEl) {
+    if (fallbackCount > 0 || meta?.fallback_used) titleEl.textContent = "当前现市场价使用最低价/中位价摘要";
+    else if (missingCount > 0) titleEl.textContent = "现市场价未完整获取";
+    else if (circuit.open) titleEl.textContent = "Steam 智能价熔断中";
+    else titleEl.textContent = "Steam 智能价提示";
+  }
+  if (detailEl) detailEl.textContent = detail;
+  notice.classList.remove("hidden");
+  notice.classList.toggle("is-loading", smartPriceRetrying);
+  if (retryBtn) {
+    retryBtn.disabled = smartPriceRetrying;
+    retryBtn.textContent = smartPriceRetrying ? "获取中..." : "重新获取智能挂单价";
+  }
+  syncMarketPriceRefreshControls();
+}
 function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, multiSelectMode = false) {
   const ratio = Math.max(0.01, Math.min(1, Number(resellRatio) || 0.85));
   const rowHtmls = [];
@@ -45,6 +174,11 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
       const mp = t.market_price != null ? Number(t.market_price).toFixed(2) : "—";
       const cur = t.current_market_price != null ? Number(t.current_market_price) : null;
       const cmp = cur != null ? cur.toFixed(2) : "";
+      const cmpSource = marketPriceSourceLabel(t);
+      const cmpTitle = cmpSource ? ` title="价格来源：${escapeHtml(cmpSource)}"` : "";
+      const cmpCell = cmp
+        ? `<td class="mono"${cmpTitle}>${escapeHtml(cmp)}${cmpSource === "最低价/中位价摘要" ? '<span class="tx-price-source">摘</span>' : ""}</td>`
+        : '<td class="mono"></td>';
       const marketAtBuy = t.market_price != null ? Number(t.market_price) : null;
       let plCell = `<td class="tx-extra-col"></td>`;
       if (cur != null && marketAtBuy != null && marketAtBuy > 0) {
@@ -68,7 +202,7 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
       const selfUseCell = selfUseProfit ? `<td class="mono tx-extra-col ${selfUseClass}">${escapeHtml(parseFloat(selfUseProfit) >= 0 ? "+" + selfUseProfit : selfUseProfit)}</td>` : `<td class="tx-extra-col"></td>`;
       const assetidCell = `<td class="mono tx-extra-col">${escapeHtml(t.assetid ?? "—")}</td>`;
       const buyMarketCell = `<td class="mono tx-extra-col">${escapeHtml(mp)}</td>`;
-      rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${nameHtml}</td>${assetidCell}${priceCell}${buyMarketCell}<td class="mono">${escapeHtml(cmp)}</td>${afterTaxCell}${discountRatioCell}${profitCell}${selfUseCell}${plCell}<td class="tx-actions">${actHtml}</td></tr>`);
+      rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${nameHtml}</td>${assetidCell}${priceCell}${buyMarketCell}${cmpCell}${afterTaxCell}${discountRatioCell}${profitCell}${selfUseCell}${plCell}<td class="tx-actions">${actHtml}</td></tr>`);
     } else {
       const assetidCell = `<td class="mono">${escapeHtml(t.assetid ?? "—")}</td>`;
       rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${nameHtml}</td>${assetidCell}${priceCell}<td class="tx-actions">${actHtml}</td></tr>`);
@@ -231,14 +365,15 @@ function renderPurchaseHistoryTable(tbody, list, resellRatio = 0.85, multiSelect
     });
   });
 }
-function applyTransactionsToUI(all, summaryEl, tbodyP, tbodyS, tbodyHistory, resellRatio = 0.85) {
+function applyTransactionsToUI(all, summaryEl, tbodyP, tbodyHistory, resellRatio = 0.85) {
   const purchases = all.filter((t) => t.type === "purchase");
   const holdings = purchases.filter((t) => !(t.sale_price != null && Number(t.sale_price) > 0));
-  const sales = all.filter((t) => t.type === "sale");
   const ratio = Math.max(0.01, Math.min(1, Number(resellRatio) || 0.85));
   syncTxColumnToggleUI();
   if (tbodyP) renderTxTable(tbodyP, holdings, true, ratio, holdingsMultiSelectMode);
   if (tbodyHistory) renderPurchaseHistoryTable(tbodyHistory, purchases, ratio, historyMultiSelectMode);
+  updateMarketPriceNotice(lastMarketPriceMeta, holdings);
+  syncMarketPriceRefreshControls();
   syncHistoryMultiSelectUI();
   const historySummaryEl = el("purchase-history-summary");
   if (historySummaryEl && purchases.length) {
@@ -294,6 +429,8 @@ function applyTransactionsToUI(all, summaryEl, tbodyP, tbodyS, tbodyHistory, res
     const totalPlPct = totalPl != null && totalMp > 0 ? ((totalPl / totalMp) * 100).toFixed(2) + "%" : "—";
     const plClass = totalPl != null && totalPl > 0 ? "text-ok" : totalPl != null && totalPl < 0 ? "text-bad" : "";
     const cmpStr = totalCmp != null ? totalCmp.toFixed(2) : "—";
+    const hasFallbackCmp = holdings.some((t) => t.current_market_price != null && t.current_market_price_source === "steam_lowest");
+    const cmpSummaryLabel = hasFallbackCmp ? '总现市场价<span class="tx-price-source" title="部分条目使用 Steam 最低价/中位价摘要">摘</span>' : '总现市场价';
     const plStr = totalPl != null ? `${totalPl >= 0 ? "+" : ""}${totalPl.toFixed(2)} (${totalPl >= 0 ? "+" : ""}${totalPlPct})` : "—";
     const totalAfterTax = totalCmp != null && totalCmp > 0 ? totalCmp / 1.15 : null;
     const afterTaxStr = totalAfterTax != null ? totalAfterTax.toFixed(2) : "—";
@@ -319,7 +456,7 @@ function applyTransactionsToUI(all, summaryEl, tbodyP, tbodyS, tbodyHistory, res
       `<span class="summary-stat"><span class="summary-label">数量</span><span class="summary-value mono">${holdings.length}</span></span>`,
       `<span class="summary-stat"><span class="summary-label">总购入价</span><span class="summary-value mono">${totalPrice.toFixed(2)}</span></span>`,
       `<span class="summary-stat"><span class="summary-label">总购入市场价</span><span class="summary-value mono">${totalMp.toFixed(2)}</span></span>`,
-      `<span class="summary-stat"><span class="summary-label">总现市场价</span><span class="summary-value mono">${cmpStr}</span></span>`,
+      `<span class="summary-stat"><span class="summary-label">${cmpSummaryLabel}</span><span class="summary-value mono">${cmpStr}</span></span>`,
       `<span class="summary-stat"><span class="summary-label">总税后价格</span><span class="summary-value mono">${afterTaxStr}</span></span>`,
       `<span class="summary-stat"><span class="summary-label">实际折扣比率</span><span class="summary-value mono ${discountRatioClass}">${discountRatio}</span></span>`,
       `<span class="summary-stat"><span class="summary-label">总变现收益</span><span class="summary-value mono ${profitClass}">${cashProfitStr}</span></span>`,
@@ -332,7 +469,6 @@ function applyTransactionsToUI(all, summaryEl, tbodyP, tbodyS, tbodyHistory, res
   }
   if (summaryEl && holdings.length) summaryEl.style.display = "";
   if (summaryEl && !holdings.length) summaryEl.style.display = "none";
-  if (tbodyS) renderTxTable(tbodyS, sales, false);
   refreshAnalytics(purchases, ratio);
   syncHoldingsMultiSelectUI();
 }
@@ -393,12 +529,12 @@ function setHistoryShowMoreColumns(value) {
 function getCurrentPriceRefreshMinutes() {
   return Math.max(1, parseInt(el("cfg-current-price-refresh-minutes")?.value, 10) || 10);
 }
-async function refreshTransactions() {
+async function refreshTransactions(options = {}) {
+  const forceSmartPrice = !!options.forceSmartPrice;
   const tbodyP = document.querySelector("#transactions-table-purchases tbody");
-  const tbodyS = document.querySelector("#transactions-table-sales tbody");
   const tbodyHistory = document.querySelector("#transactions-table-purchase-history tbody");
   const summaryEl = el("purchases-summary");
-  if (!tbodyP && !tbodyS && !tbodyHistory) return;
+  if (!tbodyP && !tbodyHistory) return;
   try {
     const d = await fetchJson(API + "/transactions?enrich_current_price=0");
     let all = d.transactions || [];
@@ -408,26 +544,65 @@ async function refreshTransactions() {
     for (const t of all) {
       const e = enrichedMap.get(byKey(t));
       if (e && e.current_market_price != null) t.current_market_price = e.current_market_price;
+      if (e && e.current_market_price_source) {
+        t.current_market_price_source = e.current_market_price_source;
+        t.current_market_price_source_label = e.current_market_price_source_label;
+      }
     }
     const holdings = all.filter((t) => t.type === "purchase" && !(t.sale_price != null && Number(t.sale_price) > 0));
     const missingCurrentPrice = holdings.some((t) => t.current_market_price == null);
     const refreshAgeMs = getCurrentPriceRefreshMinutes() * 60 * 1000;
     const priceCacheStale = !lastEnrichTime || (Date.now() - lastEnrichTime) > refreshAgeMs;
-    if (holdings.length && (missingCurrentPrice || priceCacheStale)) {
+    let priceRefreshAttempted = false;
+    let priceRefreshMeta = null;
+    let priceRefreshError = "";
+    if (holdings.length && (forceSmartPrice || missingCurrentPrice || priceCacheStale)) {
+      priceRefreshAttempted = true;
       try {
-        const enriched = await fetchJson(API + "/transactions?enrich_current_price=1");
+        const params = new URLSearchParams({ enrich_current_price: "1" });
+        if (forceSmartPrice) params.set("force_smart_price", "1");
+        const enriched = await fetchJson(API + "/transactions?" + params.toString());
+        priceRefreshMeta = enriched.price_meta || null;
+        handleMarketPriceMeta(priceRefreshMeta);
         if (Array.isArray(enriched.transactions)) {
           all = enriched.transactions;
           resellRatio = enriched.resell_ratio ?? resellRatio;
           lastEnrichTime = Date.now();
         }
-      } catch {
+      } catch (e) {
+        priceRefreshError = e.message || "请求失败";
       }
     }
     lastEnrichData = all;
-    applyTransactionsToUI(all, summaryEl, tbodyP, tbodyS, tbodyHistory, resellRatio);
+    if (priceRefreshAttempted) {
+      const refreshedHoldings = all.filter((t) => t.type === "purchase" && !(t.sale_price != null && Number(t.sale_price) > 0));
+      recordMarketPriceRefresh(refreshedHoldings, priceRefreshMeta || lastMarketPriceMeta, forceSmartPrice ? "手动刷新" : "自动刷新", priceRefreshError);
+    }
+    applyTransactionsToUI(all, summaryEl, tbodyP, tbodyHistory, resellRatio);
   } catch (e) {
     toast("加载操作记录失败", e.message || "");
+  }
+}
+async function retrySmartMarketPrices() {
+  if (smartPriceRetrying) return;
+  smartPriceRetrying = true;
+  syncMarketPriceRefreshControls();
+  updateMarketPriceNotice(lastMarketPriceMeta, Array.isArray(lastEnrichData) ? lastEnrichData : []);
+  try {
+    await refreshTransactions({ forceSmartPrice: true });
+    const holdings = Array.isArray(lastEnrichData)
+      ? lastEnrichData.filter((t) => t.type === "purchase" && !(t.sale_price != null && Number(t.sale_price) > 0))
+      : [];
+    const fallbackCount = holdings.filter((t) => t.current_market_price != null && t.current_market_price_source === "steam_lowest").length;
+    if (fallbackCount > 0) toast("智能价仍未完全恢复", `${fallbackCount} 条仍使用最低价/中位价摘要`);
+    else toast("智能价已更新");
+  } finally {
+    smartPriceRetrying = false;
+    syncMarketPriceRefreshControls();
+    const holdings = Array.isArray(lastEnrichData)
+      ? lastEnrichData.filter((t) => t.type === "purchase" && !(t.sale_price != null && Number(t.sale_price) > 0))
+      : [];
+    updateMarketPriceNotice(lastMarketPriceMeta, holdings);
   }
 }
 

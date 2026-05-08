@@ -21,7 +21,7 @@ from app.config_loader import (
     get_steam_credentials,
     load_app_config_validated,
 )
-from app.shared_market import get_steam_smart_price_cny, batch_fetch_prices
+from app.shared_market import batch_fetch_price_details, batch_fetch_prices, get_market_price_context, get_steam_smart_price_cny
 router = APIRouter()
 class AddPurchaseBody(BaseModel):
     name: str = ""
@@ -56,11 +56,11 @@ def _fetch_steam_lowest_cny(market_hash_name: str, app_id: int = 730) -> Optiona
         return None
     prices = batch_fetch_prices({name}, app_id=app_id)
     return prices.get(name)
-def _enrich_purchases_with_current_prices(transactions: list) -> None:
+def _enrich_purchases_with_current_prices(transactions: list, force_smart_price: bool = False) -> dict:
     """Fill current_market_price on unsold purchase records using shared batch_fetch_prices."""
     purchases = [t for t in transactions if t.get("type") == "purchase"]
     if not purchases:
-        return
+        return {}
     names: set = set()
     for t in purchases:
         if t.get("sale_price") is not None:
@@ -69,12 +69,16 @@ def _enrich_purchases_with_current_prices(transactions: list) -> None:
         if name:
             names.add(name)
     if not names:
-        return
-    prices = batch_fetch_prices(names)
+        return {}
+    details = batch_fetch_price_details(names, force_smart=force_smart_price)
     for t in purchases:
         name = (t.get("name") or "").strip()
-        if name in prices and t.get("sale_price") is None:
-            t["current_market_price"] = prices[name]
+        detail = details.get(name)
+        if detail and t.get("sale_price") is None:
+            t["current_market_price"] = detail["price"]
+            t["current_market_price_source"] = detail.get("source")
+            t["current_market_price_source_label"] = detail.get("source_label")
+    return details
 @router.get("/api/purchases")
 def api_purchases():
     return {"purchases": get_purchases()}
@@ -106,7 +110,7 @@ def api_add_purchase(body: AddPurchaseBody):
         append_purchase(rec)
     return {"ok": True, "added": qty}
 @router.get("/api/transactions")
-def api_transactions(enrich_current_price: bool = False):
+def api_transactions(enrich_current_price: bool = False, force_smart_price: bool = False):
     purchases = get_purchases()
     sales = get_sales()
     out = []
@@ -138,13 +142,20 @@ def api_transactions(enrich_current_price: bool = False):
             row["db_id"] = s.get("_db_id")
         out.append(row)
     out.sort(key=lambda x: x["at"], reverse=True)
+    price_details = {}
+    price_meta = get_market_price_context() if enrich_current_price else {}
+    if enrich_current_price and force_smart_price:
+        price_meta["force_smart_price"] = True
     if enrich_current_price and is_steam_background_allowed():
-        _enrich_purchases_with_current_prices(out)
+        price_details = _enrich_purchases_with_current_prices(out, force_smart_price=force_smart_price)
+        if any(d.get("source") == "steam_lowest" for d in price_details.values()):
+            price_meta["fallback_used"] = True
+            price_meta["warning"] = price_meta.get("warning") or "部分现市场价使用 Steam 最低价/中位价摘要兜底，不等同智能挂单价。"
     cfg = load_app_config_validated().get("pipeline", {})
     resell_ratio = float(cfg.get("resell_ratio", 0.85))
     if resell_ratio <= 0:
         resell_ratio = 0.85
-    return {"transactions": out, "resell_ratio": resell_ratio}
+    return {"transactions": out, "resell_ratio": resell_ratio, "price_meta": price_meta}
 @router.delete("/api/transaction")
 def api_delete_transaction(type: str = "purchase", idx: int = 0, db_id: int = 0):
     if type == "purchase":

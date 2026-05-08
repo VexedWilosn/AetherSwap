@@ -58,7 +58,7 @@ function txSubTabSwitch(name) {
   }
   if (btn) btn.classList.add('active');
   // Trigger data refresh for the selected sub-tab
-  if (name === 'purchases' || name === 'purchase-history' || name === 'sales') refreshTransactions();
+  if (name === 'purchases' || name === 'purchase-history') refreshTransactions();
   if (name === 'analytics') refreshAnalytics();
 }
 
@@ -454,7 +454,9 @@ async function refreshInventory(forceRefresh = true) {
 async function refreshMarketPrices() {
   try {
     const d = await fetchJson(API + "/market-prices");
+    if (typeof handleMarketPriceMeta === "function") handleMarketPriceMeta(d.price_meta);
     const prices = d.prices || {};
+    const sources = d.sources || {};
     if (Object.keys(prices).length === 0) return;
     const invItems = getInventoryCache();
     if (invItems && invItems.length > 0) {
@@ -490,7 +492,13 @@ async function refreshMarketPrices() {
       for (const t of lastEnrichData) {
         if (t.type !== "purchase" || t.sale_price != null) continue;
         const p = prices[t.name];
-        if (p != null) t.current_market_price = p;
+        if (p != null) {
+          t.current_market_price = p;
+          if (sources[t.name]) {
+            t.current_market_price_source = sources[t.name];
+            t.current_market_price_source_label = sources[t.name] === "steam_lowest" ? "最低价/中位价摘要" : "智能价";
+          }
+        }
       }
       lastEnrichTime = Date.now();
       refreshTransactions();
@@ -672,7 +680,21 @@ function bindEvents() {
       }
     }
   });
-  el("btn-refresh-sales")?.addEventListener("click", () => refreshTransactions());
+  el("btn-retry-smart-price")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (typeof retrySmartMarketPrices === "function") retrySmartMarketPrices();
+  });
+  el("btn-refresh-market-price")?.addEventListener("click", () => {
+    if (typeof retrySmartMarketPrices === "function") retrySmartMarketPrices();
+  });
+  el("market-price-notice")?.addEventListener("click", () => {
+    if (typeof retrySmartMarketPrices === "function") retrySmartMarketPrices();
+  });
+  el("market-price-notice")?.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    if (typeof retrySmartMarketPrices === "function") retrySmartMarketPrices();
+  });
   el("btn-add-account")?.addEventListener("click", () => openAccountForm());
   el("accounts-search")?.addEventListener("input", (e) => {
     accountsSearchTerm = e.target?.value || "";
