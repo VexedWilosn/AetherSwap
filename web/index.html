@@ -622,13 +622,13 @@
               <span class="hint">Steam 多账号 · 本地保存</span>
             </div>
             <div class="toolbar-actions">
-              <div class="input-pill" title="搜索用户名或 Steam ID">
+              <div class="input-pill accounts-search-pill" title="搜索用户名或 Steam ID">
                 <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                   aria-hidden="true">
                   <circle cx="11" cy="11" r="7"></circle>
                   <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                 </svg>
-                <input id="accounts-search" type="text" placeholder="搜索用户名 / Steam ID" />
+                <input id="accounts-search" type="text" placeholder="搜索账号" />
               </div>
               <button id="btn-add-account" class="btn btn-primary btn-sm">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -636,7 +636,7 @@
                   <line x1="12" y1="5" x2="12" y2="19"></line>
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
-                添加
+                添加账号
               </button>
             </div>
           </div>
@@ -644,7 +644,7 @@
 
         <div class="accounts-guide-callout" id="accounts-guide-callout">
           <div class="agu-steps">
-            <div class="agu-step"><span class="agu-num">1</span> 点击「<strong>添加</strong>」填写 Steam 用户名/密码</div>
+            <div class="agu-step"><span class="agu-num">1</span> 点击「<strong>添加账号</strong>」填写 Steam 用户名/密码</div>
             <div class="agu-step"><span class="agu-num">2</span> 点击账号卡片上的「<strong>验证</strong>」自动登录获取 Cookie</div>
             <div class="agu-step"><span class="agu-num">3</span> 返回仪表盘点击「<strong>启动任务</strong>」开始运行</div>
           </div>
@@ -682,15 +682,7 @@
                 <label>密码（可选，用于自动填充）</label>
                 <input type="password" id="acc-password" placeholder="保存后仅用于自动填充" autocomplete="current-password" />
               </div>
-              <div class="field">
-                <label>Steam ID（可选，登录后自动获取）</label>
-                <input type="text" id="acc-steam-id" placeholder="76561198xxx" />
-              </div>
-              <div class="field">
-                <label>Steam 昵称（登录后自动获取）</label>
-                <input type="text" id="acc-display-name" placeholder="个人资料名称" readonly />
-              </div>
-              <div class="field">
+              <div class="field field--full">
                 <label>账号备注</label>
                 <input type="text" id="acc-account-note" placeholder="例如：主号 / 小号 / 用途" />
               </div>

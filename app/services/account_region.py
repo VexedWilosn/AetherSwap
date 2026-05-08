@@ -1,4 +1,5 @@
 """Helpers for syncing Steam account wallet currency and store region."""
+from datetime import datetime, timezone
 from typing import Optional
 
 from app.accounts import get_account, get_current_account, update_account
@@ -20,10 +21,30 @@ def sync_account_currency_region(account_id: Optional[str] = None, cookies_str: 
     region_code = (country_code or "").strip().upper()
     if not currency_code:
         return {"ok": False, "error": "未解析到结算币种"}
-    updates = {"currency_code": currency_code}
+    balance_raw = wallet.get("balance_raw")
+    balance_value = None
+    try:
+        balance_value = float(balance_raw) / 100.0 if balance_raw is not None else None
+    except (TypeError, ValueError):
+        balance_value = None
+    updates = {
+        "currency_code": currency_code,
+        "balance_display": wallet.get("balance_display") or "",
+        "wallet_balance": balance_raw,
+        "balance": balance_value,
+        "wallet_currency_id": wallet.get("currency_id"),
+        "wallet_currency_symbol": wallet.get("currency_symbol") or "",
+        "balance_synced_at": datetime.now(timezone.utc).isoformat(),
+    }
     if region_code:
         updates["region_code"] = region_code
     updated = update_account(account.get("id"), **updates)
     if not updated:
         return {"ok": False, "error": "写入账号配置失败"}
-    return {"ok": True, "currency_code": currency_code, "region_code": region_code, "account": updated}
+    return {
+        "ok": True,
+        "currency_code": currency_code,
+        "region_code": region_code,
+        "balance_display": updates["balance_display"],
+        "account": updated,
+    }

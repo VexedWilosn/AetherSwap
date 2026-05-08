@@ -87,3 +87,26 @@ def api_set_current_account(account_id: str):
 def api_verify_account(account_id: str):
     result = verify_steam_auto_login(account_id)
     return {"ok": result.get("ok", False), "status": result.get("status", "error"), "message": result.get("message", "验证失败")}
+
+@router.post("/api/accounts/{account_id}/sync_balance")
+def api_sync_account_balance(account_id: str):
+    acc = get_account(account_id)
+    if not acc:
+        return {"ok": False, "error": "账号不存在"}
+    current = get_current_account()
+    if not current or current.get("id") != account_id:
+        login = verify_steam_auto_login(account_id)
+        if not login.get("ok"):
+            return {
+                "ok": False,
+                "status": login.get("status", "error"),
+                "error": login.get("message", "无法登录账号，余额同步失败"),
+            }
+    try:
+        from app.services.account_region import sync_account_currency_region
+        result = sync_account_currency_region(account_id)
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    if not result.get("ok"):
+        return {"ok": False, "error": result.get("error", "余额同步失败")}
+    return {"ok": True, "account": public_account(result["account"], load_app_config_validated())}
