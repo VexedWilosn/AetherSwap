@@ -351,8 +351,8 @@
             </div>
             <div class="panel-toolbar-actions">
               <div class="market-price-tools">
-                <button id="btn-refresh-market-price" class="btn btn-sm btn-secondary" type="button">刷新价格</button>
                 <span id="market-price-refresh-record" class="market-price-refresh-record">未刷新</span>
+                <button id="btn-refresh-market-price" class="btn btn-sm btn-secondary" type="button">刷新价格</button>
               </div>
               <button id="btn-holdings-toggle-cols" class="btn btn-sm btn-secondary" type="button" aria-pressed="false">显示更多数据</button>
               <div class="tx-toolbar-more" id="tx-more-actions">
@@ -2011,13 +2011,15 @@
         <div class="wizard-icon">🔑</div>
         <h3 class="wizard-title">账号 Steam 令牌</h3>
         <p class="wizard-desc">用于当前 Steam 账号生成 Steam Guard 验证码和确认交易。已有账号时会保存到账号；未添加账号时才作为兼容配置保存。</p>
-        <div class="field">
-          <label for="wiz-shared-secret">shared_secret <span class="wizard-tag">必填</span></label>
-          <input type="password" id="wiz-shared-secret" placeholder="Steam Guard 共享密钥" autocomplete="off" />
-        </div>
-        <div class="field" style="margin-top:10px">
-          <label for="wiz-identity-secret">identity_secret <span class="wizard-tag">必填</span></label>
-          <input type="password" id="wiz-identity-secret" placeholder="Steam 身份密钥" autocomplete="off" />
+        <div class="field-row">
+          <div class="field">
+            <label for="wiz-shared-secret">shared_secret <span class="wizard-tag">必填</span></label>
+            <input type="password" id="wiz-shared-secret" placeholder="Steam Guard 共享密钥" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="wiz-identity-secret">identity_secret <span class="wizard-tag">必填</span></label>
+            <input type="password" id="wiz-identity-secret" placeholder="Steam 身份密钥" autocomplete="off" />
+          </div>
         </div>
         <p class="wizard-hint">后续可在「账号管理 → Steam 令牌」按账号维护。</p>
       </div>

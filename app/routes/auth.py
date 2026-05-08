@@ -134,6 +134,11 @@ def _relogin_worker(relogin_type: str) -> None:
                             break
                     display_name, avatar_url = fetch_steam_profile_via_api(steam_id or "", cookie_str)
                     update_account(cur["id"], steam_id=steam_id or "", display_name=display_name, avatar_url=avatar_url)
+                    try:
+                        from app.services.account_region import sync_account_currency_region
+                        sync_account_currency_region(cur["id"], cookie_str)
+                    except Exception as sync_err:
+                        log(f"steam_relogin: 同步账号币种/地区失败 {sync_err}", "warn", category="account")
             else:
                 buff_cookies = context.cookies(["https://buff.163.com/"])
                 cookie_str = cookies_to_header(buff_cookies)

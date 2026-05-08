@@ -205,7 +205,10 @@
 .market-price-tools {
   display: inline-flex;
   align-items: center;
+  flex: 0 0 350px;
   min-height: 40px;
+  width: 350px;
+  max-width: 100%;
   gap: 0;
   margin-right: 6px;
   padding: 3px;
@@ -216,7 +219,9 @@
 }
 
 .market-price-tools .btn {
+  flex: 0 0 auto;
   min-height: 32px;
+  min-width: 82px;
   border-radius: calc(var(--radius-md) - 4px);
   box-shadow: none;
 }
@@ -224,11 +229,13 @@
 .market-price-refresh-record {
   display: inline-flex;
   align-items: center;
+  flex: 1 1 auto;
   min-height: 32px;
+  min-width: 0;
   max-width: 380px;
-  margin-left: 6px;
-  padding: 0 9px 0 10px;
-  border-left: 1px solid var(--border-color);
+  margin-right: 6px;
+  padding: 0 10px 0 9px;
+  border-right: 1px solid var(--border-color);
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.2;
@@ -377,7 +384,8 @@
 
 @media (max-width: 900px) {
   .market-price-tools {
-    flex-basis: 100%;
+    flex: 1 1 100%;
+    width: 100%;
     justify-content: flex-end;
   }
 

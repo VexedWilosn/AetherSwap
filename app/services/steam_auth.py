@@ -348,6 +348,11 @@ def verify_steam_auto_login(account_id: str) -> dict:
                                steam_id=steam_id or cur_acc.get("steam_id", ""),
                                display_name=dn or cur_acc.get("display_name", ""),
                                avatar_url=av or cur_acc.get("avatar_url", ""))
+                try:
+                    from app.services.account_region import sync_account_currency_region
+                    sync_account_currency_region(account_id, cookie_str)
+                except Exception:
+                    pass
             except Exception:
                 pass
         return {"ok": True, "status": "auto_ok", "message": "可自动登录"}

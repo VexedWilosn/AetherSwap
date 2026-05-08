@@ -431,15 +431,10 @@ def sync_account_region_worker() -> None:
         _sync_account_profile_and_region(acc)
         
         try:
-            from app.gift_engine import get_wallet_balance, get_base_auth_status
-            from app.config_loader import get_steam_credentials
-            cred = get_steam_credentials()
-            cookies_str = cred.get("cookies", "")
-            
-            jwt_token, country_code, _ = get_base_auth_status(cookies_str)
-            wallet = get_wallet_balance(cookies_str)
-            code = wallet.get("currency_code")
-            region_code = country_code or ""
+            from app.services.account_region import sync_account_currency_region
+            result = sync_account_currency_region(acc.get("id"))
+            code = result.get("currency_code", "")
+            region_code = result.get("region_code", "")
         except Exception as e:
             log(f"account_region: 尝试通过钱包/底层接口拉取币种和地区信息失败: {e}", "error", category="account")
             return
