@@ -127,7 +127,7 @@
   display: inline-flex;
   align-items: center;
   min-height: 32px;
-  max-width: 320px;
+  max-width: 380px;
   margin-left: 6px;
   padding: 0 9px 0 10px;
   border-left: 1px solid var(--border-color);
@@ -305,7 +305,7 @@
 #panel-transactions table {
   width: 100%;
   min-width: max(1360px, 100%);
-  table-layout: auto;
+  table-layout: fixed;
 }
 
 #panel-transactions th,
@@ -338,13 +338,24 @@
 }
 
 #panel-transactions .item-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 #panel-transactions .item-name-cell span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+
+#panel-transactions .item-name-cell .item-icon {
+  flex: 0 0 auto;
 }
 
 #panel-transactions .tx-batch-bar {
@@ -451,105 +462,24 @@
   color: var(--danger);
 }
 
-#transactions-table-purchases th:nth-child(1),
-#transactions-table-purchases td:nth-child(1),
-#transactions-table-purchase-history th:nth-child(1),
-#transactions-table-purchase-history td:nth-child(1) {
-  width: 52px;
-}
-
-#transactions-table-purchases th:nth-child(2),
-#transactions-table-purchases td:nth-child(2),
-#transactions-table-purchase-history th:nth-child(2),
-#transactions-table-purchase-history td:nth-child(2) {
-  width: 182px;
-  color: var(--text-secondary);
-}
-
-#transactions-table-purchases th:nth-child(3),
-#transactions-table-purchases td:nth-child(3),
-#transactions-table-purchase-history th:nth-child(3),
-#transactions-table-purchase-history td:nth-child(3) {
-  width: auto;
-}
-
-#transactions-table-purchases th:nth-child(4),
-#transactions-table-purchases td:nth-child(4),
-#transactions-table-purchase-history th:nth-child(4),
-#transactions-table-purchase-history td:nth-child(4) {
-  width: 130px;
-}
-
-#transactions-table-purchases th:nth-child(5),
-#transactions-table-purchases td:nth-child(5),
-#transactions-table-purchases th:nth-child(7),
-#transactions-table-purchases td:nth-child(7),
-#transactions-table-purchase-history th:nth-child(5),
-#transactions-table-purchase-history td:nth-child(5),
-#transactions-table-purchase-history th:nth-child(8),
-#transactions-table-purchase-history td:nth-child(8) {
-  width: 96px;
-  text-align: right;
-}
-
-#transactions-table-purchases th:nth-child(6),
-#transactions-table-purchases td:nth-child(6),
-#transactions-table-purchases th:nth-child(8),
-#transactions-table-purchases td:nth-child(8),
-#transactions-table-purchase-history th:nth-child(6),
-#transactions-table-purchase-history td:nth-child(6),
-#transactions-table-purchase-history th:nth-child(11),
-#transactions-table-purchase-history td:nth-child(11) {
-  width: 116px;
-  text-align: right;
-}
-
-#transactions-table-purchases th:nth-child(9),
-#transactions-table-purchases td:nth-child(9),
-#transactions-table-purchase-history th:nth-child(9),
-#transactions-table-purchase-history td:nth-child(9) {
-  width: 132px;
-  text-align: right;
-}
-
-#transactions-table-purchases th:nth-child(10),
-#transactions-table-purchases td:nth-child(10),
-#transactions-table-purchase-history th:nth-child(10),
-#transactions-table-purchase-history td:nth-child(10) {
-  width: 112px;
-  text-align: right;
-}
-
-#transactions-table-purchases th:nth-child(11),
-#transactions-table-purchases td:nth-child(11),
-#transactions-table-purchases th:nth-child(12),
-#transactions-table-purchases td:nth-child(12),
-#transactions-table-purchase-history th:nth-child(12),
-#transactions-table-purchase-history td:nth-child(12) {
-  width: 150px;
-  text-align: right;
-}
-
-#transactions-table-purchases th:nth-child(13),
-#transactions-table-purchases td:nth-child(13),
-#transactions-table-purchase-history th:nth-child(13),
-#transactions-table-purchase-history td:nth-child(13) {
-  width: 116px;
-  text-align: right;
-}
+/* Redundant first set deleted — single canonical set below (L626+) */
 
 #analytics-table {
   min-width: max(1120px, 100%);
+  table-layout: fixed;
 }
 
 #analytics-table th:first-child,
 #analytics-table td:first-child {
   width: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 #analytics-table th:not(:first-child),
 #analytics-table td:not(:first-child) {
-  width: 120px;
+  width: 110px;
   text-align: right;
 }
 
@@ -623,97 +553,113 @@
   background: var(--danger-soft);
 }
 
+/* === Canonical column widths & alignment (table-layout: fixed) === */
+
+/* Default: all columns auto width, left-aligned */
 #transactions-table-purchases th,
 #transactions-table-purchases td,
 #transactions-table-purchase-history th,
 #transactions-table-purchase-history td {
-  width: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
+/* Col 1: Checkbox select */
 #transactions-table-purchases th:nth-child(1),
 #transactions-table-purchases td:nth-child(1),
 #transactions-table-purchase-history th:nth-child(1),
 #transactions-table-purchase-history td:nth-child(1) {
   width: 48px;
+  overflow: visible;
 }
 
+/* Col 2: 时间 */
 #transactions-table-purchases th:nth-child(2),
 #transactions-table-purchases td:nth-child(2),
 #transactions-table-purchase-history th:nth-child(2),
 #transactions-table-purchase-history td:nth-child(2) {
-  width: 142px;
+  width: 136px;
   color: var(--text-secondary);
 }
 
+/* Col 3: 物品/说明 — flexible, ellipsis */
 #transactions-table-purchases th:nth-child(3),
 #transactions-table-purchases td:nth-child(3),
 #transactions-table-purchase-history th:nth-child(3),
 #transactions-table-purchase-history td:nth-child(3) {
-  min-width: 260px;
+  /* auto width in fixed layout = take remaining space */
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+/* === Holdings table specific columns === */
+/* Col 4: 账号 — center */
 #transactions-table-purchases th:nth-child(4),
-#transactions-table-purchases td:nth-child(4),
-#transactions-table-purchase-history th:nth-child(4),
-#transactions-table-purchase-history td:nth-child(4) {
-  width: 96px;
-  min-width: 96px;
-  max-width: 96px;
+#transactions-table-purchases td:nth-child(4) {
+  width: 88px;
   text-align: center;
 }
 
+/* Col 5: 解禁时间 — left */
 #transactions-table-purchases th:nth-child(5),
 #transactions-table-purchases td:nth-child(5) {
-  width: 142px;
+  width: 138px;
+  text-align: left;
+  white-space: normal;
 }
 
+/* Col 6: 自动化 — left */
 #transactions-table-purchases th:nth-child(6),
-#transactions-table-purchases td:nth-child(6),
-#transactions-table-purchase-history th:nth-child(5),
-#transactions-table-purchase-history td:nth-child(5) {
-  width: 118px;
-}
-
-#transactions-table-purchases th:nth-child(7),
-#transactions-table-purchases td:nth-child(7),
-#transactions-table-purchase-history th:nth-child(6),
-#transactions-table-purchase-history td:nth-child(6) {
-  width: 128px;
-}
-
-#transactions-table-purchases th:nth-child(n+8),
-#transactions-table-purchases td:nth-child(n+8),
-#transactions-table-purchase-history th:nth-child(n+7),
-#transactions-table-purchase-history td:nth-child(n+7),
-#analytics-table th:not(:first-child),
-#analytics-table td:not(:first-child) {
-  text-align: right;
-}
-
-#transactions-table-purchases th:last-child,
-#transactions-table-purchases td:last-child,
-#transactions-table-purchase-history th:last-child,
-#transactions-table-purchase-history td:last-child {
-  width: 136px;
-}
-
-#transactions-table-purchases td:nth-child(4),
-#transactions-table-purchases td:nth-child(5),
-#transactions-table-purchases td:nth-child(6),
-#transactions-table-purchase-history td:nth-child(5) {
+#transactions-table-purchases td:nth-child(6) {
+  width: 100px;
   text-align: left;
 }
 
-#transactions-table-purchases td:nth-child(4),
+/* Col 7+: assetid, 购入价, 购入市场价, 现市场价, 税后价格, 实际折扣, 变现收益, 自用收益, 市场变动 — right */
+#transactions-table-purchases th:nth-child(n+7),
+#transactions-table-purchases td:nth-child(n+7) {
+  text-align: right;
+}
+
+/* Col last: 操作 — center */
+#transactions-table-purchases th:last-child,
+#transactions-table-purchases td:last-child {
+  width: 120px;
+  text-align: center;
+  overflow: visible;
+}
+
+/* === History table specific columns === */
+/* Col 4: 账号 — center */
+#transactions-table-purchase-history th:nth-child(4),
 #transactions-table-purchase-history td:nth-child(4) {
+  width: 88px;
   text-align: center;
 }
 
-#transactions-table-purchases th:nth-child(4),
-#transactions-table-purchase-history th:nth-child(4) {
-  text-align: center;
+/* Col 5: 自动化 — left */
+#transactions-table-purchase-history th:nth-child(5),
+#transactions-table-purchase-history td:nth-child(5) {
+  width: 100px;
+  text-align: left;
 }
 
+/* Col 6+: right-aligned numeric columns */
+#transactions-table-purchase-history th:nth-child(n+6),
+#transactions-table-purchase-history td:nth-child(n+6) {
+  text-align: right;
+}
+
+/* Col last: 操作 — center */
+#transactions-table-purchase-history th:last-child,
+#transactions-table-purchase-history td:last-child {
+  width: 80px;
+  text-align: center;
+  overflow: visible;
+}
+
+/* === Analytics table columns === */
 #analytics-table th:first-child,
 #analytics-table td:first-child {
   min-width: 280px;

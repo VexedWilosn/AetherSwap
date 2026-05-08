@@ -144,8 +144,15 @@
   flex-wrap: wrap;
   gap: 12px;
   margin-top: 24px;
-  padding-top: 20px;
+  padding: 16px 20px;
   border-top: 1px solid var(--border-color);
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  background: color-mix(in srgb, var(--bg-main) 85%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 
 /* --- Settings Tab Navigation (Phase 2.3) --- */

@@ -176,9 +176,19 @@ function syncMarketPriceRefreshControls() {
     return;
   }
   const time = formatPriceRefreshTime(record.at);
-  const status = record.error ? "失败" : record.missing > 0 ? "部分完成" : record.fallback > 0 ? "摘要价" : "智能价";
-  recordEl.textContent = `${time} · ${status} · 智 ${record.smart} / 摘 ${record.fallback} / 缺 ${record.missing}`;
-  recordEl.title = `${record.mode || "刷新"}：${record.error || "刷新完成"}；总数 ${record.total}，智能价 ${record.smart}，摘要价 ${record.fallback}，缺失 ${record.missing}`;
+  // Simplified display text — details go into tooltip
+  let label;
+  if (record.error) {
+    label = `${time} 刷新失败`;
+  } else if (record.missing > 0) {
+    label = `${time} · ${record.missing} 项暂无价格`;
+  } else if (record.fallback > 0) {
+    label = `${time} · 已刷新（${record.fallback} 项为参考价）`;
+  } else {
+    label = `${time} 已刷新`;
+  }
+  recordEl.textContent = label;
+  recordEl.title = `${record.mode || "刷新"}：${record.error || "刷新完成"}\n总数 ${record.total}，精准价 ${record.smart}，参考价 ${record.fallback}，缺失 ${record.missing}`;
 }
 function recordMarketPriceRefresh(holdings, meta, mode, error) {
   const counts = summarizeMarketPriceSources(holdings);
