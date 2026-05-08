@@ -43,9 +43,9 @@
   align-items: center;
   flex: 0 1 auto;
   min-width: 0;
-  min-height: 44px;
+  min-height: 40px;
   gap: 8px;
-  margin-left: 18px;
+  margin-left: 0;
 }
 
 #panel-transactions .panel-toolbar-actions > .btn,
@@ -65,18 +65,27 @@
 }
 
 #panel-transactions .toolbar-title {
-  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  gap: 2px;
 }
 
 #panel-transactions .toolbar-title .label {
+  display: block;
   font-size: 18px;
   font-weight: 700;
   color: var(--text-main);
+  line-height: 1.25;
 }
 
 #panel-transactions .toolbar-title .hint {
+  display: block;
   font-size: 12px;
   color: var(--text-secondary);
+  line-height: 1.25;
+  white-space: nowrap;
 }
 
 .purchases-summary {
@@ -395,7 +404,16 @@
   width: 150px;
 }
 
+.tx-filter-bar #history-filter-period,
+.tx-filter-bar #history-sort-by {
+  width: 150px;
+}
+
 .tx-filter-bar #holdings-sort-dir {
+  width: 92px;
+}
+
+.tx-filter-bar #history-sort-dir {
   width: 92px;
 }
 
@@ -404,6 +422,111 @@
   font-size: 12px;
   margin-left: auto;
   white-space: nowrap;
+}
+
+.analytics-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.analytics-kpi {
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-xs);
+}
+
+.analytics-kpi-label,
+.analytics-kpi-hint {
+  display: block;
+  overflow: hidden;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analytics-kpi-label {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.analytics-kpi-value {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-main);
+  font-size: 20px;
+  font-weight: 750;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.analytics-kpi-hint {
+  margin-top: 5px;
+  font-size: 11px;
+}
+
+.analytics-insights-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.analytics-insight-card {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-xs);
+}
+
+.analytics-insight-title {
+  margin-bottom: 10px;
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.analytics-rank-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.analytics-rank-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+}
+
+.analytics-rank-name {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.analytics-rank-name .item-name-cell {
+  max-width: 100%;
+}
+
+.analytics-rank-value {
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.analytics-rank-empty {
+  min-height: 32px;
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 
 .tx-column-sort-bar {
@@ -1086,6 +1209,14 @@
 }
 
 @media (max-width: 900px) {
+  .analytics-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .analytics-insights-grid {
+    grid-template-columns: 1fr;
+  }
+
   #panel-transactions .panel-toolbar-row {
     align-items: stretch;
     flex-direction: column;

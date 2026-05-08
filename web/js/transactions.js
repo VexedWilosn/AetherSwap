@@ -5,6 +5,7 @@ const TX_HOLDINGS_COLUMNS_KEY = "aetherswap_holdings_show_extra_cols";
 const TX_HISTORY_COLUMNS_KEY = "aetherswap_history_show_extra_cols";
 const TX_PRICE_REFRESH_RECORD_KEY = "aetherswap_price_refresh_record";
 const TX_HOLDINGS_SORT_KEY = "aetherswap_holdings_sort";
+const TX_HISTORY_SORT_KEY = "aetherswap_history_sort";
 const TX_HOLDINGS_COLUMN_ORDER_KEY = "aetherswap_holdings_column_order";
 const TX_HOLDINGS_EXTRA_COLUMNS_KEY = "aetherswap_holdings_extra_columns";
 const TX_TRADE_COOLDOWN_DAYS = 7;
@@ -49,9 +50,11 @@ let txAccountsCapabilityAt = 0;
 let holdingsColumnSortMode = false;
 let holdingsColumnDragPlaceholder = null;
 let txHoldingsSort = readHoldingsSortPreference();
+let txHistorySort = readHistorySortPreference();
 let txHoldingsColumnOrder = readHoldingsColumnOrderPreference();
 let txHoldingsExtraColumns = readHoldingsExtraColumnsPreference();
 let txHoldingsFilters = { search: "", status: "all", price: "all" };
+let txHistoryFilters = { search: "", status: "all", period: "all" };
 function readTxColumnPreference(key, defaultValue = false) {
   try {
     const raw = localStorage.getItem(key);
@@ -81,6 +84,24 @@ function readHoldingsSortPreference() {
 function writeHoldingsSortPreference(value) {
   try {
     localStorage.setItem(TX_HOLDINGS_SORT_KEY, JSON.stringify(value));
+  } catch {
+  }
+}
+function readHistorySortPreference() {
+  try {
+    const raw = localStorage.getItem(TX_HISTORY_SORT_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    const allowed = ["time", "name", "status", "buy_price", "sale_price", "cash_profit", "discount", "deviation"];
+    const by = allowed.includes(parsed.by) ? parsed.by : "time";
+    const dir = parsed.dir === "asc" ? "asc" : "desc";
+    return { by, dir };
+  } catch {
+    return { by: "time", dir: "desc" };
+  }
+}
+function writeHistorySortPreference(value) {
+  try {
+    localStorage.setItem(TX_HISTORY_SORT_KEY, JSON.stringify(value));
   } catch {
   }
 }
@@ -326,9 +347,126 @@ function refreshHoldingsFilterUI(total, filtered) {
   const countEl = el("holdings-filter-count");
   if (countEl) countEl.textContent = total === filtered ? `${total} 项` : `${filtered} / ${total} 项`;
 }
+function getHistoryStatus(t) {
+  if (t.pending_receipt) return "pending";
+  if (String(t.listing_status || "").toLowerCase() === "error") return "error";
+  if (t.sale_price != null && Number(t.sale_price) > 0) return "sold";
+  if (t.listing) return "listing";
+  return "holding";
+}
+function getHistoryStatusMeta(t, state) {
+  const status = getHistoryStatus(t);
+  if (status === "pending") return { key: status, label: "待收货", hint: "收货后进入交易冷却", className: "is-pending" };
+  if (status === "error") return { key: status, label: "异常", hint: "需要检查 Steam 在售状态", className: "is-error" };
+  if (status === "sold") return { key: status, label: "已出售", hint: "该记录已出售", className: "is-sold" };
+  if (status === "listing") return { key: status, label: "出售中", hint: "已在 Steam 市场挂售", className: "is-listing" };
+  return { key: status, label: "持有中", hint: state?.hint || "仍在当前持仓中", className: "is-manual" };
+}
+function renderHistoryStatusBadge(meta) {
+  return `<span class="tx-state-pill ${escapeHtml(meta.className)}" title="${escapeHtml(meta.hint)}">${escapeHtml(meta.label)}</span>`;
+}
+function readHistoryFiltersFromUI() {
+  txHistoryFilters = {
+    search: (el("history-filter-search")?.value || "").trim().toLowerCase(),
+    status: el("history-filter-status")?.value || "all",
+    period: el("history-filter-period")?.value || "all",
+  };
+  const sortBy = el("history-sort-by")?.value || txHistorySort.by;
+  const sortDir = el("history-sort-dir")?.value || txHistorySort.dir;
+  const allowed = ["time", "name", "status", "buy_price", "sale_price", "cash_profit", "discount", "deviation"];
+  txHistorySort = {
+    by: allowed.includes(sortBy) ? sortBy : "time",
+    dir: sortDir === "asc" ? "asc" : "desc",
+  };
+  writeHistorySortPreference(txHistorySort);
+  return txHistoryFilters;
+}
+function getHistoryEventTime(t) {
+  return getHistoryStatus(t) === "sold" ? (Number(t.sold_at) || Number(t.at) || 0) : (Number(t.at) || 0);
+}
+function filterHistoryList(list) {
+  const filters = txHistoryFilters || {};
+  const nowSeconds = Date.now() / 1000;
+  return list.filter((t) => {
+    const search = filters.search || "";
+    if (search) {
+      const hay = [t.name, t.assetid, t.goods_id].filter((v) => v != null && v !== "").join(" ").toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    const status = getHistoryStatus(t);
+    if (filters.status && filters.status !== "all" && status !== filters.status) return false;
+    if (filters.period === "sold" && status !== "sold") return false;
+    if (filters.period === "today") {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      if (getHistoryEventTime(t) < d.getTime() / 1000) return false;
+    }
+    if (filters.period === "7d" && getHistoryEventTime(t) < nowSeconds - 7 * 24 * 60 * 60) return false;
+    if (filters.period === "30d" && getHistoryEventTime(t) < nowSeconds - 30 * 24 * 60 * 60) return false;
+    return true;
+  });
+}
+function getHistoryMetrics(t, resellRatio = 0.85) {
+  const ratio = Math.max(0.01, Math.min(1, Number(resellRatio) || 0.85));
+  const cost = Number(t.price) || 0;
+  const sold = getHistoryStatus(t) === "sold";
+  const sale = sold ? Number(t.sale_price) || 0 : null;
+  const afterTax = sale != null ? sale / 1.15 : null;
+  const buyMarket = t.market_price != null ? Number(t.market_price) : null;
+  return {
+    sale,
+    afterTax,
+    cashProfit: afterTax != null ? afterTax * ratio - cost : null,
+    selfUse: afterTax != null ? afterTax - cost : null,
+    discount: afterTax != null && afterTax > 0 && cost > 0 ? cost / afterTax : null,
+    deviation: sale != null && buyMarket != null ? sale - buyMarket : null,
+  };
+}
+function getHistorySortValue(t, key, resellRatio = 0.85) {
+  const metrics = getHistoryMetrics(t, resellRatio);
+  if (key === "time") return getHistoryEventTime(t);
+  if (key === "name") return (t.name || "").toString().toLowerCase();
+  if (key === "status") return getHistoryStatus(t);
+  if (key === "buy_price") return Number(t.price) || 0;
+  if (key === "sale_price") return metrics.sale;
+  if (key === "cash_profit") return metrics.cashProfit;
+  if (key === "discount") return metrics.discount;
+  if (key === "deviation") return metrics.deviation;
+  return getHistoryEventTime(t);
+}
+function sortHistoryList(list, resellRatio = 0.85) {
+  const sort = txHistorySort || { by: "time", dir: "desc" };
+  const dir = sort.dir === "asc" ? 1 : -1;
+  return list.slice().sort((a, b) => {
+    const av = getHistorySortValue(a, sort.by, resellRatio);
+    const bv = getHistorySortValue(b, sort.by, resellRatio);
+    const aMissing = av == null || av === "";
+    const bMissing = bv == null || bv === "";
+    if (aMissing && bMissing) return getHistoryEventTime(b) - getHistoryEventTime(a);
+    if (aMissing) return 1;
+    if (bMissing) return -1;
+    if (typeof av === "string" || typeof bv === "string") {
+      const cmp = String(av).localeCompare(String(bv), "zh-Hans-CN", { numeric: true });
+      return cmp === 0 ? getHistoryEventTime(b) - getHistoryEventTime(a) : cmp * dir;
+    }
+    const cmp = Number(av) - Number(bv);
+    return cmp === 0 ? getHistoryEventTime(b) - getHistoryEventTime(a) : cmp * dir;
+  });
+}
+function syncHistorySortControls() {
+  const sortBy = el("history-sort-by");
+  const sortDir = el("history-sort-dir");
+  if (sortBy) sortBy.value = txHistorySort.by || "time";
+  if (sortDir) sortDir.value = txHistorySort.dir || "desc";
+}
+function refreshHistoryFilterUI(total, filtered) {
+  const countEl = el("history-filter-count");
+  if (countEl) countEl.textContent = total === filtered ? `${total} 项` : `${filtered} / ${total} 项`;
+}
 function rerenderTransactionsFromCache() {
   if (!Array.isArray(lastEnrichData)) return;
   readHoldingsFiltersFromUI();
+  readHistoryFiltersFromUI();
   applyTransactionsToUI(
     lastEnrichData,
     el("purchases-summary"),
@@ -1047,9 +1185,8 @@ function renderPurchaseHistoryTable(tbody, list, resellRatio = 0.85, multiSelect
   const ratio = Math.max(0.01, Math.min(1, Number(resellRatio) || 0.85));
   const accountCapability = getTxAccountCapability();
   const accountName = normalizeAccountLabel(accountCapability.current);
-  const sorted = list.slice().sort((a, b) => (b.at || 0) - (a.at || 0));
   const rowHtmls = [];
-  for (const t of sorted) {
+  for (const t of list) {
     const timeStr = formatDateTime(t.at);
     const soldTimeStr = formatDateTime(t.sold_at);
     const nameText = (t.name || "—").toString();
@@ -1058,19 +1195,17 @@ function renderPurchaseHistoryTable(tbody, list, resellRatio = 0.85, multiSelect
     const checkCell = `<td class="holding-select-cell ${multiSelectMode ? "" : "hidden"}"><input type="checkbox" class="history-checkbox" data-idx="${idx}" /></td>`;
     const cost = Number(t.price) || 0;
     const mp = t.market_price != null ? Number(t.market_price).toFixed(2) : "—";
-    const sold = t.sale_price != null && Number(t.sale_price) > 0;
     const state = getAutomationState(t, accountCapability);
-    const listingError = t.listing_status === "error";
-    const statusStr = t.pending_receipt ? "待收货" : sold ? "已出售" : listingError ? "ERROR" : t.listing ? "出售中" : "持有中";
-    const statusCellClass = t.pending_receipt ? "status-pending" : sold ? "status-sold" : listingError ? "status-error" : t.listing ? "status-listing" : "status-holding";
-    const salePriceStr = sold ? Number(t.sale_price).toFixed(2) : "—";
+    const statusMeta = getHistoryStatusMeta(t, state);
+    const sold = statusMeta.key === "sold";
+    const metrics = getHistoryMetrics(t, ratio);
+    const salePriceStr = sold && metrics.sale != null ? metrics.sale.toFixed(2) : "—";
     let discountRatioStr = "—", cashProfitStr = "—", selfUseStr = "—", discountRatioClass = "";
-    if (sold) {
-      const afterTax = Number(t.sale_price) / 1.15;
-      discountRatioStr = afterTax > 0 && cost > 0 ? (cost / afterTax).toFixed(4) : "—";
+    if (sold && metrics.afterTax != null) {
+      discountRatioStr = metrics.discount != null ? metrics.discount.toFixed(4) : "—";
       discountRatioClass = discountRatioStr !== "—" ? (parseFloat(discountRatioStr) > ratio ? "text-bad" : "text-ok") : "";
-      const cashProfit = afterTax > 0 && cost >= 0 ? afterTax * ratio - cost : 0;
-      const selfUse = afterTax - cost;
+      const cashProfit = metrics.cashProfit != null ? metrics.cashProfit : 0;
+      const selfUse = metrics.selfUse != null ? metrics.selfUse : 0;
       cashProfitStr = (cashProfit >= 0 ? "+" : "") + cashProfit.toFixed(2);
       selfUseStr = (selfUse >= 0 ? "+" : "") + selfUse.toFixed(2);
     }
@@ -1095,7 +1230,7 @@ function renderPurchaseHistoryTable(tbody, list, resellRatio = 0.85, multiSelect
     const delistItem = hasListing ? `<button type="button" class="tx-action-item ph-btn-delist" data-type="purchase" data-idx="${idx}">下架</button>` : "";
     const actHtml = !multiSelectMode ? `<div class="tx-actions-dropdown"><button type="button" class="tx-actions-trigger" title="操作">⋮</button><div class="tx-actions-menu">${delistItem}<button type="button" class="tx-action-item tx-action-danger ph-btn-del" data-type="purchase" data-idx="${idx}">删除</button></div></div>` : "";
     const assetidStr = t.assetid ?? "—";
-    rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${nameHtml}</td><td><span class="tx-account-cell" title="${escapeHtml(accountName)}">${escapeHtml(accountName)}</span></td><td>${renderAutomationBadge(sold ? { className: "is-sold", label: "已完成", hint: "该记录已出售" } : state)}</td><td class="mono tx-extra-col">${escapeHtml(assetidStr)}</td><td class="mono">${escapeHtml(Number(t.price).toFixed(2))}</td><td class="mono tx-extra-col">${escapeHtml(mp)}</td><td class="status-cell ${statusCellClass}">${escapeHtml(statusStr)}</td><td class="mono">${escapeHtml(salePriceStr)}</td><td class="mono tx-extra-col">${escapeHtml(soldTimeStr)}</td><td class="mono ${discountRatioClass}">${escapeHtml(discountRatioStr)}</td><td class="mono ${cashClass}">${escapeHtml(cashProfitStr)}</td><td class="mono tx-extra-col ${selfUseClass}">${escapeHtml(selfUseStr)}</td>${deviationCell}<td class="tx-actions">${actHtml}</td></tr>`);
+    rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${nameHtml}</td><td><span class="tx-account-cell" title="${escapeHtml(accountName)}">${escapeHtml(accountName)}</span></td><td>${renderAutomationBadge(sold ? { className: "is-sold", label: "已完成", hint: "该记录已出售" } : state)}</td><td class="mono tx-extra-col">${escapeHtml(assetidStr)}</td><td class="mono">${escapeHtml(Number(t.price).toFixed(2))}</td><td class="mono tx-extra-col">${escapeHtml(mp)}</td><td>${renderHistoryStatusBadge(statusMeta)}</td><td class="mono">${escapeHtml(salePriceStr)}</td><td class="mono tx-extra-col">${escapeHtml(soldTimeStr)}</td><td class="mono ${discountRatioClass}">${escapeHtml(discountRatioStr)}</td><td class="mono ${cashClass}">${escapeHtml(cashProfitStr)}</td><td class="mono tx-extra-col ${selfUseClass}">${escapeHtml(selfUseStr)}</td>${deviationCell}<td class="tx-actions">${actHtml}</td></tr>`);
   }
   tbody.innerHTML = rowHtmls.length
     ? rowHtmls.join("")
@@ -1146,7 +1281,9 @@ function applyTransactionsToUI(all, summaryEl, tbodyP, tbodyHistory, resellRatio
   const purchases = all.filter((t) => t.type === "purchase");
   const holdings = purchases.filter((t) => !(t.sale_price != null && Number(t.sale_price) > 0));
   const ratio = Math.max(0.01, Math.min(1, Number(resellRatio) || 0.85));
+  readHistoryFiltersFromUI();
   const filteredHoldings = sortHoldingsList(filterHoldingsList(holdings), ratio);
+  const filteredHistory = sortHistoryList(filterHistoryList(purchases), ratio);
   lastTransactionsResellRatio = ratio;
   const holdingsCountEl = el("tx-tab-count-purchases");
   const historyCountEl = el("tx-tab-count-history");
@@ -1161,7 +1298,13 @@ function applyTransactionsToUI(all, summaryEl, tbodyP, tbodyHistory, resellRatio
           renderTxTable(tbodyP, filteredHoldings, true, ratio, holdingsMultiSelectMode);
         }
       }
-      if (tbodyHistory) renderPurchaseHistoryTable(tbodyHistory, purchases, ratio, historyMultiSelectMode);
+      if (tbodyHistory) {
+        if (purchases.length && !filteredHistory.length) {
+          tbodyHistory.innerHTML = txTableStateRow(16, "没有匹配的流水", "调整筛选条件后再试。", "empty");
+        } else {
+          renderPurchaseHistoryTable(tbodyHistory, filteredHistory, ratio, historyMultiSelectMode);
+        }
+      }
     }
   });
   syncTxColumnToggleUI();
@@ -1172,19 +1315,27 @@ function applyTransactionsToUI(all, summaryEl, tbodyP, tbodyHistory, resellRatio
       renderTxTable(tbodyP, filteredHoldings, true, ratio, holdingsMultiSelectMode);
     }
   }
-  if (tbodyHistory) renderPurchaseHistoryTable(tbodyHistory, purchases, ratio, historyMultiSelectMode);
+  if (tbodyHistory) {
+    if (purchases.length && !filteredHistory.length) {
+      tbodyHistory.innerHTML = txTableStateRow(16, "没有匹配的流水", "调整筛选条件后再试。", "empty");
+    } else {
+      renderPurchaseHistoryTable(tbodyHistory, filteredHistory, ratio, historyMultiSelectMode);
+    }
+  }
   updateMarketPriceNotice(lastMarketPriceMeta, holdings);
   refreshHoldingsFilterUI(holdings.length, filteredHoldings.length);
+  refreshHistoryFilterUI(purchases.length, filteredHistory.length);
   syncHoldingsSortControls();
+  syncHistorySortControls();
   syncMarketPriceRefreshControls();
   syncHistoryMultiSelectUI();
   const historySummaryEl = el("purchase-history-summary");
-  if (historySummaryEl && purchases.length) {
-    const totalPrice = purchases.reduce((s, t) => s + (Number(t.price) || 0), 0);
-    const totalMp = purchases.reduce((s, t) => s + (t.market_price != null ? Number(t.market_price) : 0), 0);
-    const totalSalePrice = purchases.reduce((s, t) => s + (t.sale_price != null && Number(t.sale_price) > 0 ? Number(t.sale_price) : 0), 0);
+  if (historySummaryEl && filteredHistory.length) {
+    const totalPrice = filteredHistory.reduce((s, t) => s + (Number(t.price) || 0), 0);
+    const totalMp = filteredHistory.reduce((s, t) => s + (t.market_price != null ? Number(t.market_price) : 0), 0);
+    const totalSalePrice = filteredHistory.reduce((s, t) => s + (t.sale_price != null && Number(t.sale_price) > 0 ? Number(t.sale_price) : 0), 0);
     const totalAfterTax = totalSalePrice > 0 ? totalSalePrice / 1.15 : null;
-    const soldItems = purchases.filter((t) => t.sale_price != null && Number(t.sale_price) > 0);
+    const soldItems = filteredHistory.filter((t) => t.sale_price != null && Number(t.sale_price) > 0);
     let ratioSum = 0, ratioCount = 0, totalCashProfit = 0, totalSelfUseProfit = 0;
     soldItems.forEach((t) => {
       const afterTax = Number(t.sale_price) / 1.15;
@@ -1199,7 +1350,7 @@ function applyTransactionsToUI(all, summaryEl, tbodyP, tbodyHistory, resellRatio
     const selfUseProfitVal = soldItems.length > 0 ? totalSelfUseProfit : null;
     const profitClass = cashProfitVal != null && cashProfitVal > 0 ? "text-ok" : cashProfitVal != null && cashProfitVal < 0 ? "text-bad" : "";
     const selfUseClass = selfUseProfitVal != null && selfUseProfitVal > 0 ? "text-ok" : selfUseProfitVal != null && selfUseProfitVal < 0 ? "text-bad" : "";
-    const soldMp = purchases.reduce((s, t) => s + (t.sale_price != null && Number(t.sale_price) > 0 && t.market_price != null ? Number(t.market_price) : 0), 0);
+    const soldMp = filteredHistory.reduce((s, t) => s + (t.sale_price != null && Number(t.sale_price) > 0 && t.market_price != null ? Number(t.market_price) : 0), 0);
     const totalDeviation = totalSalePrice > 0 && soldMp > 0 ? totalSalePrice - soldMp : null;
     const totalDeviationPct = totalDeviation != null && soldMp > 0 ? ((totalDeviation / soldMp) * 100).toFixed(2) + "%" : "—";
     const deviationClass = totalDeviation != null && totalDeviation > 0 ? "text-ok" : totalDeviation != null && totalDeviation < 0 ? "text-bad" : "";

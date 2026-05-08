@@ -492,6 +492,43 @@
           </div>
           <div id="purchase-history-summary" class="purchases-summary"></div>
         </div>
+        <div class="tx-filter-bar tx-filter-bar--history">
+          <div class="tx-filter-search">
+            <span class="label">筛选</span>
+            <input type="search" id="history-filter-search" placeholder="搜索物品名或 assetid" />
+          </div>
+          <select id="history-filter-status" title="按交易状态筛选">
+            <option value="all">全部状态</option>
+            <option value="holding">持有中</option>
+            <option value="listing">出售中</option>
+            <option value="sold">已出售</option>
+            <option value="pending">待收货</option>
+            <option value="error">异常</option>
+          </select>
+          <select id="history-filter-period" title="按交易时间筛选">
+            <option value="all">全部时间</option>
+            <option value="today">今天</option>
+            <option value="7d">近 7 天</option>
+            <option value="30d">近 30 天</option>
+            <option value="sold">仅已售</option>
+          </select>
+          <select id="history-sort-by" title="交易流水排序字段">
+            <option value="time">按时间</option>
+            <option value="name">按物品</option>
+            <option value="status">按状态</option>
+            <option value="buy_price">按购入价</option>
+            <option value="sale_price">按出售价</option>
+            <option value="cash_profit">按变现收益</option>
+            <option value="discount">按折扣比率</option>
+            <option value="deviation">按价格偏离</option>
+          </select>
+          <select id="history-sort-dir" title="交易流水排序方向">
+            <option value="desc">降序</option>
+            <option value="asc">升序</option>
+          </select>
+          <button id="btn-reset-history-filter" class="btn btn-sm btn-secondary" type="button">重置</button>
+          <span id="history-filter-count" class="tx-filter-count"></span>
+        </div>
         <div class="table-container table-card">
           <table id="transactions-table-purchase-history" class="tx-table-compact">
             <thead>
@@ -526,6 +563,8 @@
             <span class="hint">按饰品聚合复盘表现</span>
           </div>
         </div>
+        <div id="analytics-kpis" class="analytics-kpi-grid"></div>
+        <div id="analytics-insights" class="analytics-insights-grid"></div>
         <div class="table-container table-card">
           <table id="analytics-table">
             <thead>

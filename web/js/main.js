@@ -595,6 +595,73 @@ function refreshAnalytics(purchases, resellRatio) {
   if (!tbody) return;
   const render = (list, ratio) => {
     const rows = aggregateByItemName(list, ratio);
+    const kpiWrap = el("analytics-kpis");
+    const insightsWrap = el("analytics-insights");
+    const fmtMoney = (value) => value == null ? "—" : `${value >= 0 ? "+" : ""}${value.toFixed(2)}`;
+    const fmtPlainMoney = (value) => value == null ? "—" : value.toFixed(2);
+    const valueClass = (value) => value > 0 ? "text-ok" : value < 0 ? "text-bad" : "";
+    const soldItems = list.filter((t) => t.sale_price != null && Number(t.sale_price) > 0);
+    const heldItems = list.filter((t) => !(t.sale_price != null && Number(t.sale_price) > 0));
+    const totalInvest = list.reduce((s, t) => s + (Number(t.price) || 0), 0);
+    let realizedProfit = 0;
+    let unrealizedProfit = 0;
+    let heldPricedCount = 0;
+    let winCount = 0;
+    let discountSum = 0;
+    let discountCount = 0;
+    let deviationSum = 0;
+    let deviationCount = 0;
+    soldItems.forEach((t) => {
+      const cost = Number(t.price) || 0;
+      const sale = Number(t.sale_price) || 0;
+      const afterTax = sale / 1.15;
+      const cashProfit = afterTax * ratio - cost;
+      realizedProfit += cashProfit;
+      if (cashProfit > 0) winCount += 1;
+      if (afterTax > 0 && cost > 0) {
+        discountSum += cost / afterTax;
+        discountCount += 1;
+      }
+      if (t.market_price != null) {
+        deviationSum += sale - Number(t.market_price);
+        deviationCount += 1;
+      }
+    });
+    heldItems.forEach((t) => {
+      const cost = Number(t.price) || 0;
+      const cur = t.current_market_price != null ? Number(t.current_market_price) : null;
+      if (cur != null && cur > 0) {
+        unrealizedProfit += (cur / 1.15) * ratio - cost;
+        heldPricedCount += 1;
+      }
+    });
+    const winRate = soldItems.length ? `${((winCount / soldItems.length) * 100).toFixed(1)}%` : "—";
+    const avgDiscount = discountCount ? (discountSum / discountCount).toFixed(4) : "—";
+    const avgDeviation = deviationCount ? deviationSum / deviationCount : null;
+    if (kpiWrap) {
+      kpiWrap.innerHTML = [
+        `<div class="analytics-kpi"><span class="analytics-kpi-label">总投入</span><span class="analytics-kpi-value mono">${fmtPlainMoney(totalInvest)}</span><span class="analytics-kpi-hint">${list.length} 条记录</span></div>`,
+        `<div class="analytics-kpi"><span class="analytics-kpi-label">已实现变现收益</span><span class="analytics-kpi-value mono ${valueClass(soldItems.length ? realizedProfit : 0)}">${fmtMoney(soldItems.length ? realizedProfit : null)}</span><span class="analytics-kpi-hint">${soldItems.length} 条已出售</span></div>`,
+        `<div class="analytics-kpi"><span class="analytics-kpi-label">未实现变现收益</span><span class="analytics-kpi-value mono ${valueClass(heldPricedCount ? unrealizedProfit : 0)}">${fmtMoney(heldPricedCount ? unrealizedProfit : null)}</span><span class="analytics-kpi-hint">${heldPricedCount} / ${heldItems.length} 条有现价</span></div>`,
+        `<div class="analytics-kpi"><span class="analytics-kpi-label">胜率</span><span class="analytics-kpi-value mono">${winRate}</span><span class="analytics-kpi-hint">${winCount} / ${soldItems.length || 0} 盈利</span></div>`,
+        `<div class="analytics-kpi"><span class="analytics-kpi-label">平均折扣比率</span><span class="analytics-kpi-value mono ${avgDiscount === "—" ? "" : (parseFloat(avgDiscount) > ratio ? "text-bad" : "text-ok")}">${avgDiscount}</span><span class="analytics-kpi-hint">越低越划算</span></div>`,
+        `<div class="analytics-kpi"><span class="analytics-kpi-label">平均价格偏离</span><span class="analytics-kpi-value mono ${valueClass(avgDeviation || 0)}">${avgDeviation == null ? "—" : fmtMoney(avgDeviation)}</span><span class="analytics-kpi-hint">出售价相对购入市场价</span></div>`,
+      ].join("");
+    }
+    const renderRankList = (items, emptyText, formatter) => {
+      if (!items.length) return `<div class="analytics-rank-empty">${escapeHtml(emptyText)}</div>`;
+      return `<ol class="analytics-rank-list">${items.map((item) => `<li><span class="analytics-rank-name">${typeof buildItemNameHtml === "function" ? buildItemNameHtml(item.name) : escapeHtml(item.name)}</span>${formatter(item)}</li>`).join("")}</ol>`;
+    };
+    if (insightsWrap) {
+      const winners = rows.filter((r) => r.totalCashProfit != null).slice().sort((a, b) => b.totalCashProfit - a.totalCashProfit).slice(0, 3);
+      const risks = rows.filter((r) => r.totalCashProfit != null).slice().sort((a, b) => a.totalCashProfit - b.totalCashProfit).slice(0, 3);
+      const discounts = rows.filter((r) => r.avgDiscountRatio != null).slice().sort((a, b) => a.avgDiscountRatio - b.avgDiscountRatio).slice(0, 3);
+      insightsWrap.innerHTML = [
+        `<section class="analytics-insight-card"><div class="analytics-insight-title">收益排行</div>${renderRankList(winners, "暂无已出售记录", (r) => `<span class="analytics-rank-value mono ${valueClass(r.totalCashProfit)}">${fmtMoney(r.totalCashProfit)}</span>`)}</section>`,
+        `<section class="analytics-insight-card"><div class="analytics-insight-title">风险排行</div>${renderRankList(risks, "暂无亏损样本", (r) => `<span class="analytics-rank-value mono ${valueClass(r.totalCashProfit)}">${fmtMoney(r.totalCashProfit)}</span>`)}</section>`,
+        `<section class="analytics-insight-card"><div class="analytics-insight-title">折扣表现</div>${renderRankList(discounts, "暂无折扣样本", (r) => `<span class="analytics-rank-value mono ${r.avgDiscountRatio > ratio ? "text-bad" : "text-ok"}">${r.avgDiscountRatio.toFixed(4)}</span>`)}</section>`,
+      ].join("");
+    }
     const rowHtmls = rows.map((r) => {
       const nameHtml = typeof buildItemNameHtml === "function" ? buildItemNameHtml(r.name) : escapeHtml(r.name);
       const avgPriceStr = r.avgPrice > 0 ? r.avgPrice.toFixed(2) : "—";
@@ -1075,6 +1142,34 @@ function bindEvents() {
   });
   el("btn-history-toggle-cols")?.addEventListener("click", () => {
     setHistoryShowMoreColumns(!historyShowMoreColumns);
+  });
+  el("history-filter-search")?.addEventListener("input", () => {
+    if (typeof rerenderTransactionsFromCache === "function") rerenderTransactionsFromCache();
+  });
+  el("history-filter-status")?.addEventListener("change", () => {
+    if (typeof rerenderTransactionsFromCache === "function") rerenderTransactionsFromCache();
+  });
+  el("history-filter-period")?.addEventListener("change", () => {
+    if (typeof rerenderTransactionsFromCache === "function") rerenderTransactionsFromCache();
+  });
+  el("history-sort-by")?.addEventListener("change", () => {
+    if (typeof rerenderTransactionsFromCache === "function") rerenderTransactionsFromCache();
+  });
+  el("history-sort-dir")?.addEventListener("change", () => {
+    if (typeof rerenderTransactionsFromCache === "function") rerenderTransactionsFromCache();
+  });
+  el("btn-reset-history-filter")?.addEventListener("click", () => {
+    const search = el("history-filter-search");
+    if (search) search.value = "";
+    const status = el("history-filter-status");
+    if (status) status.value = "all";
+    const period = el("history-filter-period");
+    if (period) period.value = "all";
+    const sortBy = el("history-sort-by");
+    if (sortBy) sortBy.value = "time";
+    const sortDir = el("history-sort-dir");
+    if (sortDir) sortDir.value = "desc";
+    if (typeof rerenderTransactionsFromCache === "function") rerenderTransactionsFromCache();
   });
   el("btn-history-batch-del")?.addEventListener("click", async () => {
     const checked = document.querySelectorAll("#transactions-table-purchase-history .history-checkbox:checked");
