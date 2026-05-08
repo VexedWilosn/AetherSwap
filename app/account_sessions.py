@@ -6,10 +6,9 @@ from sqlmodel import select
 from app import database
 from app.accounts import get_current_account
 from app.database import AccountSession, get_session
-from app.secret_box import is_protected, protect_secret, unprotect_secret
+from app.secret_box import protect_secret, unprotect_secret
 from config import get_buff as get_legacy_buff
 from config import get_steam as get_legacy_steam
-from config import update_buff_credentials, update_steam_credentials
 
 PROVIDER_STEAM = "steam"
 PROVIDER_BUFF = "buff"
@@ -18,7 +17,6 @@ _SUCCESS_STATUSES = {"", "ok", "valid"}
 
 def _ensure_ready() -> None:
     database.init_db()
-    _encrypt_existing_session_secrets()
 
 
 def _resolve_account_id(account_id: Optional[str] = None) -> str:
@@ -65,23 +63,6 @@ def _session_to_dict(row: AccountSession) -> dict:
     if row.last_validated_at is not None:
         out["last_validated_at"] = row.last_validated_at
     return out
-
-
-def _encrypt_existing_session_secrets() -> None:
-    with get_session() as session:
-        rows = session.exec(select(AccountSession)).all()
-        changed = False
-        for row in rows:
-            if row.cookies and not is_protected(row.cookies):
-                row.cookies = protect_secret(row.cookies)
-                changed = True
-            if row.session_id and not is_protected(row.session_id):
-                row.session_id = protect_secret(row.session_id)
-                changed = True
-            if changed:
-                session.add(row)
-        if changed:
-            session.commit()
 
 
 def public_session_summary(account_id: Optional[str]) -> dict:
@@ -220,12 +201,6 @@ def clear_account_session(account_id: Optional[str], provider: str) -> bool:
             return True
         session.delete(row)
         session.commit()
-    current = get_current_account() or {}
-    if str(current.get("id") or "").strip() == account_id:
-        if provider == PROVIDER_STEAM:
-            update_steam_credentials("", "", None)
-        elif provider == PROVIDER_BUFF:
-            update_buff_credentials("")
     return True
 
 
@@ -295,7 +270,7 @@ def set_steam_session(
     *,
     account_id: Optional[str] = None,
     steam_id: Optional[str] = None,
-    mirror_legacy: bool = True,
+    mirror_legacy: bool = False,
 ) -> dict:
     resolved_steam_id = steam_id or _steam_id_from_cookies(cookies)
     saved = set_account_session(
@@ -307,6 +282,7 @@ def set_steam_session(
         status="ok" if cookies else "",
     )
     if mirror_legacy:
+        from config import update_steam_credentials
         update_steam_credentials(cookies, session_id or "", resolved_steam_id)
     return saved
 
@@ -333,7 +309,7 @@ def set_buff_session(
     cookies: str,
     *,
     account_id: Optional[str] = None,
-    mirror_legacy: bool = True,
+    mirror_legacy: bool = False,
 ) -> dict:
     saved = set_account_session(
         account_id,
@@ -342,5 +318,6 @@ def set_buff_session(
         status="ok" if cookies else "",
     )
     if mirror_legacy:
+        from config import update_buff_credentials
         update_buff_credentials(cookies)
     return saved

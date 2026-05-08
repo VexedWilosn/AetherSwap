@@ -1,4 +1,6 @@
 """Config, data init, export/import, holdings report routes."""
+import copy
+
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from app.state import (
@@ -10,9 +12,8 @@ from app.state import (
     replace_transactions,
 )
 from app.config_loader import load_app_config_validated, save_app_config_validated
-from config import load_app_config, save_app_config, save_credentials, get_all_credentials
+from config import load_app_config, save_app_config, save_credentials
 from app.accounts import list_accounts, replace_all as accounts_replace_all
-from app.account_sessions import list_account_sessions
 router = APIRouter()
 class ConfigBody(BaseModel):
     config: dict
@@ -23,6 +24,69 @@ class ImportFullBody(BaseModel):
     accounts: dict = {}
     account_sessions: list = []
     log: list = []
+
+
+_REDACTED = ""
+_SENSITIVE_EXPORT_KEYS = {
+    "api_key",
+    "cookies",
+    "device_id",
+    "email_pass",
+    "identity_secret",
+    "password",
+    "session_id",
+    "shared_secret",
+    "token",
+    "webshare_api_key",
+}
+
+
+def _sanitize_config_for_export(value):
+    if isinstance(value, dict):
+        out = {}
+        for key, item in value.items():
+            key_text = str(key).lower()
+            if key_text in _SENSITIVE_EXPORT_KEYS or key_text.endswith("_token") or key_text.endswith("_secret"):
+                out[key] = _REDACTED
+            else:
+                out[key] = _sanitize_config_for_export(item)
+        return out
+    if isinstance(value, list):
+        return [_sanitize_config_for_export(item) for item in value]
+    return value
+
+
+def _sanitize_accounts_for_export(accounts: list) -> list:
+    clean = []
+    for account in accounts or []:
+        if not isinstance(account, dict):
+            continue
+        item = copy.deepcopy(account)
+        item["password"] = ""
+        item["steam_guard"] = {"shared_secret": "", "identity_secret": "", "device_id": ""}
+        item.pop("steam_guard_status", None)
+        item.pop("session_status", None)
+        clean.append(item)
+    return clean
+
+
+def _build_full_export() -> dict:
+    from datetime import datetime, timezone
+    from app.accounts import get_current_id
+
+    return {
+        "version": 1,
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "export_mode": "sanitized",
+        "app_config": _sanitize_config_for_export(load_app_config()),
+        "credentials": {},
+        "transactions": {"purchases": get_purchases(), "sales": get_sales()},
+        "accounts": {"accounts": _sanitize_accounts_for_export(list_accounts()), "current_id": get_current_id()},
+        "account_sessions": [],
+        "log": get_log(0),
+    }
+
+
 @router.get("/api/config")
 def api_get_config():
     return {"config": load_app_config_validated()}
@@ -154,36 +218,14 @@ def api_data_init():
 
 @router.get("/api/export_full")
 def api_export_full():
-    from datetime import datetime, timezone
-    from app.accounts import get_current_id
-    data = {
-        "version": 1,
-        "exported_at": datetime.now(timezone.utc).isoformat(),
-        "app_config": load_app_config(),
-        "credentials": get_all_credentials(),
-        "transactions": {"purchases": get_purchases(), "sales": get_sales()},
-        "accounts": {"accounts": list_accounts(), "current_id": get_current_id()},
-        "account_sessions": list_account_sessions(),
-        "log": get_log(0),
-    }
-    return data
+    return _build_full_export()
 
 @router.get("/api/export_full/download")
 def api_export_full_download():
     import json
-    from datetime import datetime, timezone
+    from datetime import datetime
     from fastapi.responses import Response
-    from app.accounts import get_current_id
-    data = {
-        "version": 1,
-        "exported_at": datetime.now(timezone.utc).isoformat(),
-        "app_config": load_app_config(),
-        "credentials": get_all_credentials(),
-        "transactions": {"purchases": get_purchases(), "sales": get_sales()},
-        "accounts": {"accounts": list_accounts(), "current_id": get_current_id()},
-        "account_sessions": list_account_sessions(),
-        "log": get_log(0),
-    }
+    data = _build_full_export()
     ts = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
     filename = f"full_backup_{ts}.json"
     return Response(

@@ -98,7 +98,7 @@ def test_explicit_account_lookup_does_not_copy_legacy_credentials(monkeypatch, t
     assert steam == {}
 
 
-def test_update_steam_creds_writes_current_account_and_legacy_file(monkeypatch, tmp_path):
+def test_update_steam_creds_writes_current_account_without_legacy_file(monkeypatch, tmp_path):
     _use_temp_storage(monkeypatch, tmp_path)
     acc = accounts.add_account(username="current")
 
@@ -107,8 +107,7 @@ def test_update_steam_creds_writes_current_account_and_legacy_file(monkeypatch, 
     saved = get_steam_credentials(acc["id"])
     assert saved["steam_id"] == "444"
     assert saved["session_id"] == "new"
-    legacy = json.loads(config._CREDENTIALS_FILE.read_text(encoding="utf-8"))
-    assert legacy["steam"]["steam_id"] == "444"
+    assert not config._CREDENTIALS_FILE.exists()
 
 
 def test_auto_relogin_writes_target_account_without_switching_current(monkeypatch, tmp_path):
@@ -133,6 +132,7 @@ def test_auto_relogin_writes_target_account_without_switching_current(monkeypatc
     assert status == "auto_ok"
     assert accounts.get_current_id() == first["id"]
     assert get_steam_credentials(second["id"])["steam_id"] == "666"
+    assert not config._CREDENTIALS_FILE.exists()
 
 
 def test_session_status_tracks_failures_and_clears_on_success(monkeypatch, tmp_path):

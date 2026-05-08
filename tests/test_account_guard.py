@@ -90,6 +90,7 @@ def test_accounts_json_migrates_to_sqlite(monkeypatch, tmp_path):
       "steam_id": "765",
       "display_name": "Legacy",
       "account_note": "note",
+      "balance_synced_at": "2026-05-08T17:48:13.560044+00:00",
       "steam_guard": {
         "shared_secret": "shared",
         "identity_secret": "identity",
@@ -108,6 +109,7 @@ def test_accounts_json_migrates_to_sqlite(monkeypatch, tmp_path):
     assert len(migrated) == 1
     assert migrated[0]["id"] == "legacy01"
     assert migrated[0]["username"] == "legacy-user"
+    assert migrated[0]["balance_synced_at"] == "2026-05-08T17:48:13.560044+00:00"
     assert migrated[0]["steam_guard"]["shared_secret"] == "shared"
     assert migrated[0]["trade_config"]["enabled"] is True
     assert accounts.get_current_id() == "legacy01"

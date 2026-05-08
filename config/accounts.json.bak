@@ -1,0 +1,22 @@
+{
+  "accounts": [
+    {
+      "id": "73c7bafc",
+      "username": "banbanzhigexiaohao",
+      "password": "781220092",
+      "steam_id": "76561198977228990",
+      "display_name": "QB",
+      "avatar_url": "https://avatars.fastly.steamstatic.com/adcba5a8cb0602a1dc81ac696721a417a1b759e8_full.jpg",
+      "account_note": "消耗",
+      "currency_code": "CNY",
+      "region_code": "CN",
+      "balance_display": "¥0.00",
+      "wallet_balance": 0,
+      "balance": 0.0,
+      "wallet_currency_id": 23,
+      "wallet_currency_symbol": "¥",
+      "balance_synced_at": "2026-05-08T17:48:13.560044+00:00"
+    }
+  ],
+  "current_id": "73c7bafc"
+}

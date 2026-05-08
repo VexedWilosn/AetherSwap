@@ -26,6 +26,7 @@ from app.services.steam_auth import (
 )
 from app.services.browser_profile import release_chromium_profile
 from app.services.playwright_cookies import cookies_to_header, parse_cookie_string_for_url
+from app.services.buff_auth import safe_buff_profile_segment
 router = APIRouter()
 _relogin_lock = threading.Lock()
 _relogin_type = None
@@ -62,16 +63,20 @@ def _public_novnc_url(request: Request) -> str:
     return f"{proto}://{host}:{port}/vnc.html?autoconnect=1"
 class ReloginFinishBody(BaseModel):
     success: bool
-def _relogin_worker(relogin_type: str) -> None:
+def _relogin_worker(relogin_type: str, account_id: str = "") -> None:
     global _relogin_playwright, _relogin_browser, _relogin_context, _relogin_error, _relogin_success
     try:
         from playwright.sync_api import sync_playwright
         p = sync_playwright().start()
+        target_account_id = (account_id or "").strip()
         if relogin_type == "steam":
             cur = get_current_account()
-            profile_dir = get_profile_dir(cur.get("id") if cur else None)
+            target_account_id = target_account_id or (cur.get("id") if cur else "")
+            profile_dir = get_profile_dir(target_account_id or None)
         else:
-            profile_dir = Path(__file__).resolve().parent.parent.parent / "config" / "playwright_buff"
+            cur = get_current_account()
+            target_account_id = target_account_id or (cur.get("id") if cur else "")
+            profile_dir = Path(__file__).resolve().parent.parent.parent / "config" / "playwright_buff" / safe_buff_profile_segment(target_account_id)
         profile_dir.mkdir(parents=True, exist_ok=True)
         if relogin_type == "buff" and os.environ.get("AETHERSWAP_DOCKER") == "1":
             stopped = release_chromium_profile(
@@ -91,7 +96,7 @@ def _relogin_worker(relogin_type: str) -> None:
         )
         page = context.pages[0] if context.pages else context.new_page()
         if relogin_type == "buff":
-            saved = (get_buff_credentials() or {}).get("cookies", "")
+            saved = (get_buff_credentials(target_account_id) or {}).get("cookies", "")
             saved_cookies = parse_cookie_string_for_url(saved, "https://buff.163.com/")
             if saved_cookies:
                 try:
@@ -120,8 +125,8 @@ def _relogin_worker(relogin_type: str) -> None:
                 cookie_str = "; ".join(f"{c['name']}={c['value']}" for c in selected)
                 session_id = next((c["value"] for c in selected if c.get("name") == "sessionid"), None) or next((c["value"] for c in cookies if c.get("name") == "sessionid"), None)
                 if session_id and has_secure:
-                    update_steam_creds(cookie_str, session_id)
-                cur = get_current_account()
+                    update_steam_creds(cookie_str, session_id, account_id=target_account_id)
+                cur = get_account(target_account_id) if target_account_id else get_current_account()
                 if cur:
                     steam_id = None
                     for c in cookies:
@@ -142,7 +147,7 @@ def _relogin_worker(relogin_type: str) -> None:
             else:
                 buff_cookies = context.cookies(["https://buff.163.com/"])
                 cookie_str = cookies_to_header(buff_cookies)
-                update_buff_creds(cookie_str)
+                update_buff_creds(cookie_str, account_id=target_account_id)
                 set_buff_auth_expired(False)
                 from app.state import get_status
                 from app.pipeline import start_pipeline
@@ -173,7 +178,7 @@ def _relogin_worker(relogin_type: str) -> None:
             _relogin_browser = None
             _relogin_context = None
         _relogin_done.set()
-def _relogin_start(relogin_type: str, request: Request):
+def _relogin_start(relogin_type: str, request: Request, account_id: str = ""):
     global _relogin_type, _relogin_error, _relogin_success, _relogin_playwright, _relogin_browser, _relogin_context
     had_existing = False
     with _relogin_lock:
@@ -206,7 +211,7 @@ def _relogin_start(relogin_type: str, request: Request):
     _relogin_ready.clear()
     _relogin_done.clear()
     _relogin_wake.clear()
-    t = threading.Thread(target=_relogin_worker, args=(relogin_type,), daemon=True)
+    t = threading.Thread(target=_relogin_worker, args=(relogin_type, account_id), daemon=True)
     t.start()
     if not _relogin_ready.wait(timeout=60):
         return {"ok": False, "error": "打开浏览器超时"}
@@ -250,14 +255,14 @@ def _generate_steam_guard_code(shared_secret: str) -> Optional[str]:
         code_int //= 26
     return "".join(out)
 @router.post("/api/auth/steam/relogin_start")
-def api_auth_steam_relogin_start(request: Request):
-    return _relogin_start("steam", request)
+def api_auth_steam_relogin_start(request: Request, account_id: str = ""):
+    return _relogin_start("steam", request, account_id=account_id)
 @router.post("/api/auth/steam/relogin_finish")
 def api_auth_steam_relogin_finish(body: ReloginFinishBody):
     return _relogin_finish(body.success)
 @router.post("/api/auth/buff/relogin_start")
-def api_auth_buff_relogin_start(request: Request):
-    return _relogin_start("buff", request)
+def api_auth_buff_relogin_start(request: Request, account_id: str = ""):
+    return _relogin_start("buff", request, account_id=account_id)
 @router.post("/api/auth/buff/relogin_finish")
 def api_auth_buff_relogin_finish(body: ReloginFinishBody):
     return _relogin_finish(body.success)

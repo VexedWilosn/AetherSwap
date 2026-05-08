@@ -10,7 +10,7 @@ from sqlmodel import select
 
 from app import database
 from app.database import AccountRecord, AppSetting, get_session
-from app.secret_box import is_protected, protect_secret, unprotect_secret
+from app.secret_box import protect_secret, unprotect_secret
 
 _ACCOUNTS_FILE = Path(__file__).resolve().parent.parent / "config" / "accounts.json"
 _cache: Optional[dict] = None  # Backward-compatible test/reset hook; DB is the source of truth.
@@ -28,7 +28,6 @@ def _ensure_ready() -> None:
         database.init_db()
         _schema_key = db_key
     _migrate_from_json_if_needed()
-    _encrypt_existing_account_secrets()
 
 
 def _current_migration_key() -> tuple[str, str]:
@@ -186,23 +185,6 @@ def _row_to_dict(row: AccountRecord) -> dict:
         if value is not None:
             out[key] = value
     return out
-
-
-def _encrypt_existing_account_secrets() -> None:
-    with get_session() as session:
-        rows = session.exec(select(AccountRecord)).all()
-        changed = False
-        for row in rows:
-            if row.password and not is_protected(row.password):
-                row.password = protect_secret(row.password)
-                changed = True
-            if row.steam_guard_json and not is_protected(row.steam_guard_json):
-                row.steam_guard_json = protect_secret(row.steam_guard_json)
-                changed = True
-            if changed:
-                session.add(row)
-        if changed:
-            session.commit()
 
 
 def _get_setting(key: str) -> Optional[str]:
