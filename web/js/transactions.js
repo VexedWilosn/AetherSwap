@@ -778,31 +778,49 @@ function renderHoldingsColumnSortBar() {
   const clearZoneHighlight = () => {
     bar.querySelectorAll(".tx-column-sort-lane.is-drop-zone").forEach((node) => node.classList.remove("is-drop-zone"));
   };
+  const getDropPosition = (wrap, event) => {
+    if (!wrap) return null;
+    const chips = Array.from(wrap.querySelectorAll(".tx-column-chip:not(.is-dragging)"));
+    if (!chips.length) return null;
+    const y = event.clientY;
+    const rowCandidates = chips.filter((chip) => {
+      const rect = chip.getBoundingClientRect();
+      return y >= rect.top - 6 && y <= rect.bottom + 6;
+    });
+    const candidates = rowCandidates.length ? rowCandidates : chips;
+    let best = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    candidates.forEach((chip) => {
+      const rect = chip.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const distance = Math.abs(event.clientY - centerY) * 4 + Math.abs(event.clientX - centerX);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = { chip, after: event.clientX > centerX };
+      }
+    });
+    return best;
+  };
   [visibleWrap, extraWrap].forEach((wrap) => {
     if (!wrap || wrap.dataset.dropBound === "1") return;
     wrap.dataset.dropBound = "1";
     wrap.addEventListener("dragover", (e) => {
       e.preventDefault();
+      e.stopPropagation();
       e.dataTransfer.dropEffect = "move";
-      const chip = e.target.closest(".tx-column-chip");
-      if (chip?.classList.contains("is-dragging")) {
-        showHoldingsColumnPlaceholderAtEnd(wrap);
-        return;
-      }
-      if (!chip && wrap.lastElementChild) showHoldingsColumnPlaceholder(wrap.lastElementChild, true);
-      else if (!chip) showHoldingsColumnPlaceholderAtEnd(wrap);
+      const pos = getDropPosition(wrap, e);
+      if (pos) showHoldingsColumnPlaceholder(pos.chip, pos.after);
+      else showHoldingsColumnPlaceholderAtEnd(wrap);
     });
     wrap.addEventListener("drop", (e) => {
       e.preventDefault();
+      e.stopPropagation();
       clearHoldingsColumnPlaceholder();
       const from = e.dataTransfer.getData("text/plain");
       const targetZone = wrap.id === "holdings-column-sort-extra" ? "extra" : "visible";
-      const chip = e.target.closest(".tx-column-chip");
-      if (chip?.classList.contains("is-dragging")) {
-        moveHoldingColumnToZoneEnd(from, targetZone);
-        return;
-      }
-      if (chip) moveHoldingColumnBefore(from, chip.dataset.col, e.offsetX > chip.offsetWidth / 2, targetZone);
+      const pos = getDropPosition(wrap, e);
+      if (pos) moveHoldingColumnBefore(from, pos.chip.dataset.col, pos.after, targetZone);
       else moveHoldingColumnToZoneEnd(from, targetZone);
     });
   });
@@ -815,8 +833,8 @@ function renderHoldingsColumnSortBar() {
       clearZoneHighlight();
       lane.classList.add("is-drop-zone");
       const list = lane.querySelector(".tx-column-sort-list");
-      const chip = e.target.closest(".tx-column-chip");
-      if (!chip && list) showHoldingsColumnPlaceholderAtEnd(list);
+      if (list?.contains(e.target)) return;
+      if (list) showHoldingsColumnPlaceholderAtEnd(list);
     });
     lane.addEventListener("dragleave", (e) => {
       if (e.relatedTarget && lane.contains(e.relatedTarget)) return;
@@ -828,9 +846,8 @@ function renderHoldingsColumnSortBar() {
       clearHoldingsColumnPlaceholder();
       const list = lane.querySelector(".tx-column-sort-list");
       const targetZone = list?.id === "holdings-column-sort-extra" ? "extra" : "visible";
-      const chip = e.target.closest(".tx-column-chip");
-      if (chip && !chip.classList.contains("is-dragging")) moveHoldingColumnBefore(e.dataTransfer.getData("text/plain"), chip.dataset.col, e.offsetX > chip.offsetWidth / 2, targetZone);
-      else moveHoldingColumnToZoneEnd(e.dataTransfer.getData("text/plain"), targetZone);
+      if (list?.contains(e.target)) return;
+      moveHoldingColumnToZoneEnd(e.dataTransfer.getData("text/plain"), targetZone);
     });
   });
   bar.querySelectorAll(".tx-column-chip").forEach((chip) => {
@@ -844,22 +861,6 @@ function renderHoldingsColumnSortBar() {
       chip.classList.remove("is-dragging");
       clearZoneHighlight();
       clearHoldingsColumnPlaceholder();
-    });
-    chip.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      e.dataTransfer.dropEffect = "move";
-      showHoldingsColumnPlaceholder(chip, e.offsetX > chip.offsetWidth / 2);
-    });
-    chip.addEventListener("dragleave", () => {
-    });
-    chip.addEventListener("drop", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      clearHoldingsColumnPlaceholder();
-      const wrap = chip.closest(".tx-column-sort-list");
-      const targetZone = wrap?.id === "holdings-column-sort-extra" ? "extra" : "visible";
-      moveHoldingColumnBefore(e.dataTransfer.getData("text/plain"), chip.dataset.col, e.offsetX > chip.offsetWidth / 2, targetZone);
     });
   });
 }
