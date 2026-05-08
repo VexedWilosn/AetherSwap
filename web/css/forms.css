@@ -58,16 +58,6 @@
   line-height: 1.6;
 }
 
-.legacy-guard-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin: -4px 0 16px;
-}
-
-.settings-group--legacy-guard {
-  border-style: dashed;
-}
-
 .form-grid {
   display: grid;
   gap: 16px;
@@ -199,6 +189,17 @@
   height: 2px;
   background: var(--primary);
   border-radius: 2px 2px 0 0;
+}
+
+.settings-tab.is-dirty::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--warning, #f59e0b);
 }
 
 .settings-tab-pane {

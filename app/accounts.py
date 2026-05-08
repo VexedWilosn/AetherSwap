@@ -37,7 +37,7 @@ def get_current_account() -> Optional[dict]:
     return next((a for a in accs if a.get("id") == cid), accs[0] if accs else None)
 def get_account(account_id: str) -> Optional[dict]:
     return next((a for a in list_accounts() if a.get("id") == account_id), None)
-def add_account(username: str = "", password: str = "", steam_id: str = "", display_name: str = "", avatar_url: str = "") -> dict:
+def add_account(username: str = "", password: str = "", steam_id: str = "", display_name: str = "", avatar_url: str = "", account_note: str = "") -> dict:
     data = _load()
     accs = data.get("accounts", [])
     aid = str(uuid.uuid4())[:8]
@@ -47,6 +47,7 @@ def add_account(username: str = "", password: str = "", steam_id: str = "", disp
         "password": (password or "").strip(),
         "steam_id": (steam_id or "").strip(),
         "display_name": (display_name or "").strip(),
+        "account_note": (account_note or "").strip(),
         "avatar_url": (avatar_url or "").strip(),
         "steam_guard": {
             "shared_secret": "",
@@ -64,7 +65,7 @@ def add_account(username: str = "", password: str = "", steam_id: str = "", disp
 def update_account(account_id: str, **kwargs: Any) -> Optional[dict]:
     data = _load()
     accs = data.get("accounts", [])
-    allowed = ("username", "password", "steam_id", "display_name", "avatar_url", "currency_code", "region_code", "steam_guard", "trade_config")
+    allowed = ("username", "password", "steam_id", "display_name", "account_note", "avatar_url", "currency_code", "region_code", "steam_guard", "trade_config")
     for a in accs:
         if a.get("id") == account_id:
             for k, v in kwargs.items():
@@ -125,6 +126,7 @@ def get_account_steam_guard(account: Optional[dict], cfg: Optional[dict] = None)
 def public_account(account: dict, cfg: Optional[dict] = None) -> dict:
     """Return an account payload with compatibility guard status metadata."""
     out = copy.deepcopy(account)
+    out["account_note"] = (out.get("account_note") or "").strip()
     guard = _normalize_steam_guard(out.get("steam_guard") or {})
     resolved = get_account_steam_guard(out, cfg)
     out["steam_guard"] = guard

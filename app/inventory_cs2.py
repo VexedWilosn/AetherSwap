@@ -54,6 +54,7 @@ def scan_cs2_inventory() -> Tuple[bool, List[Dict[str, Any]], str]:
         or account_id
         or "当前账号"
     )
+    account_note = (account.get("account_note") or "").strip()
     items: List[Dict[str, Any]] = []
     now = time.time()
     desc_map: Dict[tuple, Dict[str, Any]] = {}
@@ -93,6 +94,7 @@ def scan_cs2_inventory() -> Tuple[bool, List[Dict[str, Any]], str]:
                 "can_trade": can_trade,
                 "account_id": account_id,
                 "account_label": account_label,
+                "account_note": account_note,
             }
         )
     items.sort(key=lambda x: (not x["can_sell"], not x["can_trade"], x["name"]))

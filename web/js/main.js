@@ -24,12 +24,10 @@ function tabSwitch(name) {
   if (name === "transactions") { refreshTransactions(); refreshAnalytics(); }
   // analytics refresh is now handled by txSubTabSwitch
   if (name === "accounts") refreshAccounts();
-  if (name === "proxy") {
-    loadProxyConfig();
-  }
 }
 
 function settingsTabSwitch(name) {
+  if (typeof shouldAllowSettingsTabSwitch === "function" && !shouldAllowSettingsTabSwitch(name)) return;
   document.querySelectorAll('.settings-tab-pane').forEach(p => {
     p.classList.remove('active');
     p.style.display = 'none';
@@ -42,6 +40,7 @@ function settingsTabSwitch(name) {
     pane.classList.add('active');
   }
   if (btn) btn.classList.add('active');
+  if (name === 'proxy' && !(typeof isSettingsTabDirty === "function" && isSettingsTabDirty("proxy"))) loadProxyConfig();
 }
 
 function txSubTabSwitch(name) {
@@ -415,13 +414,16 @@ function getInventoryLowest(it) {
   return Number.isFinite(lowest) && lowest > 0 ? lowest : 0;
 }
 function getInventorySearchName(it) {
-  return [it.name, it.market_hash_name, it.account_label].filter(Boolean).join(" ").toLowerCase();
+  return [it.name, it.market_hash_name, it.account_label, it.account_note].filter(Boolean).join(" ").toLowerCase();
 }
 function getInventoryAccountId(it) {
   return (it.account_id || it.account_label || "current").toString();
 }
 function getInventoryAccountLabel(it) {
   return (it.account_label || it.account_id || "当前账号").toString();
+}
+function getInventoryAccountNote(it) {
+  return (it.account_note || "").toString().trim();
 }
 function readInventoryFiltersFromUI() {
   inventoryFilters = {
@@ -529,8 +531,8 @@ function renderInventoryFromCache() {
   }, { totalValue: 0, sellable: 0, locked: 0, missing: 0 });
   if (filtered.length === 0) {
     tbody.innerHTML = typeof txTableStateRow === "function"
-      ? txTableStateRow(8, lastInventoryItems.length ? "没有匹配的库存" : "暂无库存", lastInventoryItems.length ? "调整筛选条件后再看" : "刷新后会显示 Steam 库存", "empty")
-      : `<tr><td colspan="8">暂无库存</td></tr>`;
+      ? txTableStateRow(9, lastInventoryItems.length ? "没有匹配的库存" : "暂无库存", lastInventoryItems.length ? "调整筛选条件后再看" : "刷新后会显示 Steam 库存", "empty")
+      : `<tr><td colspan="9">暂无库存</td></tr>`;
   } else {
     tbody.innerHTML = filtered.map((it) => {
       const state = getInventoryState(it);
@@ -550,10 +552,12 @@ function renderInventoryFromCache() {
         : txEmptyValue();
       const statusNote = getInventoryStatusNote(it, state);
       const fullNote = it.cooldown_text || statusNote;
+      const accountNote = getInventoryAccountNote(it) || "-";
       return `
         <tr>
           <td><span class="item-name-cell">${iconHtml}<span title="${escapeHtml(it.name || mhn)}">${escapeHtml(it.name || mhn || "—")}</span></span></td>
           <td><span class="inventory-account-cell" title="${escapeHtml(getInventoryAccountLabel(it))}">${escapeHtml(getInventoryAccountLabel(it))}</span></td>
+          <td><span class="inventory-account-note-cell" title="${escapeHtml(accountNote)}">${escapeHtml(accountNote)}</span></td>
           <td><span class="inv-links">${linksHtml}</span></td>
           <td>${renderInventoryPill(state.sell)}</td>
           <td>${renderInventoryPill(state.trade)}</td>
@@ -1512,6 +1516,7 @@ function bindEvents() {
     el("sell-tx-price")?.focus();
   });
   el("btn-theme")?.addEventListener("click", () => Theme.cycle());
+  if (typeof bindSettingsDirtyTracking === "function") bindSettingsDirtyTracking();
 }
 function setupScrollToTop() {
   const btn = el("scroll-top-btn");
@@ -1529,7 +1534,7 @@ function setupScrollToTop() {
   });
 }
 function setupKeyboardShortcuts() {
-  const tabMap = { "1": "auto", "2": "transactions", "3": "inventory", "4": "accounts", "5": "proxy", "6": "steam-deals", "7": "gift", "8": "settings", "9": "debug" };
+  const tabMap = { "1": "auto", "2": "transactions", "3": "inventory", "4": "accounts", "5": "steam-deals", "6": "gift", "7": "settings", "8": "debug" };
   document.addEventListener("keydown", (e) => {
     if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT" || e.target.isContentEditable) return;
     if (e.altKey && tabMap[e.key]) {

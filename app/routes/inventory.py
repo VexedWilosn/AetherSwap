@@ -18,16 +18,28 @@ def _current_account_info() -> dict:
             or account_id
             or "当前账号"
         )
-        return {"account_id": account_id, "account_label": label}
+        note = (account.get("account_note") or "").strip()
+        return {"account_id": account_id, "account_label": label, "account_note": note}
     except Exception:
-        return {"account_id": "", "account_label": "当前账号"}
+        return {"account_id": "", "account_label": "当前账号", "account_note": ""}
 def _with_account_info(items: list) -> list:
     account = _current_account_info()
+    accounts_by_id = {}
+    try:
+        from app.accounts import list_accounts
+        accounts_by_id = {str(a.get("id") or ""): a for a in list_accounts()}
+    except Exception:
+        accounts_by_id = {}
     out = []
     for it in items or []:
         row = dict(it)
         row.setdefault("account_id", account["account_id"])
         row.setdefault("account_label", account["account_label"])
+        row_account = accounts_by_id.get(str(row.get("account_id") or ""))
+        if row_account:
+            row["account_note"] = (row_account.get("account_note") or "").strip()
+        elif not row.get("account_note"):
+            row["account_note"] = account["account_note"]
         out.append(row)
     return out
 def _inventory_response(items=None, *, cached: bool = False, message: str = "", **extra):

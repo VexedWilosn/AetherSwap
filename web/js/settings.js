@@ -3,6 +3,18 @@ let inventoryRefreshSeconds = 60;
 let inventoryTimer = null;
 let currentPriceRefreshMinutes = 10;
 let currentPriceTimer = null;
+let settingsLoadingConfig = false;
+let settingsDirtyTabs = new Set();
+let settingsDirtyTrackingBound = false;
+const SETTINGS_TAB_LABELS = {
+  trade: "交易策略",
+  sell: "出售策略",
+  notify: "推送与确认",
+  stability: "价格稳定性",
+  proxy: "网络代理",
+  system: "系统",
+};
+
 function readNumberInput(id, parser = parseFloat) {
   const node = el(id);
   if (!node) return undefined;
@@ -25,7 +37,67 @@ function applyInternalUiScale(value) {
     document.documentElement.style.zoom = "";
   }
 }
+
+function getActiveSettingsTabName() {
+  return document.querySelector(".settings-tab.active")?.dataset?.settab || "trade";
+}
+
+function getSettingsTabNameForElement(node) {
+  return node?.closest?.(".settings-tab-pane")?.dataset?.settabPane || getActiveSettingsTabName();
+}
+
+function updateSettingsDirtyUI() {
+  document.querySelectorAll(".settings-tab").forEach((tab) => {
+    const name = tab.dataset?.settab;
+    const dirty = settingsDirtyTabs.has(name);
+    tab.classList.toggle("is-dirty", dirty);
+    tab.title = dirty ? `${SETTINGS_TAB_LABELS[name] || name} 有未保存修改` : "";
+  });
+}
+
+function markSettingsTabDirty(name) {
+  if (settingsLoadingConfig) return;
+  const tabName = name || getActiveSettingsTabName();
+  if (!tabName) return;
+  settingsDirtyTabs.add(tabName);
+  updateSettingsDirtyUI();
+}
+
+function clearSettingsTabDirty(name) {
+  if (name) settingsDirtyTabs.delete(name);
+  else settingsDirtyTabs.clear();
+  updateSettingsDirtyUI();
+}
+
+function isSettingsTabDirty(name) {
+  return settingsDirtyTabs.has(name);
+}
+
+function shouldAllowSettingsTabSwitch(nextName) {
+  const currentName = getActiveSettingsTabName();
+  if (!nextName || nextName === currentName || !settingsDirtyTabs.has(currentName)) return true;
+  const label = SETTINGS_TAB_LABELS[currentName] || currentName;
+  return confirm(`当前「${label}」有未保存修改，确定切换到其他设置页？`);
+}
+
+function bindSettingsDirtyTracking() {
+  if (settingsDirtyTrackingBound) return;
+  const panel = el("panel-settings");
+  if (!panel) return;
+  settingsDirtyTrackingBound = true;
+  const markFromEvent = (event) => {
+    const target = event.target;
+    if (!target?.matches?.("input, textarea, select")) return;
+    if (target.type === "file") return;
+    markSettingsTabDirty(getSettingsTabNameForElement(target));
+  };
+  panel.addEventListener("input", markFromEvent);
+  panel.addEventListener("change", markFromEvent);
+}
+
 async function loadConfig() {
+  settingsLoadingConfig = true;
+  try {
   const d = await fetchJson(API + "/config");
   const c = d.config || {};
   const i = c.iflow || {};
@@ -155,16 +227,6 @@ async function loadConfig() {
   if (gSubFail) gSubFail.value = n.subject_fail ?? "";
   const gEmailTimeout = el("cfg-email_timeout_seconds");
   if (gEmailTimeout) gEmailTimeout.value = n.email_timeout_seconds ?? "";
-  const sg = c.steam_guard || {};
-  const gSteamSecret = el("cfg-steam-shared-secret");
-  if (gSteamSecret) gSteamSecret.value = sg.shared_secret ?? "";
-  const sc = c.steam_confirm || {};
-  const gAutoConfirm = el("cfg-steam-auto-confirm");
-  if (gAutoConfirm) gAutoConfirm.checked = !!sc.enabled;
-  const gIdentitySecret = el("cfg-steam-identity-secret");
-  if (gIdentitySecret) gIdentitySecret.value = sc.identity_secret ?? "";
-  const gDeviceId = el("cfg-steam-device-id");
-  if (gDeviceId) gDeviceId.value = sc.device_id ?? "";
   const gFx = el("cfg-exchange-refresh-hours");
   if (gFx) gFx.value = sys.exchange_rate_refresh_hours ?? "";
   const gKeepalive = el("cfg-session-keepalive-hours");
@@ -188,6 +250,10 @@ async function loadConfig() {
   if (gSdRegionThreads) gSdRegionThreads.value = sd.max_region_threads ?? "";
   // 加载完成后刷新 UX 状态组件
   updateUXStatus(c);
+  clearSettingsTabDirty();
+  } finally {
+    settingsLoadingConfig = false;
+  }
 }
 
 function formToConfig() {
@@ -273,14 +339,6 @@ function formToConfig() {
       subject_fail: el("cfg-subject_fail") ? el("cfg-subject_fail").value.trim() : undefined,
       email_timeout_seconds: el("cfg-email_timeout_seconds") ? parseInt(el("cfg-email_timeout_seconds").value, 10) || undefined : undefined,
     },
-    steam_guard: {
-      shared_secret: el("cfg-steam-shared-secret") ? el("cfg-steam-shared-secret").value.trim() : undefined,
-    },
-    steam_confirm: {
-      enabled: !!el("cfg-steam-auto-confirm")?.checked,
-      identity_secret: el("cfg-steam-identity-secret") ? el("cfg-steam-identity-secret").value.trim() : undefined,
-      device_id: el("cfg-steam-device-id") ? el("cfg-steam-device-id").value.trim() : undefined,
-    },
     system: {
       exchange_rate_refresh_hours: readNumberInput("cfg-exchange-refresh-hours"),
       session_keepalive_hours: readNumberInput("cfg-session-keepalive-hours"),
@@ -294,12 +352,115 @@ function formToConfig() {
     },
   };
 }
+
+function removeUndefinedValues(value) {
+  if (Array.isArray(value)) return value;
+  if (!value || typeof value !== "object") return value;
+  const out = {};
+  Object.entries(value).forEach(([key, child]) => {
+    if (child === undefined) return;
+    const compacted = removeUndefinedValues(child);
+    if (compacted === undefined) return;
+    out[key] = compacted;
+  });
+  return out;
+}
+
+function pickKeys(source, keys) {
+  const out = {};
+  keys.forEach((key) => {
+    if (source && source[key] !== undefined) out[key] = source[key];
+  });
+  return out;
+}
+
+function configForSettingsTab(tabName) {
+  const all = formToConfig();
+  const tab = tabName || getActiveSettingsTabName();
+  if (tab === "trade") {
+    return removeUndefinedValues({
+      iflow: all.iflow,
+      buff: pickKeys(all.buff, ["pay_method", "game", "price_tolerance"]),
+      pipeline: pickKeys(all.pipeline, [
+        "target_balance",
+        "max_discount",
+        "huge_profit_offset",
+        "iflow_top_n",
+        "exclude_keywords",
+        "start_time_limit_enabled",
+        "start_time_hour",
+        "end_time_hour",
+      ]),
+    });
+  }
+  if (tab === "sell") {
+    return removeUndefinedValues({
+      pipeline: pickKeys(all.pipeline, [
+        "sell_price_ratio",
+        "sell_strategy",
+        "sell_price_offset",
+        "sell_price_wall_volume",
+        "sell_price_max_ignore_volume",
+        "sell_trend_days",
+        "max_listings_per_item",
+        "listing_delay_seconds",
+        "resell_ratio",
+        "safe_purchase_hard_qty_cap",
+        "safe_purchase_liquidity_ratio",
+        "safe_purchase_low_price_threshold",
+        "safe_purchase_low_price_penalty",
+        "safe_purchase_low_price_hard_cap",
+        "sell_pressure_orders_n",
+        "sell_pressure_threshold",
+      ]),
+    });
+  }
+  if (tab === "notify") return removeUndefinedValues({ notify: all.notify });
+  if (tab === "stability") return removeUndefinedValues({ stability: all.stability });
+  if (tab === "system") {
+    return removeUndefinedValues({
+      pipeline: pickKeys(all.pipeline, [
+        "retry_interval_seconds",
+        "current_price_refresh_minutes",
+        "market_price_circuit_enabled",
+      ]),
+      inventory: all.inventory,
+      system: all.system,
+      steam_deals: all.steam_deals,
+    });
+  }
+  return removeUndefinedValues(all);
+}
+
 async function saveConfigFromForm() {
   const d = await fetchJson(API + "/config");
-  const merged = deepMerge(d.config || {}, formToConfig());
+  const merged = deepMerge(d.config || {}, removeUndefinedValues(formToConfig()));
   await fetchJson(API + "/config", { method: "POST", body: JSON.stringify({ config: merged }) });
   await loadConfig();
   setupInventoryAutoRefresh();
+}
+
+async function saveSettingsTab(tabName) {
+  const tab = tabName || getActiveSettingsTabName();
+  if (tab === "proxy") {
+    await saveProxyConfig();
+    clearSettingsTabDirty("proxy");
+    return;
+  }
+  const d = await fetchJson(API + "/config");
+  const merged = deepMerge(d.config || {}, configForSettingsTab(tab));
+  await fetchJson(API + "/config", { method: "POST", body: JSON.stringify({ config: merged }) });
+  if (tab === "system") {
+    const invRefresh = readNumberInput("cfg-inv-refresh", (v) => parseInt(v, 10));
+    const priceRefresh = readNumberInput("cfg-current-price-refresh-minutes", (v) => parseInt(v, 10));
+    inventoryRefreshSeconds = Number.isFinite(invRefresh) ? invRefresh : 60;
+    currentPriceRefreshMinutes = Number.isFinite(priceRefresh) ? priceRefresh : 10;
+    applyInternalUiScale(el("cfg-ui_scale")?.value || "0.7");
+    setupInventoryAutoRefresh();
+  }
+  if (tab === "notify") updateUXStatus(merged);
+  clearSettingsTabDirty(tab);
+  toast("已保存", SETTINGS_TAB_LABELS[tab] || "设置");
 }
 async function startPipeline() {
   try {
@@ -485,6 +646,7 @@ function _showWizard(startAtBuffStep = false) {
   const steps = overlay.querySelectorAll(".wizard-step");
   const btnNext = el("wizard-btn-next");
   const btnSkip = el("wizard-btn-skip");
+  const btnPrev = el("wizard-btn-prev");
   const noRemindCb = el("wizard-no-remind");
 
   // Buff relogin state
@@ -502,6 +664,7 @@ function _showWizard(startAtBuffStep = false) {
   }
 
   function updateButtons(step) {
+    if (btnPrev) btnPrev.style.display = step === 0 ? "none" : "";
     if (step === 0) {
       btnNext.textContent = "开始配置 →";
       btnSkip.textContent = "跳过全部";
@@ -630,24 +793,36 @@ function _showWizard(startAtBuffStep = false) {
       if (currentStep === 1) {
         const username = (el("wiz-account-username")?.value || "").trim();
         const password = (el("wiz-account-password")?.value || "").trim();
-        const steamId = (el("wiz-account-steam-id")?.value || "").trim();
-        const displayName = (el("wiz-account-display-name")?.value || "").trim();
-        if (!username && !steamId && !displayName) return;
+        const accountNote = (el("wiz-account-note")?.value || "").trim();
+        if (!username && !accountNote) return;
         try {
           const accData = await fetchJson(API + "/accounts");
           const existing = (accData.accounts || []).find((a) =>
-            (steamId && a.steam_id === steamId) || (username && a.username === username)
+            username && a.username === username
           );
           if (existing) {
+            if (accountNote) {
+              await fetchJson(API + "/accounts/" + encodeURIComponent(existing.id), {
+                method: "PUT",
+                body: JSON.stringify({ account_note: accountNote }),
+              });
+            }
             await fetchJson(API + "/accounts/" + encodeURIComponent(existing.id) + "/set_current", { method: "POST" });
-          } else {
+          } else if (!username && accountNote) {
+            const target = (accData.accounts || []).find((a) => a.id === accData.current_id) || (accData.accounts || [])[0];
+            if (target) {
+              await fetchJson(API + "/accounts/" + encodeURIComponent(target.id), {
+                method: "PUT",
+                body: JSON.stringify({ account_note: accountNote }),
+              });
+            }
+          } else if (username) {
             const r = await fetchJson(API + "/accounts", {
               method: "POST",
               body: JSON.stringify({
                 username,
                 password,
-                steam_id: steamId,
-                display_name: displayName,
+                account_note: accountNote,
                 avatar_url: "",
               }),
             });
@@ -690,10 +865,6 @@ function _showWizard(startAtBuffStep = false) {
             method: "POST",
             body: JSON.stringify({ config: { ...cfg, steam_guard: sg, steam_confirm: sc } }),
           });
-          const gSteamSecret = el("cfg-steam-shared-secret");
-          if (gSteamSecret && ss) gSteamSecret.value = ss;
-          const gIdentSec = el("cfg-steam-identity-secret");
-          if (gIdentSec && is) gIdentSec.value = is;
         } else {
           try { await refreshAccounts(); } catch { }
         }
@@ -743,6 +914,20 @@ function _showWizard(startAtBuffStep = false) {
     }
   };
 
+  if (btnPrev) {
+    btnPrev.onclick = () => {
+      if (currentStep <= 0) return;
+      if (currentStep === 4 && _buffReloginStarted) {
+        fetchJson(API + "/auth/buff/relogin_finish", {
+          method: "POST",
+          body: JSON.stringify({ success: false }),
+        }).catch(() => { });
+        _buffReloginStarted = false;
+      }
+      goToStep(currentStep - 1);
+    };
+  }
+
   btnSkip.onclick = () => {
     if (currentStep === 0 || currentStep === TOTAL_STEPS) {
       closeWizard(null);
@@ -774,7 +959,6 @@ async function updateUXStatus(cfg) {
     accounts = d.accounts || [];
   } catch (e) { }
   updateNavBadges(cfg, accounts);
-  updateLegacyGuardVisibility(accounts);
   renderGettingStartedCard(cfg, accounts);
 }
 
@@ -792,17 +976,6 @@ function updateNavBadges(cfg, accounts) {
     badgeAccounts.classList.toggle("hidden", accountOk && guardStatus.complete);
     badgeAccounts.title = !accountOk ? "尚未添加账号" : (!guardStatus.complete ? "Steam 账号令牌未配置" : "");
   }
-}
-
-function updateLegacyGuardVisibility(accounts) {
-  const group = el("legacy-steam-guard-settings");
-  if (!group) return;
-  const hasAccountLevelGuard = (Array.isArray(accounts) ? accounts : []).some((a) => {
-    const status = a.steam_guard_status || {};
-    const guard = a.steam_guard || {};
-    return !!status.account_configured || !!guard.shared_secret;
-  });
-  group.style.display = hasAccountLevelGuard ? "none" : "";
 }
 
 function renderGettingStartedCard(cfg, accounts) {

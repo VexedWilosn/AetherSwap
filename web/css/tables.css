@@ -111,9 +111,19 @@
 
 #panel-inventory .panel-toolbar-actions {
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
   margin-left: auto;
+  justify-content: flex-end;
+}
+
+#panel-inventory .panel-toolbar-actions #btn-refresh-inventory {
+  flex: 0 0 auto;
+  order: 2;
+}
+
+#panel-inventory .panel-toolbar-actions .inventory-cache-note {
+  order: 1;
 }
 
 #panel-inventory .toolbar-title {
@@ -912,13 +922,18 @@
   font-family: var(--font-mono);
 }
 
-#panel-transactions .tx-account-cell {
+#panel-transactions .tx-account-cell,
+#panel-transactions .tx-account-note-cell {
   display: inline-block;
   max-width: 128px;
   overflow: hidden;
   color: var(--text-main);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+#panel-transactions .tx-account-note-cell {
+  color: var(--text-secondary);
 }
 
 #panel-transactions .tx-unlock-cell {
@@ -1122,7 +1137,8 @@
   color: var(--success);
 }
 
-#panel-inventory .inventory-account-cell {
+#panel-inventory .inventory-account-cell,
+#panel-inventory .inventory-account-note-cell {
   display: inline-block;
   width: 100%;
   max-width: 128px;
@@ -1133,6 +1149,11 @@
   text-overflow: ellipsis;
   vertical-align: middle;
   white-space: nowrap;
+}
+
+#panel-inventory .inventory-account-note-cell {
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 
 #panel-inventory .inventory-unlock {
@@ -1170,7 +1191,10 @@
 #panel-inventory .inventory-cache-note {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  flex: 0 1 260px;
   min-height: 32px;
+  min-width: 0;
   max-width: 260px;
   padding: 0 10px;
   overflow: hidden;
@@ -1184,7 +1208,7 @@
 }
 
 #panel-inventory .inventory-cache-note:empty {
-  display: none;
+  visibility: hidden;
 }
 
 #panel-inventory .inventory-cache-note.text-bad {
@@ -1195,38 +1219,43 @@
 
 #inv-table th:nth-child(1),
 #inv-table td:nth-child(1) {
-  width: 25%;
+  width: 23%;
 }
 
 #inv-table th:nth-child(2),
 #inv-table td:nth-child(2) {
-  width: 10%;
+  width: 9%;
 }
 
 #inv-table th:nth-child(3),
 #inv-table td:nth-child(3) {
-  width: 10%;
+  width: 9%;
 }
 
 #inv-table th:nth-child(4),
-#inv-table td:nth-child(4),
-#inv-table th:nth-child(5),
-#inv-table td:nth-child(5) {
-  width: 10%;
+#inv-table td:nth-child(4) {
+  width: 9%;
 }
 
+#inv-table th:nth-child(5),
+#inv-table td:nth-child(5),
 #inv-table th:nth-child(6),
 #inv-table td:nth-child(6) {
-  width: 15%;
+  width: 8%;
 }
 
 #inv-table th:nth-child(7),
 #inv-table td:nth-child(7) {
-  width: 8%;
+  width: 14%;
 }
 
 #inv-table th:nth-child(8),
 #inv-table td:nth-child(8) {
+  width: 8%;
+}
+
+#inv-table th:nth-child(9),
+#inv-table td:nth-child(9) {
   width: 12%;
 }
 
@@ -1373,49 +1402,56 @@
 #transactions-table-purchases th:nth-child(5),
 #transactions-table-purchases td:nth-child(5) {
   width: 1%;
-  min-width: 15ch;
+  min-width: 9ch;
   text-align: center;
-  white-space: normal;
 }
 
 #transactions-table-purchases th:nth-child(6),
 #transactions-table-purchases td:nth-child(6) {
   width: 1%;
-  min-width: 9ch;
+  min-width: 15ch;
   text-align: center;
-}
-
-#transactions-table-purchases th:nth-child(n+7),
-#transactions-table-purchases td:nth-child(n+7) {
-  text-align: center;
+  white-space: normal;
 }
 
 #transactions-table-purchases th:nth-child(7),
-#transactions-table-purchases td:nth-child(7),
-#transactions-table-purchases th:nth-child(9),
-#transactions-table-purchases td:nth-child(9),
-#transactions-table-purchases th:nth-child(11),
-#transactions-table-purchases td:nth-child(11),
-#transactions-table-purchases th:nth-child(14),
-#transactions-table-purchases td:nth-child(14) {
-  width: 7%;
+#transactions-table-purchases td:nth-child(7) {
+  width: 1%;
   min-width: 9ch;
+  text-align: center;
+}
+
+#transactions-table-purchases th:nth-child(n+8),
+#transactions-table-purchases td:nth-child(n+8) {
+  text-align: center;
 }
 
 #transactions-table-purchases th:nth-child(8),
 #transactions-table-purchases td:nth-child(8),
 #transactions-table-purchases th:nth-child(10),
 #transactions-table-purchases td:nth-child(10),
-#transactions-table-purchases th:nth-child(13),
-#transactions-table-purchases td:nth-child(13) {
-  width: 8%;
-  min-width: 8ch;
-}
-
 #transactions-table-purchases th:nth-child(12),
 #transactions-table-purchases td:nth-child(12),
 #transactions-table-purchases th:nth-child(15),
 #transactions-table-purchases td:nth-child(15) {
+  width: 7%;
+  min-width: 9ch;
+}
+
+#transactions-table-purchases th:nth-child(9),
+#transactions-table-purchases td:nth-child(9),
+#transactions-table-purchases th:nth-child(11),
+#transactions-table-purchases td:nth-child(11),
+#transactions-table-purchases th:nth-child(14),
+#transactions-table-purchases td:nth-child(14) {
+  width: 8%;
+  min-width: 8ch;
+}
+
+#transactions-table-purchases th:nth-child(13),
+#transactions-table-purchases td:nth-child(13),
+#transactions-table-purchases th:nth-child(16),
+#transactions-table-purchases td:nth-child(16) {
   width: 9%;
   min-width: 11ch;
 }
@@ -1444,39 +1480,46 @@
   text-align: center;
 }
 
-#transactions-table-purchase-history th:nth-child(n+6),
-#transactions-table-purchase-history td:nth-child(n+6) {
+#transactions-table-purchase-history th:nth-child(6),
+#transactions-table-purchase-history td:nth-child(6) {
+  width: 1%;
+  min-width: 9ch;
   text-align: center;
 }
 
-#transactions-table-purchase-history th:nth-child(6),
-#transactions-table-purchase-history td:nth-child(6),
-#transactions-table-purchase-history th:nth-child(8),
-#transactions-table-purchase-history td:nth-child(8),
-#transactions-table-purchase-history th:nth-child(11),
-#transactions-table-purchase-history td:nth-child(11),
-#transactions-table-purchase-history th:nth-child(14),
-#transactions-table-purchase-history td:nth-child(14) {
-  width: 7%;
-  min-width: 9ch;
+#transactions-table-purchase-history th:nth-child(n+7),
+#transactions-table-purchase-history td:nth-child(n+7) {
+  text-align: center;
 }
 
 #transactions-table-purchase-history th:nth-child(7),
 #transactions-table-purchase-history td:nth-child(7),
-#transactions-table-purchase-history th:nth-child(10),
-#transactions-table-purchase-history td:nth-child(10),
-#transactions-table-purchase-history th:nth-child(13),
-#transactions-table-purchase-history td:nth-child(13) {
-  width: 8%;
-  min-width: 8ch;
-}
-
 #transactions-table-purchase-history th:nth-child(9),
 #transactions-table-purchase-history td:nth-child(9),
 #transactions-table-purchase-history th:nth-child(12),
 #transactions-table-purchase-history td:nth-child(12),
 #transactions-table-purchase-history th:nth-child(15),
 #transactions-table-purchase-history td:nth-child(15) {
+  width: 7%;
+  min-width: 9ch;
+}
+
+#transactions-table-purchase-history th:nth-child(8),
+#transactions-table-purchase-history td:nth-child(8),
+#transactions-table-purchase-history th:nth-child(11),
+#transactions-table-purchase-history td:nth-child(11),
+#transactions-table-purchase-history th:nth-child(14),
+#transactions-table-purchase-history td:nth-child(14) {
+  width: 8%;
+  min-width: 8ch;
+}
+
+#transactions-table-purchase-history th:nth-child(10),
+#transactions-table-purchase-history td:nth-child(10),
+#transactions-table-purchase-history th:nth-child(13),
+#transactions-table-purchase-history td:nth-child(13),
+#transactions-table-purchase-history th:nth-child(16),
+#transactions-table-purchase-history td:nth-child(16) {
   width: 9%;
   min-width: 11ch;
 }
@@ -1565,9 +1608,14 @@
   }
 
   #panel-inventory .panel-toolbar-actions {
+    flex-wrap: wrap;
     justify-content: flex-start;
     margin-left: 0;
     width: 100%;
+  }
+
+  #panel-inventory .panel-toolbar-actions .inventory-cache-note {
+    flex: 1 1 auto;
   }
 
   #panel-transactions table {
@@ -1672,18 +1720,19 @@
 
   #transactions-table-purchases td:nth-child(2)::before { content: "时间"; }
   #transactions-table-purchases td:nth-child(4)::before { content: "账号"; }
-  #transactions-table-purchases td:nth-child(5)::before { content: "解禁"; }
-  #transactions-table-purchases td:nth-child(6)::before { content: "自动化"; }
-  #transactions-table-purchases td:nth-child(8)::before { content: "购入"; }
-  #transactions-table-purchases td:nth-child(10)::before { content: "市场"; }
-  #transactions-table-purchases td:nth-child(12)::before { content: "折扣"; }
-  #transactions-table-purchases td:nth-child(13)::before { content: "收益"; }
+  #transactions-table-purchases td:nth-child(5)::before { content: "备注"; }
+  #transactions-table-purchases td:nth-child(6)::before { content: "解禁"; }
+  #transactions-table-purchases td:nth-child(7)::before { content: "自动化"; }
+  #transactions-table-purchases td:nth-child(9)::before { content: "购入"; }
+  #transactions-table-purchases td:nth-child(11)::before { content: "市场"; }
+  #transactions-table-purchases td:nth-child(13)::before { content: "折扣"; }
+  #transactions-table-purchases td:nth-child(14)::before { content: "收益"; }
 
-  #transactions-table-purchases.show-extra-cols td:nth-child(7)::before { content: "assetid"; }
-  #transactions-table-purchases.show-extra-cols td:nth-child(9)::before { content: "买入市场"; }
-  #transactions-table-purchases.show-extra-cols td:nth-child(11)::before { content: "税后"; }
-  #transactions-table-purchases.show-extra-cols td:nth-child(14)::before { content: "自用"; }
-  #transactions-table-purchases.show-extra-cols td:nth-child(15)::before { content: "变动"; }
+  #transactions-table-purchases.show-extra-cols td:nth-child(8)::before { content: "assetid"; }
+  #transactions-table-purchases.show-extra-cols td:nth-child(10)::before { content: "买入市场"; }
+  #transactions-table-purchases.show-extra-cols td:nth-child(12)::before { content: "税后"; }
+  #transactions-table-purchases.show-extra-cols td:nth-child(15)::before { content: "自用"; }
+  #transactions-table-purchases.show-extra-cols td:nth-child(16)::before { content: "变动"; }
 
   #transactions-table-purchases td:nth-child(3) {
     grid-column: 1 / -1;

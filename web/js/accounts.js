@@ -24,6 +24,7 @@ function renderAccountDetail(acc, currentId) {
   const isCurrent = acc.id === currentId;
   const name = acc.display_name || acc.username || acc.steam_id || "未命名";
   const meta = [acc.username, acc.steam_id].filter(Boolean).join(" · ") || "—";
+  const accountNote = (acc.account_note || "").trim();
   const avatar = buildAccountAvatar(name, acc.avatar_url, 56);
   const currency = (acc.currency_code || "").toUpperCase();
   let currencyLabel = currency || "—";
@@ -75,7 +76,8 @@ function renderAccountDetail(acc, currentId) {
         <div class="kv-grid">
           <div class="kv"><div class="k">Steam 用户名</div><div class="v mono">${escapeHtml(acc.username || "—")}</div></div>
           <div class="kv"><div class="k">Steam ID</div><div class="v mono">${escapeHtml(acc.steam_id || "—")}</div></div>
-          <div class="kv"><div class="k">显示名</div><div class="v">${escapeHtml(acc.display_name || "—")}</div></div>
+          <div class="kv"><div class="k">Steam 昵称</div><div class="v">${escapeHtml(acc.display_name || "—")}</div></div>
+          <div class="kv"><div class="k">账号备注</div><div class="v">${escapeHtml(accountNote || "-")}</div></div>
           <div class="kv"><div class="k">头像</div><div class="v">${acc.avatar_url ? "已获取" : "未获取"}</div></div>
           <div class="kv"><div class="k">结算币种</div><div class="v mono">${escapeHtml(currencyLabel)}</div></div>
           <div class="kv"><div class="k">地区</div><div class="v mono">${escapeHtml(regionLabel)}</div></div>
@@ -302,7 +304,7 @@ function renderAccountsUI(accs, currentId) {
   const term = (accountsSearchTerm || "").trim().toLowerCase();
   const filtered = term
     ? accs.filter((a) => {
-      const hay = [a.display_name, a.username, a.steam_id].filter(Boolean).join(" ").toLowerCase();
+      const hay = [a.display_name, a.username, a.steam_id, a.account_note].filter(Boolean).join(" ").toLowerCase();
       return hay.includes(term);
     })
     : accs;
@@ -477,11 +479,13 @@ function openAccountForm(editId = null) {
   const pw = el("acc-password");
   const sid = el("acc-steam-id");
   const dn = el("acc-display-name");
+  const note = el("acc-account-note");
   if (title) title.textContent = editId ? "编辑账号" : "添加账号";
   if (un) un.value = "";
   if (pw) pw.value = "";
   if (sid) sid.value = "";
   if (dn) dn.value = "";
+  if (note) note.value = "";
   if (editId) {
     const accs = [];
     fetchJson(API + "/accounts").then((d) => {
@@ -491,6 +495,7 @@ function openAccountForm(editId = null) {
         if (pw) pw.placeholder = "已保存，留空不修改";
         if (sid) sid.value = a.steam_id || "";
         if (dn) dn.value = a.display_name || "";
+        if (note) note.value = a.account_note || "";
       }
     }).catch(() => { });
   } else if (pw) pw.placeholder = "保存后仅用于自动填充";
@@ -507,9 +512,10 @@ async function saveAccountForm() {
   const pw = (el("acc-password")?.value || "").trim();
   const sid = (el("acc-steam-id")?.value || "").trim();
   const dn = (el("acc-display-name")?.value || "").trim();
+  const note = (el("acc-account-note")?.value || "").trim();
   try {
     if (accountEditId) {
-      const body = { username: un, steam_id: sid, display_name: dn };
+      const body = { username: un, steam_id: sid, display_name: dn, account_note: note };
       if (pw) body.password = pw;
       const r = await fetchJson(API + "/accounts/" + accountEditId, {
         method: "PUT",
@@ -520,7 +526,7 @@ async function saveAccountForm() {
     } else {
       const r = await fetchJson(API + "/accounts", {
         method: "POST",
-        body: JSON.stringify({ username: un, password: pw, steam_id: sid, display_name: dn, avatar_url: "" }),
+        body: JSON.stringify({ username: un, password: pw, steam_id: sid, display_name: dn, account_note: note, avatar_url: "" }),
       });
       if (r.ok) { toast("已添加"); closeAccountForm(); refreshAccounts(); }
       else toast("添加失败", r.error || "");

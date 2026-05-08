@@ -77,6 +77,7 @@ class State:
                         or account.get("steam_id")
                         or account_id
                     )
+                    p["account_note"] = (account.get("account_note") or "").strip()
             except Exception:
                 pass
         db_append_purchase(p)

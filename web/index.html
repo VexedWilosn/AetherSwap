@@ -84,14 +84,6 @@
         </button>
 
         <div class="nav-group-label">工具</div>
-        <button class="nav-item" data-tab="proxy">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"></circle>
-            <line x1="2" y1="12" x2="22" y2="12"></line>
-            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-          </svg>
-          <span>代理池</span>
-        </button>
         <button class="nav-item" data-tab="steam-deals">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
@@ -321,7 +313,7 @@
             <div class="dash-card-body">
               <div class="dash-shortcut-grid">
                 <button class="dash-shortcut" onclick="tabSwitch('settings')">系统设置</button>
-                <button class="dash-shortcut" onclick="tabSwitch('proxy')">代理池</button>
+                <button class="dash-shortcut" onclick="tabSwitch('settings'); settingsTabSwitch('proxy')">网络代理</button>
                 <button class="dash-shortcut" onclick="tabSwitch('steam-deals')">Steam 折扣</button>
                 <button class="dash-shortcut" onclick="tabSwitch('gift')">Steam 赠礼</button>
               </div>
@@ -378,7 +370,7 @@
         <div class="tx-filter-bar">
           <div class="tx-filter-search">
             <span class="label">筛选</span>
-            <input type="search" id="holdings-filter-search" placeholder="搜索物品名或 assetid" />
+            <input type="search" id="holdings-filter-search" placeholder="搜索物品名、备注或 assetid" />
           </div>
           <select id="holdings-filter-status" title="按持仓状态筛选">
             <option value="all">全部状态</option>
@@ -456,6 +448,7 @@
                 <th data-col="time">时间</th>
                 <th data-col="name">物品/说明</th>
                 <th data-col="account">账号</th>
+                <th data-col="account_note">账号备注</th>
                 <th data-col="unlock">解禁时间</th>
                 <th data-col="automation">自动化</th>
                 <th data-col="assetid" class="tx-extra-col">assetid</th>
@@ -498,7 +491,7 @@
         <div class="tx-filter-bar tx-filter-bar--history">
           <div class="tx-filter-search">
             <span class="label">筛选</span>
-            <input type="search" id="history-filter-search" placeholder="搜索物品名或 assetid" />
+            <input type="search" id="history-filter-search" placeholder="搜索物品名、备注或 assetid" />
           </div>
           <select id="history-filter-status" title="按交易状态筛选">
             <option value="all">全部状态</option>
@@ -540,6 +533,7 @@
                 <th>时间</th>
                 <th>物品/说明</th>
                 <th>账号</th>
+                <th>账号备注</th>
                 <th>自动化</th>
                 <th class="tx-extra-col">assetid</th>
                 <th>购入价</th>
@@ -693,8 +687,12 @@
                 <input type="text" id="acc-steam-id" placeholder="76561198xxx" />
               </div>
               <div class="field">
-                <label>显示名（登录后自动获取）</label>
+                <label>Steam 昵称（登录后自动获取）</label>
                 <input type="text" id="acc-display-name" placeholder="个人资料名称" readonly />
+              </div>
+              <div class="field">
+                <label>账号备注</label>
+                <input type="text" id="acc-account-note" placeholder="例如：主号 / 小号 / 用途" />
               </div>
             </div>
             <div class="account-form-actions">
@@ -708,15 +706,16 @@
       <section id="panel-settings" class="panel">
         <div class="settings-layout">
         <div class="settings-tab-bar">
-          <button class="settings-tab active" data-settab="datasource" onclick="settingsTabSwitch('datasource')">数据源</button>
-          <button class="settings-tab" data-settab="trade" onclick="settingsTabSwitch('trade')">交易策略</button>
+          <button class="settings-tab active" data-settab="trade" onclick="settingsTabSwitch('trade')">交易策略</button>
           <button class="settings-tab" data-settab="sell" onclick="settingsTabSwitch('sell')">出售策略</button>
-          <button class="settings-tab" data-settab="notify" onclick="settingsTabSwitch('notify')">推送通知</button>
-          <button class="settings-tab" data-settab="advanced" onclick="settingsTabSwitch('advanced')">高级参数</button>
+          <button class="settings-tab" data-settab="notify" onclick="settingsTabSwitch('notify')">推送与确认</button>
+          <button class="settings-tab" data-settab="stability" onclick="settingsTabSwitch('stability')">价格稳定性</button>
+          <button class="settings-tab" data-settab="proxy" onclick="settingsTabSwitch('proxy')">网络代理</button>
+          <button class="settings-tab" data-settab="system" onclick="settingsTabSwitch('system')">系统</button>
         </div>
-        <div class="settings-tab-pane active" data-settab-pane="datasource">
+        <div class="settings-tab-pane active" data-settab-pane="trade">
           <div class="settings-group">
-            <h2>SteamDT 配置</h2>
+            <h2>SteamDT 数据源</h2>
             <div class="form-grid">
               <div class="field">
                 <label for="cfg-games">SteamDT 类型</label>
@@ -752,8 +751,6 @@
             </div>
           </div>
 
-        </div>
-        <div class="settings-tab-pane" data-settab-pane="trade" style="display:none">
           <div class="settings-group">
             <h2>Buff 交易策略</h2>
             <div class="form-grid">
@@ -819,6 +816,9 @@
             </div>
           </div>
 
+          <div class="form-actions form-actions--tab">
+            <button class="btn btn-primary" onclick="saveSettingsTab('trade')">保存交易策略</button>
+          </div>
         </div>
         <div class="settings-tab-pane" data-settab-pane="sell" style="display:none">
           <div class="settings-group">
@@ -917,42 +917,11 @@
             </div>
           </div>
 
+          <div class="form-actions form-actions--tab">
+            <button class="btn btn-primary" onclick="saveSettingsTab('sell')">保存出售策略</button>
+          </div>
         </div>
         <div class="settings-tab-pane" data-settab-pane="notify" style="display:none">
-          <div class="settings-group settings-group--legacy-guard" id="legacy-steam-guard-settings">
-            <h2>Steam 令牌（兼容旧配置）</h2>
-            <p class="settings-helper">
-              新方案请在「账号管理」里为每个 Steam 账号配置令牌。本区域仅作为旧配置迁移期的全局 fallback，账号未配置时才会读取。
-            </p>
-            <div class="legacy-guard-actions">
-              <button type="button" class="btn btn-sm btn-secondary" onclick="document.querySelector('[data-tab=accounts]')?.click()">前往账号管理</button>
-            </div>
-            <div class="form-grid">
-              <div class="field">
-                <label for="cfg-steam-shared-secret">shared_secret</label>
-                <input type="password" id="cfg-steam-shared-secret"
-                  placeholder="* 必填 — 从 Steam 手机令牌中提取的 shared_secret (Base64)" autocomplete="new-password" />
-              </div>
-              <div class="field field--switch">
-                <label class="checkbox-wrapper">
-                  <input type="checkbox" id="cfg-steam-auto-confirm" />
-                  <span>自动确认上架</span>
-                </label>
-              </div>
-              <div class="field-row">
-                <div class="field">
-                  <label for="cfg-steam-identity-secret">identity_secret</label>
-                  <input type="password" id="cfg-steam-identity-secret"
-                    placeholder="* 必填 — Steam 手机确认 identity_secret (Base64)" autocomplete="new-password" />
-                </div>
-                <div class="field">
-                  <label for="cfg-steam-device-id">device_id</label>
-                  <input type="password" id="cfg-steam-device-id" placeholder="Steam 手机确认 device_id"
-                    autocomplete="new-password" />
-                </div>
-              </div>
-            </div>
-          </div>
 
           <div class="settings-group">
             <h2>推送与邮箱确认</h2>
@@ -1017,10 +986,13 @@
             </div>
           </div>
 
+          <div class="form-actions form-actions--tab">
+            <button class="btn btn-primary" onclick="saveSettingsTab('notify')">保存推送与确认</button>
+          </div>
         </div>
-        <div class="settings-tab-pane" data-settab-pane="advanced" style="display:none">
+        <div class="settings-tab-pane" data-settab-pane="stability" style="display:none">
           <div class="settings-group">
-            <h2>系统参数</h2>
+            <h2>价格稳定性指标</h2>
             <div class="form-grid">
               <div class="field-row field-row--4">
                 <div class="field">
@@ -1075,179 +1047,14 @@
                   </label>
                 </div>
               </div>
-              <div class="field-row">
-                <div class="field">
-                  <label>无符合时重试间隔（秒）</label>
-                  <input type="number" id="cfg-retry_interval_seconds" min="60" placeholder="300"
-                    title="暂无符合条件或本轮回无稳定品时，等待多少秒后重新拉取判定" />
-                </div>
-                <div class="field">
-                  <label>库存自动刷新 (秒)</label>
-                  <input type="number" id="cfg-inv-refresh" min="0" placeholder="60"
-                    title="网页打开时每隔多少秒刷新 Steam 库存，0 表示关闭前端自动刷新" />
-                </div>
-                <div class="field">
-                  <label>操作记录现市场价刷新间隔 (分钟)</label>
-                  <input type="number" id="cfg-current-price-refresh-minutes" min="0" placeholder="10"
-                    title="网页打开时每隔多少分钟刷新 Steam 现市场价，0 表示关闭前端自动刷新" />
-                </div>
-                <div class="field field--switch">
-                  <label class="checkbox-wrapper">
-                    <input type="checkbox" id="cfg-market-price-circuit-enabled" checked
-                      title="连续 5 轮 Steam 智能价接口失败后暂停智能价 5 分钟，期间使用最低价/中位价摘要兜底" />
-                    <span>启用智能价熔断保护</span>
-                  </label>
-                  <span class="field-hint">连续 5 轮智能价请求全部失败后暂停 5 分钟，避免 Steam 限流或代理异常时持续重试；暂停期间仍会尝试最低价/中位价摘要。关闭后每次刷新都会继续请求智能价接口。</span>
-                </div>
-                <div class="field">
-                  <label for="cfg-exchange-refresh-hours">汇率刷新间隔(小时)</label>
-                  <input type="number" id="cfg-exchange-refresh-hours" min="0" step="0.5" placeholder="0"
-                    title="每隔多少小时自动查询一次汇率，0 表示关闭" />
-                </div>
-                <div class="field">
-                  <label for="cfg-session-keepalive-hours">Steam 保活间隔(小时)</label>
-                  <input type="number" id="cfg-session-keepalive-hours" min="0" step="0.5" placeholder="4"
-                    title="服务器后台每隔多少小时验证/保活 Steam Cookie，0 表示关闭" />
-                </div>
-                <div class="field">
-                  <label for="cfg-ui_scale">界面缩放比例(内部浏览器)</label>
-                  <select id="cfg-ui_scale">
-                    <option value="0.7" selected>70% (默认)</option>
-                    <option value="0.8">80%</option>
-                    <option value="0.9">90%</option>
-                    <option value="1.0">100%</option>
-                    <option value="1.1">110%</option>
-                    <option value="1.2">120%</option>
-                  </select>
-                </div>
-              </div>
             </div>
           </div>
-
-          <div class="settings-group">
-            <h2>Steam 折扣数据</h2>
-            <div class="form-grid">
-              <div class="field field--switch">
-                <label class="checkbox-wrapper">
-                  <input type="checkbox" id="cfg-steam-deals-enabled" />
-                  <span>启用 Steam 折扣数据抓取</span>
-                </label>
-                <span class="field-hint">注意：该功能必须搭配代理池使用，若未配置代理将无法抓取数据。</span>
-              </div>
-              <div class="field-row field-row--3">
-                <div class="field">
-                  <label for="cfg-steam-deals-auto-refresh-days">自动更新间隔 (天)</label>
-                  <input type="number" id="cfg-steam-deals-auto-refresh-days" min="0" placeholder="7"
-                    title="距离上次更新超过此天数则自动获取，0=关闭自动更新" />
-                </div>
-                <div class="field">
-                  <label for="cfg-steam-deals-game-threads">游戏并发数</label>
-                  <input type="number" id="cfg-steam-deals-game-threads" min="1" max="20" placeholder="5"
-                    title="同时处理几个游戏" />
-                </div>
-                <div class="field">
-                  <label for="cfg-steam-deals-region-threads">区域并发数</label>
-                  <input type="number" id="cfg-steam-deals-region-threads" min="1" max="16" placeholder="16"
-                    title="每个游戏同时查询几个区域" />
-                </div>
-              </div>
-            </div>
-          </div>
-
-        </div>
-          <div class="form-actions">
-            <button id="btn-export-config" class="btn btn-secondary">导出配置</button>
-            <label class="btn btn-secondary file-btn">
-              导入配置
-              <input id="cfg-import-file" type="file" accept=".json" hidden />
-            </label>
-            <button id="btn-data-init" class="btn btn-danger" type="button">恢复出厂设置</button>
-            <button id="btn-repair-error" class="btn btn-danger-outline" type="button">紧急修复</button>
-            <button id="btn-save-config" class="btn btn-primary">保存所有设置</button>
+          <div class="form-actions form-actions--tab">
+            <button class="btn btn-primary" onclick="saveSettingsTab('stability')">保存价格稳定性</button>
           </div>
         </div>
-      </section>
 
-      <section id="panel-inventory" class="panel">
-        <div class="panel-toolbar panel-toolbar--inventory">
-          <div class="panel-toolbar-row">
-            <div class="toolbar-title">
-              <span class="label">库存管理</span>
-              <span class="hint">Steam 库存、交易冷却与最低价</span>
-            </div>
-            <div class="panel-toolbar-actions">
-              <button id="btn-refresh-inventory" class="btn btn-sm btn-secondary">立即刷新</button>
-              <span id="inv-cache-note" class="inventory-cache-note"></span>
-            </div>
-          </div>
-          <div class="purchases-summary inventory-summary">
-            <span class="summary-stat"><span class="summary-label">展示库存</span><span class="summary-value" id="inv-count">0</span></span>
-            <span class="summary-stat"><span class="summary-label">库存价值</span><span class="summary-value mono" id="inv-total-value">0.00</span></span>
-            <span class="summary-stat"><span class="summary-label">税后价值</span><span class="summary-value mono" id="inv-tax-value">0.00</span></span>
-            <span class="summary-stat"><span class="summary-label">可出售</span><span class="summary-value" id="inv-sellable-count">0</span></span>
-            <span class="summary-stat"><span class="summary-label">冷却中</span><span class="summary-value" id="inv-locked-count">0</span></span>
-            <span class="summary-stat"><span class="summary-label">缺价</span><span class="summary-value" id="inv-missing-price-count">0</span></span>
-          </div>
-        </div>
-        <div class="tx-filter-bar tx-filter-bar--inventory">
-          <div class="tx-filter-search">
-            <span class="label">筛选</span>
-            <input type="search" id="inventory-filter-search" placeholder="搜索物品名或市场名" />
-          </div>
-          <select id="inventory-filter-sell" title="按出售状态筛选">
-            <option value="all">全部出售</option>
-            <option value="sellable">可出售</option>
-            <option value="blocked">不可出售</option>
-          </select>
-          <select id="inventory-filter-trade" title="按交易状态筛选">
-            <option value="all">全部交易</option>
-            <option value="tradable">可交易</option>
-            <option value="locked">冷却中</option>
-            <option value="blocked">不可交易</option>
-          </select>
-          <select id="inventory-filter-account" title="按账号筛选">
-            <option value="all">全部账号</option>
-          </select>
-          <select id="inventory-filter-price" title="按最低价筛选">
-            <option value="all">全部价格</option>
-            <option value="priced">有价格</option>
-            <option value="missing">价格缺失</option>
-          </select>
-          <select id="inventory-sort-by" title="库存排序字段">
-            <option value="price">按最低价</option>
-            <option value="unlock">按解禁时间</option>
-            <option value="name">按物品</option>
-            <option value="sell">按可出售</option>
-            <option value="trade">按可交易</option>
-          </select>
-          <select id="inventory-sort-dir" title="库存排序方向">
-            <option value="desc">降序</option>
-            <option value="asc">升序</option>
-          </select>
-          <button id="btn-reset-inventory-filter" class="btn btn-sm btn-secondary" type="button">重置</button>
-          <span id="inventory-filter-count" class="tx-filter-count"></span>
-        </div>
-        <div class="table-container table-card">
-          <table id="inv-table">
-            <thead>
-              <tr>
-                <th>物品名称</th>
-                <th>账号</th>
-                <th>链接</th>
-                <th>可出售</th>
-                <th>可交易</th>
-                <th>解禁时间</th>
-                <th>最低价</th>
-                <th>状态说明</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section id="panel-proxy" class="panel">
-
+        <div class="settings-tab-pane" data-settab-pane="proxy" style="display:none">
         <div class="proxy-hero">
           <div class="proxy-hero-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32">
@@ -1465,6 +1272,184 @@
             </svg>
             保存代理池配置
           </button>
+        </div>
+        </div>
+
+        <div class="settings-tab-pane" data-settab-pane="system" style="display:none">
+          <div class="settings-group">
+            <h2>运行参数</h2>
+            <div class="form-grid">
+              <div class="field-row">
+                <div class="field">
+                  <label>无符合时重试间隔（秒）</label>
+                  <input type="number" id="cfg-retry_interval_seconds" min="60" placeholder="300"
+                    title="暂无符合条件或本轮回无稳定品时，等待多少秒后重新拉取判定" />
+                </div>
+                <div class="field">
+                  <label>库存自动刷新 (秒)</label>
+                  <input type="number" id="cfg-inv-refresh" min="0" placeholder="60"
+                    title="网页打开时每隔多少秒刷新 Steam 库存，0 表示关闭前端自动刷新" />
+                </div>
+                <div class="field">
+                  <label>操作记录现市场价刷新间隔 (分钟)</label>
+                  <input type="number" id="cfg-current-price-refresh-minutes" min="0" placeholder="10"
+                    title="网页打开时每隔多少分钟刷新 Steam 现市场价，0 表示关闭前端自动刷新" />
+                </div>
+              </div>
+              <div class="field field--switch">
+                <label class="checkbox-wrapper">
+                  <input type="checkbox" id="cfg-market-price-circuit-enabled" checked
+                    title="连续 5 轮 Steam 智能价接口失败后暂停智能价 5 分钟，期间使用最低价/中位价摘要兜底" />
+                  <span>启用智能价熔断保护</span>
+                </label>
+                <span class="field-hint">连续 5 轮智能价请求全部失败后暂停 5 分钟，避免 Steam 限流或代理异常时持续重试。</span>
+              </div>
+              <div class="field-row">
+                <div class="field">
+                  <label for="cfg-exchange-refresh-hours">汇率刷新间隔(小时)</label>
+                  <input type="number" id="cfg-exchange-refresh-hours" min="0" step="0.5" placeholder="0"
+                    title="每隔多少小时自动查询一次汇率，0 表示关闭" />
+                </div>
+                <div class="field">
+                  <label for="cfg-session-keepalive-hours">Steam 保活间隔(小时)</label>
+                  <input type="number" id="cfg-session-keepalive-hours" min="0" step="0.5" placeholder="4"
+                    title="服务器后台每隔多少小时验证/保活 Steam Cookie，0 表示关闭" />
+                </div>
+                <div class="field">
+                  <label for="cfg-ui_scale">界面缩放比例(内部浏览器)</label>
+                  <select id="cfg-ui_scale">
+                    <option value="0.7" selected>70% (默认)</option>
+                    <option value="0.8">80%</option>
+                    <option value="0.9">90%</option>
+                    <option value="1.0">100%</option>
+                    <option value="1.1">110%</option>
+                    <option value="1.2">120%</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-group">
+            <h2>Steam 折扣数据</h2>
+            <div class="form-grid">
+              <div class="field field--switch">
+                <label class="checkbox-wrapper">
+                  <input type="checkbox" id="cfg-steam-deals-enabled" />
+                  <span>启用 Steam 折扣数据抓取</span>
+                </label>
+                <span class="field-hint">注意：该功能必须搭配「网络代理」Tab 中的代理池使用。</span>
+              </div>
+              <div class="field-row field-row--3">
+                <div class="field">
+                  <label for="cfg-steam-deals-auto-refresh-days">自动更新间隔 (天)</label>
+                  <input type="number" id="cfg-steam-deals-auto-refresh-days" min="0" placeholder="7"
+                    title="距离上次更新超过此天数则自动获取，0=关闭自动更新" />
+                </div>
+                <div class="field">
+                  <label for="cfg-steam-deals-game-threads">游戏并发数</label>
+                  <input type="number" id="cfg-steam-deals-game-threads" min="1" max="20" placeholder="5"
+                    title="同时处理几个游戏" />
+                </div>
+                <div class="field">
+                  <label for="cfg-steam-deals-region-threads">区域并发数</label>
+                  <input type="number" id="cfg-steam-deals-region-threads" min="1" max="16" placeholder="16"
+                    title="每个游戏同时查询几个区域" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-actions form-actions--tab">
+            <button class="btn btn-primary" onclick="saveSettingsTab('system')">保存系统设置</button>
+            <button id="btn-export-config" class="btn btn-secondary">导出配置</button>
+            <label class="btn btn-secondary file-btn">
+              导入配置
+              <input id="cfg-import-file" type="file" accept=".json" hidden />
+            </label>
+            <button id="btn-data-init" class="btn btn-danger" type="button">恢复出厂设置</button>
+            <button id="btn-repair-error" class="btn btn-danger-outline" type="button">紧急修复</button>
+          </div>
+        </div>
+        </div>
+      </section>
+
+      <section id="panel-inventory" class="panel">
+        <div class="panel-toolbar panel-toolbar--inventory">
+          <div class="panel-toolbar-row">
+            <div class="toolbar-title">
+              <span class="label">库存管理</span>
+              <span class="hint">Steam 库存、交易冷却与最低价</span>
+            </div>
+            <div class="panel-toolbar-actions">
+              <span id="inv-cache-note" class="inventory-cache-note"></span>
+              <button id="btn-refresh-inventory" class="btn btn-sm btn-secondary">立即刷新</button>
+            </div>
+          </div>
+          <div class="purchases-summary inventory-summary">
+            <span class="summary-stat"><span class="summary-label">展示库存</span><span class="summary-value" id="inv-count">0</span></span>
+            <span class="summary-stat"><span class="summary-label">库存价值</span><span class="summary-value mono" id="inv-total-value">0.00</span></span>
+            <span class="summary-stat"><span class="summary-label">税后价值</span><span class="summary-value mono" id="inv-tax-value">0.00</span></span>
+            <span class="summary-stat"><span class="summary-label">可出售</span><span class="summary-value" id="inv-sellable-count">0</span></span>
+            <span class="summary-stat"><span class="summary-label">冷却中</span><span class="summary-value" id="inv-locked-count">0</span></span>
+            <span class="summary-stat"><span class="summary-label">缺价</span><span class="summary-value" id="inv-missing-price-count">0</span></span>
+          </div>
+        </div>
+        <div class="tx-filter-bar tx-filter-bar--inventory">
+          <div class="tx-filter-search">
+            <span class="label">筛选</span>
+            <input type="search" id="inventory-filter-search" placeholder="搜索物品名、市场名或备注" />
+          </div>
+          <select id="inventory-filter-sell" title="按出售状态筛选">
+            <option value="all">全部出售</option>
+            <option value="sellable">可出售</option>
+            <option value="blocked">不可出售</option>
+          </select>
+          <select id="inventory-filter-trade" title="按交易状态筛选">
+            <option value="all">全部交易</option>
+            <option value="tradable">可交易</option>
+            <option value="locked">冷却中</option>
+            <option value="blocked">不可交易</option>
+          </select>
+          <select id="inventory-filter-account" title="按账号筛选">
+            <option value="all">全部账号</option>
+          </select>
+          <select id="inventory-filter-price" title="按最低价筛选">
+            <option value="all">全部价格</option>
+            <option value="priced">有价格</option>
+            <option value="missing">价格缺失</option>
+          </select>
+          <select id="inventory-sort-by" title="库存排序字段">
+            <option value="price">按最低价</option>
+            <option value="unlock">按解禁时间</option>
+            <option value="name">按物品</option>
+            <option value="sell">按可出售</option>
+            <option value="trade">按可交易</option>
+          </select>
+          <select id="inventory-sort-dir" title="库存排序方向">
+            <option value="desc">降序</option>
+            <option value="asc">升序</option>
+          </select>
+          <button id="btn-reset-inventory-filter" class="btn btn-sm btn-secondary" type="button">重置</button>
+          <span id="inventory-filter-count" class="tx-filter-count"></span>
+        </div>
+        <div class="table-container table-card">
+          <table id="inv-table">
+            <thead>
+              <tr>
+                <th>物品名称</th>
+                <th>账号</th>
+                <th>账号备注</th>
+                <th>链接</th>
+                <th>可出售</th>
+                <th>可交易</th>
+                <th>解禁时间</th>
+                <th>最低价</th>
+                <th>状态说明</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
         </div>
       </section>
 
@@ -2004,25 +1989,21 @@
         <div class="wizard-icon">👤</div>
         <h3 class="wizard-title">添加 Steam 账号</h3>
         <p class="wizard-desc">先添加一个 Steam 账号，后续令牌会直接保存到该账号，避免继续依赖旧全局配置。</p>
+        <div class="field-row">
+          <div class="field">
+            <label for="wiz-account-username">Steam 用户名</label>
+            <input type="text" id="wiz-account-username" placeholder="用于自动登录的用户名" autocomplete="username" />
+          </div>
+          <div class="field">
+            <label for="wiz-account-password">Steam 密码</label>
+            <input type="password" id="wiz-account-password" placeholder="可选，仅用于自动填充登录" autocomplete="new-password" />
+          </div>
+        </div>
         <div class="field">
-          <label for="wiz-account-username">Steam 用户名</label>
-          <input type="text" id="wiz-account-username" placeholder="用于自动登录的用户名" autocomplete="username" />
+          <label for="wiz-account-note">账号备注</label>
+          <input type="text" id="wiz-account-note" placeholder="例如：主号 / 小号 / 用途" />
         </div>
-        <div class="field" style="margin-top:10px">
-          <label for="wiz-account-password">Steam 密码</label>
-          <input type="password" id="wiz-account-password" placeholder="可选，仅用于自动填充登录" autocomplete="new-password" />
-        </div>
-        <div class="field-row" style="margin-top:10px">
-          <div class="field">
-            <label for="wiz-account-steam-id">Steam ID</label>
-            <input type="text" id="wiz-account-steam-id" placeholder="76561198xxx" />
-          </div>
-          <div class="field">
-            <label for="wiz-account-display-name">显示名</label>
-            <input type="text" id="wiz-account-display-name" placeholder="账号备注" />
-          </div>
-        </div>
-        <p class="wizard-hint">已在「账号管理」添加过账号时可直接下一步。</p>
+        <p class="wizard-hint">Steam 昵称、Steam ID 和头像会在验证或登录后自动获取。已在「账号管理」添加过账号时可直接下一步。</p>
       </div>
 
       <!-- 步骤 2：Steam 令牌 -->
@@ -2079,6 +2060,7 @@
           <input type="checkbox" id="wizard-no-remind" /> 不再显示此引导
         </label>
         <div class="wizard-footer-btns">
+          <button type="button" id="wizard-btn-prev" class="btn btn-secondary">上一步</button>
           <button type="button" id="wizard-btn-skip" class="btn btn-secondary">跳过</button>
           <button type="button" id="wizard-btn-next" class="btn btn-primary">开始配置 →</button>
         </div>

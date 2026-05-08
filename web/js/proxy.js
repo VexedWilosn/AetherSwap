@@ -1,5 +1,6 @@
 
 let _proxyList = [];
+let _proxyLoadingConfig = false;
 function proxyUrl(entry) {
     if (entry.username && entry.password) {
         return `${entry.host}:${entry.port} (${entry.username})`;
@@ -7,6 +8,7 @@ function proxyUrl(entry) {
     return `${entry.host}:${entry.port}`;
 }
 async function loadProxyConfig() {
+    _proxyLoadingConfig = true;
     try {
         const d = await fetchJson(API + "/proxy/config");
         const cfg = d.proxy_pool || {};
@@ -22,6 +24,9 @@ async function loadProxyConfig() {
         renderProxyList();
     } catch (e) {
         console.error("加载代理配置失败", e);
+    } finally {
+        _proxyLoadingConfig = false;
+        if (typeof clearSettingsTabDirty === "function") clearSettingsTabDirty("proxy");
     }
 }
 function renderProxyList(testResults) {
@@ -81,6 +86,7 @@ function addSingleProxy() {
     }
     _proxyList.push({ host, port, username: user, password: pass });
     renderProxyList();
+    if (typeof markSettingsTabDirty === "function") markSettingsTabDirty("proxy");
     ["proxy-add-host", "proxy-add-port", "proxy-add-user", "proxy-add-pass"].forEach(id => {
         const e = el(id);
         if (e) e.value = "";
@@ -113,6 +119,7 @@ function parseBulkProxyImport() {
         added++;
     });
     renderProxyList();
+    if (added > 0 && typeof markSettingsTabDirty === "function") markSettingsTabDirty("proxy");
     const el_bulk = el("proxy-bulk-input");
     if (el_bulk) el_bulk.value = "";
     if (errors.length > 0) {
@@ -124,6 +131,7 @@ function parseBulkProxyImport() {
 function removeProxy(idx) {
     _proxyList.splice(idx, 1);
     renderProxyList();
+    if (typeof markSettingsTabDirty === "function") markSettingsTabDirty("proxy");
 }
 async function testAllProxies() {
     if (_proxyList.length === 0) {
@@ -172,6 +180,7 @@ async function _doSaveProxyConfig() {
             }
         })
     });
+    if (typeof clearSettingsTabDirty === "function") clearSettingsTabDirty("proxy");
 }
 async function saveProxyConfig() {
     try {
@@ -185,6 +194,7 @@ function selectStrategy(strategyId) {
     document.querySelectorAll(".proxy-strategy-card").forEach(card => {
         card.classList.toggle("active", Number(card.dataset.strategy) === strategyId);
     });
+    if (!_proxyLoadingConfig && typeof markSettingsTabDirty === "function") markSettingsTabDirty("proxy");
 }
 async function clearAllProxies() {
     if (!confirm(`确定要清空所有 ${_proxyList.length} 个代理吗？此操作不可撤销。`)) return;
@@ -195,6 +205,7 @@ async function clearAllProxies() {
         if (d.ok) {
             _proxyList = [];
             renderProxyList();
+            if (typeof clearSettingsTabDirty === "function") clearSettingsTabDirty("proxy");
             toast("已清空代理列表");
         } else {
             toast("清除失败", d.message || "");

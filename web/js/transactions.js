@@ -14,6 +14,7 @@ const TX_HOLDINGS_COLUMN_ORDER = [
   "time",
   "name",
   "account",
+  "account_note",
   "unlock",
   "automation",
   "assetid",
@@ -32,6 +33,7 @@ const TX_HOLDINGS_COLUMN_LABELS = {
   time: "时间",
   name: "物品/说明",
   account: "账号",
+  account_note: "账号备注",
   unlock: "解禁时间",
   automation: "自动化",
   assetid: "assetid",
@@ -218,6 +220,9 @@ function normalizeAccountLabel(acc) {
   if (!acc) return "当前账号";
   return acc.display_name || acc.username || acc.steam_id || "当前账号";
 }
+function normalizeAccountNote(acc) {
+  return (acc?.account_note || "").toString().trim();
+}
 function getTransactionAccountId(t, accountCapability = getTxAccountCapability()) {
   const id = (t.account_id || "").toString().trim();
   if (id) return id;
@@ -228,6 +233,17 @@ function getTransactionAccountLabel(t, accountCapability = getTxAccountCapabilit
   const accounts = accountCapability?.accounts || [];
   const account = id ? accounts.find((a) => a.id === id) : null;
   return account ? normalizeAccountLabel(account) : (t.account_label || id || "当前账号");
+}
+function getTransactionAccountNote(t, accountCapability = getTxAccountCapability()) {
+  const id = getTransactionAccountId(t, accountCapability);
+  const accounts = accountCapability?.accounts || [];
+  const account = id ? accounts.find((a) => a.id === id) : null;
+  return normalizeAccountNote(account) || (t.account_note || "").toString().trim();
+}
+function renderAccountNoteCell(note, dataCol = true) {
+  const text = note || "-";
+  const attr = dataCol ? ' data-col="account_note"' : "";
+  return `<td${attr}><span class="tx-account-note-cell" title="${escapeHtml(text)}">${escapeHtml(text)}</span></td>`;
 }
 function renderHoldingsAccountFilterOptions(holdings = []) {
   const select = el("holdings-filter-account");
@@ -319,7 +335,7 @@ function filterHoldingsList(holdings) {
   return holdings.filter((t) => {
     const search = filters.search || "";
     if (search) {
-      const hay = [t.name, t.assetid, t.goods_id].filter((v) => v != null && v !== "").join(" ").toLowerCase();
+      const hay = [t.name, t.assetid, t.goods_id, getTransactionAccountNote(t)].filter((v) => v != null && v !== "").join(" ").toLowerCase();
       if (!hay.includes(search)) return false;
     }
     if (filters.status && filters.status !== "all" && getHoldingFilterStatus(t) !== filters.status) return false;
@@ -342,6 +358,7 @@ function getHoldingSortValue(t, key, resellRatio = 0.85) {
   if (key === "time") return Number(t.at) || 0;
   if (key === "name") return (t.name || "").toString().toLowerCase();
   if (key === "account") return getTransactionAccountLabel(t).toLowerCase();
+  if (key === "account_note") return getTransactionAccountNote(t).toLowerCase();
   if (key === "unlock") return getUnlockState(t).unlockTs || 0;
   if (key === "automation") return getAutomationState(t, getTxAccountCapability()).key || "";
   if (key === "assetid") return t.assetid || "";
@@ -427,7 +444,7 @@ function filterHistoryList(list) {
   return list.filter((t) => {
     const search = filters.search || "";
     if (search) {
-      const hay = [t.name, t.assetid, t.goods_id].filter((v) => v != null && v !== "").join(" ").toLowerCase();
+      const hay = [t.name, t.assetid, t.goods_id, getTransactionAccountNote(t)].filter((v) => v != null && v !== "").join(" ").toLowerCase();
       if (!hay.includes(search)) return false;
     }
     const status = getHistoryStatus(t);
@@ -1114,6 +1131,7 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
   const rowHtmls = [];
   for (const t of list) {
     const accountName = getTransactionAccountLabel(t, accountCapability);
+    const accountNote = getTransactionAccountNote(t, accountCapability);
     const timeStr = formatDateTime(t.at);
     const nameText = (t.name || "—").toString();
     const nameHtml = buildItemNameHtml(nameText);
@@ -1127,6 +1145,7 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
       const state = getAutomationState(t, accountCapability);
       const actHtml = renderTradeAction(t, state, type, idx, multiSelectMode);
       const accountCell = `<td data-col="account"><span class="tx-account-cell" title="${escapeHtml(accountName)}">${escapeHtml(accountName)}</span></td>`;
+      const accountNoteCell = renderAccountNoteCell(accountNote, true);
       const unlockTitle = state.unlock.label && state.unlock.label !== state.unlock.detail ? ` title="${escapeHtml(state.unlock.label)}"` : "";
       const unlockCell = `<td data-col="unlock"><span class="tx-unlock-cell ${state.unlock.locked ? "is-locked" : "is-ready"}"${unlockTitle}><span>${escapeHtml(state.unlock.detail)}</span></span></td>`;
       const automationCell = `<td data-col="automation">${renderAutomationBadge(state)}</td>`;
@@ -1161,7 +1180,7 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
       const selfUseCell = selfUseProfit ? `<td data-col="self_use" class="mono tx-extra-col ${selfUseClass}">${escapeHtml(parseFloat(selfUseProfit) >= 0 ? "+" + selfUseProfit : selfUseProfit)}</td>` : `<td data-col="self_use" class="tx-extra-col">${txEmptyText()}</td>`;
       const assetidCell = `<td data-col="assetid" class="mono tx-extra-col">${t.assetid != null ? escapeHtml(t.assetid) : txEmptyText()}</td>`;
       const buyMarketCell = `<td data-col="buy_market" class="mono tx-extra-col">${escapeHtml(mp)}</td>`;
-      rowHtmls.push(`<tr>${checkCell}<td data-col="time" class="mono">${escapeHtml(timeStr)}</td><td data-col="name">${nameHtml}</td>${accountCell}${unlockCell}${automationCell}${assetidCell}${priceCell}${buyMarketCell}${cmpCell}${afterTaxCell}${discountRatioCell}${profitCell}${selfUseCell}${plCell}<td data-col="actions" class="tx-actions">${actHtml}</td></tr>`);
+      rowHtmls.push(`<tr>${checkCell}<td data-col="time" class="mono">${escapeHtml(timeStr)}</td><td data-col="name">${nameHtml}</td>${accountCell}${accountNoteCell}${unlockCell}${automationCell}${assetidCell}${priceCell}${buyMarketCell}${cmpCell}${afterTaxCell}${discountRatioCell}${profitCell}${selfUseCell}${plCell}<td data-col="actions" class="tx-actions">${actHtml}</td></tr>`);
     } else {
       const actHtml = `<div class="tx-actions-dropdown"><button type="button" class="tx-actions-trigger" title="操作">⋮</button><div class="tx-actions-menu"><button type="button" class="tx-action-item tx-btn-edit" data-type="${escapeHtml(type)}" data-idx="${idx}">编辑</button><button type="button" class="tx-action-item tx-action-danger tx-btn-del" data-type="${escapeHtml(type)}" data-idx="${idx}">删除</button></div></div>`;
       const assetidCell = `<td class="mono">${t.assetid != null ? escapeHtml(t.assetid) : txEmptyText()}</td>`;
@@ -1169,7 +1188,7 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
     }
   }
   if (isPurchase && !rowHtmls.length) {
-    tbody.innerHTML = txTableStateRow(16, "暂无当前持仓", "买入记录会在这里显示，已出售的记录请看交易流水。", "empty");
+    tbody.innerHTML = txTableStateRow(17, "暂无当前持仓", "买入记录会在这里显示，已出售的记录请看交易流水。", "empty");
   } else {
     tbody.innerHTML = rowHtmls.join("");
   }
@@ -1224,6 +1243,7 @@ function renderPurchaseHistoryTable(tbody, list, resellRatio = 0.85, multiSelect
   const rowHtmls = [];
   for (const t of list) {
     const accountName = getTransactionAccountLabel(t, accountCapability);
+    const accountNote = getTransactionAccountNote(t, accountCapability);
     const timeStr = formatDateTime(t.at);
     const soldTimeStr = t.sold_at ? formatDateTime(t.sold_at) : "";
     const nameText = (t.name || "—").toString();
@@ -1268,11 +1288,11 @@ function renderPurchaseHistoryTable(tbody, list, resellRatio = 0.85, multiSelect
     const actHtml = !multiSelectMode ? `<div class="tx-actions-dropdown"><button type="button" class="tx-actions-trigger" title="操作">⋮</button><div class="tx-actions-menu">${delistItem}<button type="button" class="tx-action-item tx-action-danger ph-btn-del" data-type="purchase" data-idx="${idx}">删除</button></div></div>` : "";
     const assetidStr = t.assetid != null ? escapeHtml(t.assetid) : txEmptyText();
     const soldTimeHtml = t.sold_at ? escapeHtml(soldTimeStr) : txEmptyText();
-    rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${nameHtml}</td><td><span class="tx-account-cell" title="${escapeHtml(accountName)}">${escapeHtml(accountName)}</span></td><td>${renderAutomationBadge(sold ? { className: "is-sold", label: "已完成", hint: "该记录已出售" } : state)}</td><td class="mono tx-extra-col">${assetidStr}</td><td class="mono">${escapeHtml(Number(t.price).toFixed(2))}</td><td class="mono tx-extra-col">${escapeHtml(mp)}</td><td>${renderHistoryStatusBadge(statusMeta)}</td><td class="mono">${salePriceStr}</td><td class="mono tx-extra-col">${soldTimeHtml}</td><td class="mono ${discountRatioClass}">${discountRatioStr}</td><td class="mono ${cashClass}">${cashProfitStr}</td><td class="mono tx-extra-col ${selfUseClass}">${selfUseStr}</td>${deviationCell}<td class="tx-actions">${actHtml}</td></tr>`);
+    rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${nameHtml}</td><td><span class="tx-account-cell" title="${escapeHtml(accountName)}">${escapeHtml(accountName)}</span></td>${renderAccountNoteCell(accountNote, false)}<td>${renderAutomationBadge(sold ? { className: "is-sold", label: "已完成", hint: "该记录已出售" } : state)}</td><td class="mono tx-extra-col">${assetidStr}</td><td class="mono">${escapeHtml(Number(t.price).toFixed(2))}</td><td class="mono tx-extra-col">${escapeHtml(mp)}</td><td>${renderHistoryStatusBadge(statusMeta)}</td><td class="mono">${salePriceStr}</td><td class="mono tx-extra-col">${soldTimeHtml}</td><td class="mono ${discountRatioClass}">${discountRatioStr}</td><td class="mono ${cashClass}">${cashProfitStr}</td><td class="mono tx-extra-col ${selfUseClass}">${selfUseStr}</td>${deviationCell}<td class="tx-actions">${actHtml}</td></tr>`);
   }
   tbody.innerHTML = rowHtmls.length
     ? rowHtmls.join("")
-    : txTableStateRow(16, "暂无交易流水", "买入、出售和下架记录会在这里显示。", "empty");
+    : txTableStateRow(17, "暂无交易流水", "买入、出售和下架记录会在这里显示。", "empty");
   bindSelectionCount("#transactions-table-purchase-history .history-checkbox", "history-selected-count");
   tbody.querySelectorAll(".ph-btn-delist").forEach(btn => {
     btn.addEventListener("click", async () => {
@@ -1333,14 +1353,14 @@ function applyTransactionsToUI(all, summaryEl, tbodyP, tbodyHistory, resellRatio
     if (lastEnrichData === all) {
       if (tbodyP) {
         if (holdings.length && !filteredHoldings.length) {
-          tbodyP.innerHTML = txTableStateRow(16, "没有匹配的持仓", "调整筛选条件后再试。", "empty");
+          tbodyP.innerHTML = txTableStateRow(17, "没有匹配的持仓", "调整筛选条件后再试。", "empty");
         } else {
           renderTxTable(tbodyP, filteredHoldings, true, ratio, holdingsMultiSelectMode);
         }
       }
       if (tbodyHistory) {
         if (purchases.length && !filteredHistory.length) {
-          tbodyHistory.innerHTML = txTableStateRow(16, "没有匹配的流水", "调整筛选条件后再试。", "empty");
+          tbodyHistory.innerHTML = txTableStateRow(17, "没有匹配的流水", "调整筛选条件后再试。", "empty");
         } else {
           renderPurchaseHistoryTable(tbodyHistory, filteredHistory, ratio, historyMultiSelectMode);
         }
@@ -1350,14 +1370,14 @@ function applyTransactionsToUI(all, summaryEl, tbodyP, tbodyHistory, resellRatio
   syncTxColumnToggleUI();
   if (tbodyP) {
     if (holdings.length && !filteredHoldings.length) {
-      tbodyP.innerHTML = txTableStateRow(16, "没有匹配的持仓", "调整筛选条件后再试。", "empty");
+      tbodyP.innerHTML = txTableStateRow(17, "没有匹配的持仓", "调整筛选条件后再试。", "empty");
     } else {
       renderTxTable(tbodyP, filteredHoldings, true, ratio, holdingsMultiSelectMode);
     }
   }
   if (tbodyHistory) {
     if (purchases.length && !filteredHistory.length) {
-      tbodyHistory.innerHTML = txTableStateRow(16, "没有匹配的流水", "调整筛选条件后再试。", "empty");
+      tbodyHistory.innerHTML = txTableStateRow(17, "没有匹配的流水", "调整筛选条件后再试。", "empty");
     } else {
       renderPurchaseHistoryTable(tbodyHistory, filteredHistory, ratio, historyMultiSelectMode);
     }
@@ -1548,8 +1568,8 @@ async function refreshTransactions(options = {}) {
   const tbodyHistory = document.querySelector("#transactions-table-purchase-history tbody");
   const summaryEl = el("purchases-summary");
   if (!tbodyP && !tbodyHistory) return;
-  setTxTableLoading(tbodyP, 16, "正在加载当前持仓", "正在读取交易记录和市场价格。");
-  setTxTableLoading(tbodyHistory, 16, "正在加载交易流水", "正在读取买入、出售和下架记录。");
+  setTxTableLoading(tbodyP, 17, "正在加载当前持仓", "正在读取交易记录和市场价格。");
+  setTxTableLoading(tbodyHistory, 17, "正在加载交易流水", "正在读取买入、出售和下架记录。");
   try {
     const d = await fetchJson(API + "/transactions?enrich_current_price=0");
     let all = d.transactions || [];
@@ -1597,8 +1617,8 @@ async function refreshTransactions(options = {}) {
     applyTransactionsToUI(all, summaryEl, tbodyP, tbodyHistory, resellRatio);
   } catch (e) {
     toast("加载操作记录失败", e.message || "");
-    setTxTableError(tbodyP, 16, "当前持仓加载失败", e.message || "请稍后重试。");
-    setTxTableError(tbodyHistory, 16, "交易流水加载失败", e.message || "请稍后重试。");
+    setTxTableError(tbodyP, 17, "当前持仓加载失败", e.message || "请稍后重试。");
+    setTxTableError(tbodyHistory, 17, "交易流水加载失败", e.message || "请稍后重试。");
   }
 }
 async function retrySmartMarketPrices() {

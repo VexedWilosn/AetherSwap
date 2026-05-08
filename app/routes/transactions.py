@@ -121,6 +121,12 @@ def api_add_purchase(body: AddPurchaseBody):
 def api_transactions(enrich_current_price: bool = False, force_smart_price: bool = False):
     purchases = get_purchases()
     sales = get_sales()
+    accounts_by_id = {}
+    try:
+        from app.accounts import list_accounts
+        accounts_by_id = {str(a.get("id") or ""): a for a in list_accounts()}
+    except Exception:
+        accounts_by_id = {}
     out = []
     for i, p in enumerate(purchases):
         row = {"type": "purchase", "idx": i, "name": p.get("name", ""), "goods_id": p.get("goods_id", ""), "price": float(p.get("price", 0)), "at": p.get("at", 0)}
@@ -130,6 +136,10 @@ def api_transactions(enrich_current_price: bool = False, force_smart_price: bool
             row["account_id"] = p.get("account_id")
         if p.get("account_label"):
             row["account_label"] = p.get("account_label")
+        row_account = accounts_by_id.get(str(p.get("account_id") or ""))
+        account_note = (row_account.get("account_note") or "").strip() if row_account else (p.get("account_note") or "").strip()
+        if account_note:
+            row["account_note"] = account_note
         mp = p.get("market_price")
         if mp is not None:
             row["market_price"] = round(float(mp), 2)

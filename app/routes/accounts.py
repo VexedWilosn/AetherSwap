@@ -20,6 +20,7 @@ class AccountBody(BaseModel):
     password: str = ""
     steam_id: str = ""
     display_name: str = ""
+    account_note: str = ""
     avatar_url: str = ""
     steam_guard: Optional[dict[str, Any]] = None
 class AccountUpdateBody(BaseModel):
@@ -27,6 +28,7 @@ class AccountUpdateBody(BaseModel):
     password: Optional[str] = None
     steam_id: Optional[str] = None
     display_name: Optional[str] = None
+    account_note: Optional[str] = None
     avatar_url: Optional[str] = None
     steam_guard: Optional[dict[str, Any]] = None
     trade_config: Optional[dict[str, Any]] = None
@@ -44,6 +46,7 @@ def api_add_account(body: AccountBody):
         password=body.password,
         steam_id=body.steam_id,
         display_name=body.display_name,
+        account_note=body.account_note,
         avatar_url=body.avatar_url,
     )
     if body.steam_guard is not None:
@@ -60,6 +63,8 @@ def api_update_account(account_id: str, body: AccountUpdateBody):
         kwargs["steam_id"] = body.steam_id
     if body.display_name is not None:
         kwargs["display_name"] = body.display_name
+    if body.account_note is not None:
+        kwargs["account_note"] = body.account_note
     if body.avatar_url is not None:
         kwargs["avatar_url"] = body.avatar_url
     if body.steam_guard is not None:
