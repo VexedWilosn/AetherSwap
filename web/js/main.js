@@ -340,7 +340,7 @@ async function refreshStatus() {
 let reloginType = "steam";
 let inventoryRefreshInFlight = false;
 let lastInventoryItems = [];
-let inventoryFilters = { search: "", sell: "all", trade: "all", price: "all" };
+let inventoryFilters = { search: "", sell: "all", trade: "all", account: "all", price: "all" };
 let inventorySort = { by: "price", dir: "desc" };
 function showReloginModal(type, opts = {}) {
   reloginType = type || "steam";
@@ -415,13 +415,20 @@ function getInventoryLowest(it) {
   return Number.isFinite(lowest) && lowest > 0 ? lowest : 0;
 }
 function getInventorySearchName(it) {
-  return [it.name, it.market_hash_name].filter(Boolean).join(" ").toLowerCase();
+  return [it.name, it.market_hash_name, it.account_label].filter(Boolean).join(" ").toLowerCase();
+}
+function getInventoryAccountId(it) {
+  return (it.account_id || it.account_label || "current").toString();
+}
+function getInventoryAccountLabel(it) {
+  return (it.account_label || it.account_id || "当前账号").toString();
 }
 function readInventoryFiltersFromUI() {
   inventoryFilters = {
     search: (el("inventory-filter-search")?.value || "").trim().toLowerCase(),
     sell: el("inventory-filter-sell")?.value || "all",
     trade: el("inventory-filter-trade")?.value || "all",
+    account: el("inventory-filter-account")?.value || "all",
     price: el("inventory-filter-price")?.value || "all",
   };
   const sortBy = el("inventory-sort-by")?.value || inventorySort.by;
@@ -441,6 +448,7 @@ function filterInventoryItems(items) {
     if (filters.sell === "sellable" && state.sell.key !== "sellable") return false;
     if (filters.sell === "blocked" && state.sell.key === "sellable") return false;
     if (filters.trade && filters.trade !== "all" && state.trade.key !== filters.trade) return false;
+    if (filters.account && filters.account !== "all" && getInventoryAccountId(it) !== filters.account) return false;
     const priced = getInventoryLowest(it) > 0;
     if (filters.price === "priced" && !priced) return false;
     if (filters.price === "missing" && priced) return false;
@@ -486,6 +494,20 @@ function getInventoryStatusNote(it, state) {
 function syncInventoryFilterUI(total, filtered) {
   const countEl = el("inventory-filter-count");
   if (countEl) countEl.textContent = total === filtered ? `${total} 项` : `${filtered} / ${total} 项`;
+  const accountSelect = el("inventory-filter-account");
+  if (accountSelect) {
+    const current = accountSelect.value || "all";
+    const accounts = [];
+    for (const it of lastInventoryItems || []) {
+      const id = getInventoryAccountId(it);
+      const label = getInventoryAccountLabel(it);
+      if (!accounts.some((item) => item.id === id)) accounts.push({ id, label });
+    }
+    accountSelect.innerHTML = '<option value="all">全部账号</option>' + accounts
+      .map((account) => `<option value="${escapeHtml(account.id)}">${escapeHtml(account.label)}</option>`)
+      .join("");
+    accountSelect.value = accounts.some((account) => account.id === current) ? current : "all";
+  }
   const sortBy = el("inventory-sort-by");
   const sortDir = el("inventory-sort-dir");
   if (sortBy) sortBy.value = inventorySort.by;
@@ -507,8 +529,8 @@ function renderInventoryFromCache() {
   }, { totalValue: 0, sellable: 0, locked: 0, missing: 0 });
   if (filtered.length === 0) {
     tbody.innerHTML = typeof txTableStateRow === "function"
-      ? txTableStateRow(7, lastInventoryItems.length ? "没有匹配的库存" : "暂无库存", lastInventoryItems.length ? "调整筛选条件后再看" : "刷新后会显示 Steam 库存", "empty")
-      : `<tr><td colspan="7">暂无库存</td></tr>`;
+      ? txTableStateRow(8, lastInventoryItems.length ? "没有匹配的库存" : "暂无库存", lastInventoryItems.length ? "调整筛选条件后再看" : "刷新后会显示 Steam 库存", "empty")
+      : `<tr><td colspan="8">暂无库存</td></tr>`;
   } else {
     tbody.innerHTML = filtered.map((it) => {
       const state = getInventoryState(it);
@@ -530,8 +552,9 @@ function renderInventoryFromCache() {
       const fullNote = it.cooldown_text || statusNote;
       return `
         <tr>
-          <td class="item-name-cell">${iconHtml}<span title="${escapeHtml(it.name || mhn)}">${escapeHtml(it.name || mhn || "—")}</span></td>
-          <td class="inv-links">${linksHtml}</td>
+          <td><span class="item-name-cell">${iconHtml}<span title="${escapeHtml(it.name || mhn)}">${escapeHtml(it.name || mhn || "—")}</span></span></td>
+          <td><span class="inventory-account-cell" title="${escapeHtml(getInventoryAccountLabel(it))}">${escapeHtml(getInventoryAccountLabel(it))}</span></td>
+          <td><span class="inv-links">${linksHtml}</span></td>
           <td>${renderInventoryPill(state.sell)}</td>
           <td>${renderInventoryPill(state.trade)}</td>
           <td>${unlockHtml}</td>
@@ -956,6 +979,7 @@ function bindEvents() {
     "inventory-filter-search",
     "inventory-filter-sell",
     "inventory-filter-trade",
+    "inventory-filter-account",
     "inventory-filter-price",
     "inventory-sort-by",
     "inventory-sort-dir",
@@ -970,6 +994,8 @@ function bindEvents() {
     if (sell) sell.value = "all";
     const trade = el("inventory-filter-trade");
     if (trade) trade.value = "all";
+    const account = el("inventory-filter-account");
+    if (account) account.value = "all";
     const price = el("inventory-filter-price");
     if (price) price.value = "all";
     const sortBy = el("inventory-sort-by");

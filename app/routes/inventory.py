@@ -6,9 +6,34 @@ from app.pipeline import run_sell_phase_on_inventory_update
 from app.config_loader import get_steam_credentials, load_app_config_validated
 from app.shared_market import batch_fetch_price_details, batch_fetch_prices, get_market_price_context, get_steam_smart_price_cny
 router = APIRouter()
+def _current_account_info() -> dict:
+    try:
+        from app.accounts import get_current_account
+        account = get_current_account() or {}
+        account_id = (account.get("id") or "").strip()
+        label = (
+            account.get("display_name")
+            or account.get("username")
+            or account.get("steam_id")
+            or account_id
+            or "当前账号"
+        )
+        return {"account_id": account_id, "account_label": label}
+    except Exception:
+        return {"account_id": "", "account_label": "当前账号"}
+def _with_account_info(items: list) -> list:
+    account = _current_account_info()
+    out = []
+    for it in items or []:
+        row = dict(it)
+        row.setdefault("account_id", account["account_id"])
+        row.setdefault("account_label", account["account_label"])
+        out.append(row)
+    return out
 def _inventory_response(items=None, *, cached: bool = False, message: str = "", **extra):
+    response_items = get_inventory() if items is None else items
     out = {
-        "items": get_inventory() if items is None else items,
+        "items": _with_account_info(response_items),
         "cached": cached,
         "message": message,
         "inventory_meta": get_inventory_meta(),

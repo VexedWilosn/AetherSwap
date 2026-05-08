@@ -469,6 +469,7 @@
 
 .tx-filter-bar #inventory-filter-sell,
 .tx-filter-bar #inventory-filter-trade,
+.tx-filter-bar #inventory-filter-account,
 .tx-filter-bar #inventory-filter-price,
 .tx-filter-bar #inventory-sort-by {
   width: 136px;
@@ -1035,10 +1036,17 @@
 }
 
 #panel-inventory .item-name-cell {
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
+  gap: 10px;
+  width: min(100%, 360px);
   min-width: 0;
   max-width: 100%;
+  margin: 0 auto;
   overflow: hidden;
+  text-align: left;
+  vertical-align: middle;
 }
 
 #panel-inventory .item-name-cell span:last-child {
@@ -1087,8 +1095,11 @@
 
 #panel-inventory .inv-links {
   display: inline-flex;
+  align-items: center;
   justify-content: center;
   gap: 6px;
+  width: 100%;
+  vertical-align: middle;
 }
 
 #panel-inventory .inv-links a {
@@ -1111,8 +1122,22 @@
   color: var(--success);
 }
 
+#panel-inventory .inventory-account-cell {
+  display: inline-block;
+  width: 100%;
+  max-width: 128px;
+  overflow: hidden;
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 #panel-inventory .inventory-unlock {
   display: inline-block;
+  width: 100%;
   max-width: 148px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1132,7 +1157,8 @@
 
 #panel-inventory .inventory-status-note {
   display: inline-block;
-  max-width: 220px;
+  width: 100%;
+  max-width: 100%;
   overflow: hidden;
   color: var(--text-secondary);
   font-size: 12px;
@@ -1169,34 +1195,39 @@
 
 #inv-table th:nth-child(1),
 #inv-table td:nth-child(1) {
-  width: 30%;
+  width: 25%;
 }
 
 #inv-table th:nth-child(2),
 #inv-table td:nth-child(2) {
-  width: 12%;
+  width: 10%;
 }
 
 #inv-table th:nth-child(3),
-#inv-table td:nth-child(3),
-#inv-table th:nth-child(4),
-#inv-table td:nth-child(4) {
-  width: 11%;
+#inv-table td:nth-child(3) {
+  width: 10%;
 }
 
+#inv-table th:nth-child(4),
+#inv-table td:nth-child(4),
 #inv-table th:nth-child(5),
 #inv-table td:nth-child(5) {
-  width: 16%;
+  width: 10%;
 }
 
 #inv-table th:nth-child(6),
 #inv-table td:nth-child(6) {
-  width: 9%;
+  width: 15%;
 }
 
 #inv-table th:nth-child(7),
 #inv-table td:nth-child(7) {
-  width: 11%;
+  width: 8%;
+}
+
+#inv-table th:nth-child(8),
+#inv-table td:nth-child(8) {
+  width: 12%;
 }
 
 /* Redundant first set deleted — single canonical set below (L626+) */

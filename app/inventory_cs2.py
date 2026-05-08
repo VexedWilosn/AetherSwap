@@ -2,6 +2,7 @@ import re
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
+from app.accounts import get_current_account
 from config import get_steam
 from steam.inventory import CS2_APP_ID, fetch_cs2_inventory
 from steam.session import create_market_session
@@ -44,6 +45,15 @@ def scan_cs2_inventory() -> Tuple[bool, List[Dict[str, Any]], str]:
         return False, [], "获取 CS2 库存失败"
     if isinstance(data, dict) and data.get("auth_expired"):
         return False, [], "登录已过期，请重新登录"
+    account = get_current_account() or {}
+    account_id = (account.get("id") or "").strip()
+    account_label = (
+        account.get("display_name")
+        or account.get("username")
+        or account.get("steam_id")
+        or account_id
+        or "当前账号"
+    )
     items: List[Dict[str, Any]] = []
     now = time.time()
     desc_map: Dict[tuple, Dict[str, Any]] = {}
@@ -81,6 +91,8 @@ def scan_cs2_inventory() -> Tuple[bool, List[Dict[str, Any]], str]:
                 "cooldown_at_iso": _safe_iso(cd_ts),
                 "can_sell": can_sell,
                 "can_trade": can_trade,
+                "account_id": account_id,
+                "account_label": account_label,
             }
         )
     items.sort(key=lambda x: (not x["can_sell"], not x["can_trade"], x["name"]))
