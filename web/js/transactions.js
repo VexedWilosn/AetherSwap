@@ -4,11 +4,16 @@ let historyMultiSelectMode = false;
 const TX_HOLDINGS_COLUMNS_KEY = "aetherswap_holdings_show_extra_cols";
 const TX_HISTORY_COLUMNS_KEY = "aetherswap_history_show_extra_cols";
 const TX_PRICE_REFRESH_RECORD_KEY = "aetherswap_price_refresh_record";
-function readTxColumnPreference(key) {
+const TX_TRADE_COOLDOWN_DAYS = 7;
+let txAccountsCapabilityCache = null;
+let txAccountsCapabilityAt = 0;
+function readTxColumnPreference(key, defaultValue = false) {
   try {
-    return localStorage.getItem(key) === "1";
+    const raw = localStorage.getItem(key);
+    if (raw == null) return !!defaultValue;
+    return raw === "1";
   } catch {
-    return false;
+    return !!defaultValue;
   }
 }
 function writeTxColumnPreference(key, value) {
@@ -32,13 +37,113 @@ function writeMarketPriceRefreshRecord(record) {
   }
 }
 let holdingsShowMoreColumns = readTxColumnPreference(TX_HOLDINGS_COLUMNS_KEY);
-let historyShowMoreColumns = readTxColumnPreference(TX_HISTORY_COLUMNS_KEY);
+let historyShowMoreColumns = readTxColumnPreference(TX_HISTORY_COLUMNS_KEY, true);
 let lastEnrichTime = 0;
 let lastEnrichData = null;
 let lastMarketPriceHintKey = "";
 let lastMarketPriceMeta = null;
 let smartPriceRetrying = false;
 let lastMarketPriceRefreshRecord = readMarketPriceRefreshRecord();
+function formatDateTime(tsSeconds) {
+  if (!tsSeconds) return "—";
+  const d = new Date(tsSeconds * 1000);
+  if (Number.isNaN(d.getTime())) return "—";
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+function buildItemNameHtml(nameText) {
+  const safeName = (nameText || "—").toString();
+  const iconPath = typeof getIconForName === "function" ? getIconForName(safeName) : "";
+  const nameIconHtml = iconPath && typeof getIconUrl === "function"
+    ? `<img class="item-icon" src="${getIconUrl(iconPath)}" alt="" loading="lazy" onerror="this.style.display='none'" />`
+    : "";
+  return `<span class="item-name-cell">${nameIconHtml}<span>${escapeHtml(safeName)}</span></span>`;
+}
+function normalizeAccountLabel(acc) {
+  if (!acc) return "当前账号";
+  return acc.display_name || acc.username || acc.steam_id || "当前账号";
+}
+async function refreshTxAccountCapability() {
+  const now = Date.now();
+  if (txAccountsCapabilityCache && now - txAccountsCapabilityAt < 30000) return txAccountsCapabilityCache;
+  try {
+    const d = await fetchJson(API + "/accounts");
+    const accounts = d.accounts || [];
+    const current = accounts.find((a) => a.id === d.current_id) || accounts[0] || null;
+    txAccountsCapabilityCache = { accounts, current, currentId: d.current_id || null };
+    txAccountsCapabilityAt = now;
+    if (typeof accountsCache !== "undefined") accountsCache = accounts;
+    if (typeof accountsCurrentId !== "undefined") accountsCurrentId = d.current_id || null;
+  } catch {
+    const fallbackAccounts = typeof accountsCache !== "undefined" ? (accountsCache || []) : [];
+    const fallbackId = typeof accountsCurrentId !== "undefined" ? accountsCurrentId : null;
+    txAccountsCapabilityCache = {
+      accounts: fallbackAccounts,
+      current: fallbackAccounts.find((a) => a.id === fallbackId) || fallbackAccounts[0] || null,
+      currentId: fallbackId,
+    };
+  }
+  return txAccountsCapabilityCache;
+}
+function getTxAccountCapability() {
+  if (txAccountsCapabilityCache) return txAccountsCapabilityCache;
+  const fallbackAccounts = typeof accountsCache !== "undefined" ? (accountsCache || []) : [];
+  const fallbackId = typeof accountsCurrentId !== "undefined" ? accountsCurrentId : null;
+  return {
+    accounts: fallbackAccounts,
+    current: fallbackAccounts.find((a) => a.id === fallbackId) || fallbackAccounts[0] || null,
+    currentId: fallbackId,
+  };
+}
+function getUnlockState(t) {
+  if (!t.at) return { unlockTs: null, locked: false, label: "—", detail: "未知购入时间" };
+  const unlockTs = Number(t.at) + TX_TRADE_COOLDOWN_DAYS * 24 * 60 * 60;
+  const remainingMs = unlockTs * 1000 - Date.now();
+  if (remainingMs <= 0) return { unlockTs, locked: false, label: "已解禁", detail: formatDateTime(unlockTs) };
+  const remainingHours = Math.ceil(remainingMs / 3600000);
+  const remainingDays = Math.ceil(remainingHours / 24);
+  const label = remainingDays > 1 ? `${remainingDays}天后` : `${remainingHours}小时后`;
+  return { unlockTs, locked: true, label, detail: formatDateTime(unlockTs) };
+}
+function getAutomationState(t, accountCapability) {
+  const account = accountCapability?.current || null;
+  const guardStatus = account?.steam_guard_status || {};
+  const hasConfirmToken = !!guardStatus.identity_configured;
+  const unlock = getUnlockState(t);
+  if (t.pending_receipt) return { key: "pending", label: "待收货", hint: "收货后进入交易冷却", className: "is-pending", actionable: false, unlock };
+  if (t.listing_status === "error") return { key: "error", label: "上架异常", hint: "需要检查 Steam 在售状态", className: "is-error", actionable: false, unlock };
+  if (t.listing) return { key: "listing", label: "出售中", hint: "已在 Steam 市场挂售", className: "is-listing", actionable: true, unlock };
+  if (unlock.locked) return { key: "cooldown", label: "冷却中", hint: `${unlock.detail} 可交易`, className: "is-cooldown", actionable: false, unlock };
+  if (hasConfirmToken) return { key: "auto", label: "可自动上架", hint: "当前账号令牌可自动确认", className: "is-auto", actionable: true, unlock };
+  return { key: "manual", label: "需人工确认", hint: "配置身份令牌后可自动确认上架", className: "is-manual", actionable: true, unlock };
+}
+function renderAutomationBadge(state) {
+  return `<span class="tx-state-pill ${state.className}" title="${escapeHtml(state.hint)}">${escapeHtml(state.label)}</span>`;
+}
+function renderTradeAction(t, state, type, idx, multiSelectMode) {
+  if (multiSelectMode) {
+    return `<button type="button" class="btn btn-sm btn-edit tx-btn-edit" data-type="${escapeHtml(type)}" data-idx="${idx}">编辑</button>`;
+  }
+  if (state.key === "cooldown" || state.key === "pending") {
+    return `<button type="button" class="btn btn-sm btn-secondary tx-btn-disabled" disabled title="${escapeHtml(state.hint)}">${escapeHtml(state.key === "cooldown" ? state.unlock.label + "可售" : "待收货")}</button><div class="tx-actions-dropdown"><button type="button" class="tx-actions-trigger" title="更多">⋮</button><div class="tx-actions-menu"><button type="button" class="tx-action-item tx-btn-edit" data-type="${escapeHtml(type)}" data-idx="${idx}">编辑</button><button type="button" class="tx-action-item tx-action-danger tx-btn-del" data-type="${escapeHtml(type)}" data-idx="${idx}">删除</button></div></div>`;
+  }
+  if (state.key === "listing") {
+    return `<div class="tx-actions-dropdown"><button type="button" class="tx-actions-trigger" title="操作">⋮</button><div class="tx-actions-menu"><button type="button" class="tx-action-item ph-btn-delist" data-type="purchase" data-idx="${idx}">下架</button><button type="button" class="tx-action-item tx-btn-edit" data-type="${escapeHtml(type)}" data-idx="${idx}">编辑</button><button type="button" class="tx-action-item tx-action-danger tx-btn-del" data-type="${escapeHtml(type)}" data-idx="${idx}">删除</button></div></div>`;
+  }
+  const primaryClass = state.key === "auto" ? "tx-btn-auto-list" : "tx-btn-sell";
+  const primaryLabel = state.key === "auto" ? "自动上架" : "记录售出";
+  return `<button type="button" class="btn btn-sm btn-primary ${primaryClass}" data-type="${escapeHtml(type)}" data-idx="${idx}">${primaryLabel}</button><div class="tx-actions-dropdown"><button type="button" class="tx-actions-trigger" title="更多">⋮</button><div class="tx-actions-menu"><button type="button" class="tx-action-item tx-btn-edit" data-type="${escapeHtml(type)}" data-idx="${idx}">编辑</button><button type="button" class="tx-action-item tx-action-danger tx-btn-del" data-type="${escapeHtml(type)}" data-idx="${idx}">删除</button></div></div>`;
+}
+function getSelectedCount(selector) {
+  return document.querySelectorAll(selector + ":checked").length;
+}
+function bindSelectionCount(selector, countId) {
+  const update = () => {
+    const countEl = el(countId);
+    if (countEl) countEl.textContent = String(getSelectedCount(selector));
+  };
+  document.querySelectorAll(selector).forEach((cb) => cb.addEventListener("change", update));
+  update();
+}
 function formatPriceRefreshTime(ts) {
   if (!ts) return "—";
   const d = new Date(ts);
@@ -151,26 +256,27 @@ function updateMarketPriceNotice(meta, holdings) {
 }
 function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, multiSelectMode = false) {
   const ratio = Math.max(0.01, Math.min(1, Number(resellRatio) || 0.85));
+  const accountCapability = getTxAccountCapability();
+  const accountName = normalizeAccountLabel(accountCapability.current);
   const rowHtmls = [];
   for (const t of list) {
-    const at = t.at ? new Date(t.at * 1000) : null;
-    const timeStr = at ? `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, "0")}-${String(at.getDate()).padStart(2, "0")} ${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}:${String(at.getSeconds()).padStart(2, "0")}` : "—";
+    const timeStr = formatDateTime(t.at);
     const nameText = (t.name || "—").toString();
-    const iconPath = typeof getIconForName === 'function' ? getIconForName(nameText) : '';
-    const nameIconHtml = iconPath && typeof getIconUrl === 'function'
-      ? `<img class="item-icon" src="${getIconUrl(iconPath)}" alt="" loading="lazy" onerror="this.style.display='none'" />`
-      : '';
-    const nameHtml = `<span class="item-name-cell">${nameIconHtml}<span>${escapeHtml(nameText)}</span></span>`;
+    const nameHtml = buildItemNameHtml(nameText);
     const idx = t.idx;
     const type = t.type;
-    const actHtml = isPurchase
+    const checkCell = isPurchase
       ? (multiSelectMode
-        ? `<button type="button" class="btn btn-sm btn-edit tx-btn-edit" data-type="${escapeHtml(type)}" data-idx="${idx}">编辑</button>`
-        : `<button type="button" class="btn btn-sm btn-primary tx-btn-sell" data-type="${escapeHtml(type)}" data-idx="${idx}">售出</button><div class="tx-actions-dropdown"><button type="button" class="tx-actions-trigger" title="更多">⋮</button><div class="tx-actions-menu"><button type="button" class="tx-action-item tx-btn-edit" data-type="${escapeHtml(type)}" data-idx="${idx}">编辑</button><button type="button" class="tx-action-item tx-action-danger tx-btn-del" data-type="${escapeHtml(type)}" data-idx="${idx}">删除</button></div></div>`)
-      : `<div class="tx-actions-dropdown"><button type="button" class="tx-actions-trigger" title="操作">⋮</button><div class="tx-actions-menu"><button type="button" class="tx-action-item tx-btn-edit" data-type="${escapeHtml(type)}" data-idx="${idx}">编辑</button><button type="button" class="tx-action-item tx-action-danger tx-btn-del" data-type="${escapeHtml(type)}" data-idx="${idx}">删除</button></div></div>`;
-    const checkCell = isPurchase && multiSelectMode ? `<td class="holding-select-cell"><input type="checkbox" class="holding-checkbox" data-idx="${idx}" /></td>` : "";
+        ? `<td class="holding-select-cell"><input type="checkbox" class="holding-checkbox" data-idx="${idx}" /></td>`
+        : `<td class="holding-select-cell hidden"></td>`)
+      : "";
     const priceCell = `<td class="mono">${escapeHtml(Number(t.price).toFixed(2))}</td>`;
     if (isPurchase) {
+      const state = getAutomationState(t, accountCapability);
+      const actHtml = renderTradeAction(t, state, type, idx, multiSelectMode);
+      const accountCell = `<td><span class="tx-account-cell" title="${escapeHtml(accountName)}">${escapeHtml(accountName)}</span></td>`;
+      const unlockCell = `<td><span class="tx-unlock-cell ${state.unlock.locked ? "is-locked" : "is-ready"}"><span>${escapeHtml(state.unlock.detail)}</span><small>${escapeHtml(state.unlock.label)}</small></span></td>`;
+      const automationCell = `<td>${renderAutomationBadge(state)}</td>`;
       const mp = t.market_price != null ? Number(t.market_price).toFixed(2) : "—";
       const cur = t.current_market_price != null ? Number(t.current_market_price) : null;
       const cmp = cur != null ? cur.toFixed(2) : "";
@@ -202,13 +308,38 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
       const selfUseCell = selfUseProfit ? `<td class="mono tx-extra-col ${selfUseClass}">${escapeHtml(parseFloat(selfUseProfit) >= 0 ? "+" + selfUseProfit : selfUseProfit)}</td>` : `<td class="tx-extra-col"></td>`;
       const assetidCell = `<td class="mono tx-extra-col">${escapeHtml(t.assetid ?? "—")}</td>`;
       const buyMarketCell = `<td class="mono tx-extra-col">${escapeHtml(mp)}</td>`;
-      rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${nameHtml}</td>${assetidCell}${priceCell}${buyMarketCell}${cmpCell}${afterTaxCell}${discountRatioCell}${profitCell}${selfUseCell}${plCell}<td class="tx-actions">${actHtml}</td></tr>`);
+      rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${nameHtml}</td>${accountCell}${unlockCell}${automationCell}${assetidCell}${priceCell}${buyMarketCell}${cmpCell}${afterTaxCell}${discountRatioCell}${profitCell}${selfUseCell}${plCell}<td class="tx-actions">${actHtml}</td></tr>`);
     } else {
+      const actHtml = `<div class="tx-actions-dropdown"><button type="button" class="tx-actions-trigger" title="操作">⋮</button><div class="tx-actions-menu"><button type="button" class="tx-action-item tx-btn-edit" data-type="${escapeHtml(type)}" data-idx="${idx}">编辑</button><button type="button" class="tx-action-item tx-action-danger tx-btn-del" data-type="${escapeHtml(type)}" data-idx="${idx}">删除</button></div></div>`;
       const assetidCell = `<td class="mono">${escapeHtml(t.assetid ?? "—")}</td>`;
       rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${nameHtml}</td>${assetidCell}${priceCell}<td class="tx-actions">${actHtml}</td></tr>`);
     }
   }
   tbody.innerHTML = rowHtmls.join("");
+  bindSelectionCount("#transactions-table-purchases .holding-checkbox", "holdings-selected-count");
+  tbody.querySelectorAll(".ph-btn-delist").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("确定下架该饰品？下架后 assetid 会变更。")) return;
+      const idx = parseInt(btn.dataset.idx, 10);
+      btn.disabled = true;
+      toast("下架中", "请稍候…");
+      try {
+        const r = await fetchJson(API + "/purchase/" + idx + "/delist", { method: "POST" });
+        if (r.ok) {
+          const detail = r.assetid != null && r.assetid !== "" ? "新 assetid: " + r.assetid : "新 assetid 为空，请使用「同步售出/持有」补全";
+          toast("下架成功", detail);
+          refreshTransactions();
+          refreshStatus();
+        } else {
+          toast("下架失败", r.error || "接口未返回 error 字段");
+        }
+      } catch (e) {
+        toast("下架失败", e.message || "请求异常");
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
   tbody.querySelectorAll(".tx-btn-del").forEach(btn => {
     btn.addEventListener("click", async () => {
       if (!confirm("确定删除这条记录？")) return;
@@ -272,20 +403,31 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
       if (priceEl) priceEl.focus();
     });
   });
+  tbody.querySelectorAll(".tx-btn-auto-list").forEach(btn => {
+    btn.addEventListener("click", () => {
+      toast("已具备自动上架条件", "启动任务后，出售阶段会按策略和 Steam 解禁状态处理该饰品。");
+    });
+  });
 }
 function renderPurchaseHistoryTable(tbody, list, resellRatio = 0.85, multiSelectMode = false) {
   const ratio = Math.max(0.01, Math.min(1, Number(resellRatio) || 0.85));
+  const accountCapability = getTxAccountCapability();
+  const accountName = normalizeAccountLabel(accountCapability.current);
   const sorted = list.slice().sort((a, b) => (b.at || 0) - (a.at || 0));
   const rowHtmls = [];
   for (const t of sorted) {
-    const at = t.at ? new Date(t.at * 1000) : null;
-    const timeStr = at ? `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, "0")}-${String(at.getDate()).padStart(2, "0")} ${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}:${String(at.getSeconds()).padStart(2, "0")}` : "—";
+    const timeStr = formatDateTime(t.at);
+    const soldTimeStr = formatDateTime(t.sold_at);
     const nameText = (t.name || "—").toString();
+    const nameHtml = buildItemNameHtml(nameText);
     const idx = t.idx;
-    const checkCell = multiSelectMode ? `<td class="holding-select-cell"><input type="checkbox" class="history-checkbox" data-idx="${idx}" /></td>` : "";
+    const checkCell = multiSelectMode
+      ? `<td class="holding-select-cell"><input type="checkbox" class="history-checkbox" data-idx="${idx}" /></td>`
+      : `<td class="holding-select-cell hidden"></td>`;
     const cost = Number(t.price) || 0;
     const mp = t.market_price != null ? Number(t.market_price).toFixed(2) : "—";
     const sold = t.sale_price != null && Number(t.sale_price) > 0;
+    const state = getAutomationState(t, accountCapability);
     const listingError = t.listing_status === "error";
     const statusStr = t.pending_receipt ? "待收货" : sold ? "已出售" : listingError ? "ERROR" : t.listing ? "出售中" : "持有中";
     const statusCellClass = t.pending_receipt ? "status-pending" : sold ? "status-sold" : listingError ? "status-error" : t.listing ? "status-listing" : "status-holding";
@@ -321,9 +463,10 @@ function renderPurchaseHistoryTable(tbody, list, resellRatio = 0.85, multiSelect
     const delistItem = hasListing ? `<button type="button" class="tx-action-item ph-btn-delist" data-type="purchase" data-idx="${idx}">下架</button>` : "";
     const actHtml = !multiSelectMode ? `<div class="tx-actions-dropdown"><button type="button" class="tx-actions-trigger" title="操作">⋮</button><div class="tx-actions-menu">${delistItem}<button type="button" class="tx-action-item tx-action-danger ph-btn-del" data-type="purchase" data-idx="${idx}">删除</button></div></div>` : "";
     const assetidStr = t.assetid ?? "—";
-    rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${escapeHtml(nameText)}</td><td class="mono tx-extra-col">${escapeHtml(assetidStr)}</td><td class="mono">${escapeHtml(Number(t.price).toFixed(2))}</td><td class="mono tx-extra-col">${escapeHtml(mp)}</td><td class="status-cell ${statusCellClass}">${escapeHtml(statusStr)}</td><td class="mono">${escapeHtml(salePriceStr)}</td><td class="mono ${discountRatioClass}">${escapeHtml(discountRatioStr)}</td><td class="mono ${cashClass}">${escapeHtml(cashProfitStr)}</td><td class="mono tx-extra-col ${selfUseClass}">${escapeHtml(selfUseStr)}</td>${deviationCell}<td class="tx-actions">${actHtml}</td></tr>`);
+    rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${nameHtml}</td><td><span class="tx-account-cell" title="${escapeHtml(accountName)}">${escapeHtml(accountName)}</span></td><td>${renderAutomationBadge(sold ? { className: "is-sold", label: "已完成", hint: "该记录已出售" } : state)}</td><td class="mono tx-extra-col">${escapeHtml(assetidStr)}</td><td class="mono">${escapeHtml(Number(t.price).toFixed(2))}</td><td class="mono tx-extra-col">${escapeHtml(mp)}</td><td class="status-cell ${statusCellClass}">${escapeHtml(statusStr)}</td><td class="mono">${escapeHtml(salePriceStr)}</td><td class="mono tx-extra-col">${escapeHtml(soldTimeStr)}</td><td class="mono ${discountRatioClass}">${escapeHtml(discountRatioStr)}</td><td class="mono ${cashClass}">${escapeHtml(cashProfitStr)}</td><td class="mono tx-extra-col ${selfUseClass}">${escapeHtml(selfUseStr)}</td>${deviationCell}<td class="tx-actions">${actHtml}</td></tr>`);
   }
   tbody.innerHTML = rowHtmls.join("");
+  bindSelectionCount("#transactions-table-purchase-history .history-checkbox", "history-selected-count");
   tbody.querySelectorAll(".ph-btn-delist").forEach(btn => {
     btn.addEventListener("click", async () => {
       if (!confirm("确定下架该饰品？下架后 assetid 会变更。")) return;
@@ -373,6 +516,12 @@ function applyTransactionsToUI(all, summaryEl, tbodyP, tbodyHistory, resellRatio
   const historyCountEl = el("tx-tab-count-history");
   if (holdingsCountEl) holdingsCountEl.textContent = String(holdings.length);
   if (historyCountEl) historyCountEl.textContent = String(purchases.length);
+  refreshTxAccountCapability().then(() => {
+    if (lastEnrichData === all) {
+      if (tbodyP) renderTxTable(tbodyP, holdings, true, ratio, holdingsMultiSelectMode);
+      if (tbodyHistory) renderPurchaseHistoryTable(tbodyHistory, purchases, ratio, historyMultiSelectMode);
+    }
+  });
   syncTxColumnToggleUI();
   if (tbodyP) renderTxTable(tbodyP, holdings, true, ratio, holdingsMultiSelectMode);
   if (tbodyHistory) renderPurchaseHistoryTable(tbodyHistory, purchases, ratio, historyMultiSelectMode);
@@ -484,10 +633,13 @@ function syncHoldingsMultiSelectUI() {
     if (selectTh) selectTh.classList.remove("hidden");
     if (batchBar) { batchBar.classList.remove("hidden"); batchBar.style.display = "flex"; }
     if (multiselectBtn) multiselectBtn.textContent = "取消多选";
+    bindSelectionCount("#transactions-table-purchases .holding-checkbox", "holdings-selected-count");
   } else {
     if (selectTh) selectTh.classList.add("hidden");
     if (batchBar) { batchBar.classList.add("hidden"); batchBar.style.display = "none"; }
     if (multiselectBtn) multiselectBtn.textContent = "多选";
+    const countEl = el("holdings-selected-count");
+    if (countEl) countEl.textContent = "0";
   }
 }
 function syncHistoryMultiSelectUI() {
@@ -498,10 +650,13 @@ function syncHistoryMultiSelectUI() {
     if (selectTh) selectTh.classList.remove("hidden");
     if (batchBar) { batchBar.classList.remove("hidden"); batchBar.style.display = "flex"; }
     if (multiselectBtn) multiselectBtn.textContent = "取消多选";
+    bindSelectionCount("#transactions-table-purchase-history .history-checkbox", "history-selected-count");
   } else {
     if (selectTh) selectTh.classList.add("hidden");
     if (batchBar) { batchBar.classList.add("hidden"); batchBar.style.display = "none"; }
     if (multiselectBtn) multiselectBtn.textContent = "多选";
+    const countEl = el("history-selected-count");
+    if (countEl) countEl.textContent = "0";
   }
 }
 function syncTxColumnToggleUI() {

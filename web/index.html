@@ -7,21 +7,21 @@
   <title>AetherSwap</title>
   <link rel="stylesheet" href="/css/variables.css" />
   <link rel="stylesheet" href="/css/base.css" />
-  <link rel="stylesheet" href="/css/layout.css?v=2" />
+  <link rel="stylesheet" href="/css/layout.css" />
   <!-- Component modules (split from components.css — Phase 1.4) -->
   <link rel="stylesheet" href="/css/sidebar.css" />
   <link rel="stylesheet" href="/css/stat-cards.css" />
   <link rel="stylesheet" href="/css/buttons.css" />
-  <link rel="stylesheet" href="/css/tables.css?v=5" />
-  <link rel="stylesheet" href="/css/forms.css?v=2" />
+  <link rel="stylesheet" href="/css/tables.css" />
+  <link rel="stylesheet" href="/css/forms.css" />
   <link rel="stylesheet" href="/css/modals.css" />
   <link rel="stylesheet" href="/css/toast.css" />
-  <link rel="stylesheet" href="/css/accounts.css?v=2" />
+  <link rel="stylesheet" href="/css/accounts.css" />
   <link rel="stylesheet" href="/css/console.css" />
   <link rel="stylesheet" href="/css/gift.css" />
-  <link rel="stylesheet" href="/css/steam-deals.css?v=3" />
+  <link rel="stylesheet" href="/css/steam-deals.css" />
   <link rel="stylesheet" href="/css/proxy.css" />
-  <link rel="stylesheet" href="/css/components-core.css?v=2" />
+  <link rel="stylesheet" href="/css/components-core.css" />
   <link rel="stylesheet" href="/css/animations.css" />
   <link rel="stylesheet" href="/css/inline-overrides.css" />
   <link rel="stylesheet" href="/css/gap-closure.css" />
@@ -357,8 +357,9 @@
               <button id="btn-holdings-toggle-cols" class="btn btn-sm btn-secondary" type="button" aria-pressed="false">显示更多列</button>
               <button id="btn-holdings-multiselect" class="btn btn-sm btn-secondary">多选</button>
             </div>
-            <div id="holdings-batch-actions" class="hidden" style="display:none;gap:8px;align-items:center;">
-              <button id="btn-holdings-batch-sell" class="btn btn-sm btn-primary">批量出售</button>
+            <div id="holdings-batch-actions" class="tx-batch-bar hidden" style="display:none;">
+              <span class="tx-batch-count">已选择 <strong id="holdings-selected-count">0</strong> 项</span>
+              <button id="btn-holdings-batch-sell" class="btn btn-sm btn-primary">批量记录售出</button>
               <button id="btn-holdings-batch-del" class="btn btn-sm btn-danger-outline">批量删除</button>
             </div>
           </div>
@@ -387,6 +388,9 @@
                 <th id="holding-select-th" class="hidden" style="width:52px;min-width:52px"></th>
                 <th>时间</th>
                 <th>物品/说明</th>
+                <th>账号</th>
+                <th>解禁时间</th>
+                <th>自动化</th>
                 <th class="tx-extra-col">assetid</th>
                 <th>购入价</th>
                 <th class="tx-extra-col">购入市场价</th>
@@ -415,7 +419,8 @@
               <button id="btn-history-toggle-cols" class="btn btn-sm btn-secondary" type="button" aria-pressed="false">显示更多列</button>
               <button id="btn-history-multiselect" class="btn btn-sm btn-secondary">多选</button>
             </div>
-            <div id="history-batch-actions" class="hidden" style="display:none;gap:8px;align-items:center;">
+            <div id="history-batch-actions" class="tx-batch-bar hidden" style="display:none;">
+              <span class="tx-batch-count">已选择 <strong id="history-selected-count">0</strong> 项</span>
               <button id="btn-history-batch-del" class="btn btn-sm btn-danger-outline">批量删除</button>
             </div>
           </div>
@@ -428,11 +433,14 @@
                 <th id="history-select-th" class="hidden" style="width:52px;min-width:52px"></th>
                 <th>时间</th>
                 <th>物品说明</th>
+                <th>账号</th>
+                <th>自动化</th>
                 <th class="tx-extra-col">assetid</th>
                 <th>购入价</th>
                 <th class="tx-extra-col">购入市场价</th>
                 <th>出售状态</th>
                 <th>出售价格</th>
+                <th class="tx-extra-col">售出时间</th>
                 <th>实际折扣比率</th>
                 <th>变现收益</th>
                 <th class="tx-extra-col">自用收益</th>
@@ -457,11 +465,12 @@
             <thead>
               <tr>
                 <th>饰品名称</th>
-                <th>数量</th>
+                <th>持仓</th>
+                <th>已卖</th>
                 <th>购入均价</th>
                 <th>购入市场均价</th>
+                <th>当前均价</th>
                 <th>总出售额</th>
-                <th>出售均价</th>
                 <th>实际折扣比例均值</th>
                 <th>总变现收益</th>
                 <th>价格偏离度均值</th>
@@ -1703,17 +1712,17 @@
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="/js/utils.js?v=2"></script>
+  <script src="/js/utils.js"></script>
   <script src="/js/theme.js"></script>
-  <script src="/js/accounts.js?v=2"></script>
+  <script src="/js/accounts.js"></script>
   <script src="/js/console.js"></script>
-  <script src="/js/transactions.js?v=6"></script>
-  <script src="/js/settings.js?v=2"></script>
+  <script src="/js/transactions.js"></script>
+  <script src="/js/settings.js"></script>
   <script src="/js/proxy.js"></script>
   <script src="/js/gap-closure.js"></script>
-  <script src="/js/main.js?v=8"></script>
-  <script src="/js/gift.js?v=2"></script>
-  <script src="/js/steamDeals.js?v=4"></script>
+  <script src="/js/main.js"></script>
+  <script src="/js/gift.js"></script>
+  <script src="/js/steamDeals.js"></script>
   <script>
     // 简单的辅助脚本，用于更新标题显示
     document.querySelectorAll('.nav-item').forEach(btn => {

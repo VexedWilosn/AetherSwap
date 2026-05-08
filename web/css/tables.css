@@ -8,14 +8,19 @@
 }
 
 #panel-transactions {
-  max-width: 1680px;
+  max-width: none;
+  min-width: 0;
+  width: 100%;
+  overflow-x: hidden;
 }
 
 #panel-transactions .tx-pane {
+  min-width: 0;
   max-width: 100%;
 }
 
 #panel-transactions .panel-toolbar {
+  min-width: 0;
   margin-bottom: 12px;
   flex-direction: column;
   align-items: stretch;
@@ -24,6 +29,12 @@
 
 #panel-transactions .panel-toolbar-row {
   align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+#panel-transactions .panel-toolbar-actions {
+  margin-left: auto;
 }
 
 #panel-transactions .toolbar-title {
@@ -52,6 +63,8 @@
   border: 1px solid var(--border-color);
   font-size: 13px;
   box-shadow: var(--shadow-xs);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .purchases-summary .summary-stat {
@@ -94,18 +107,47 @@
 .market-price-tools {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  margin-right: 4px;
+  min-height: 40px;
+  gap: 0;
+  margin-right: 6px;
+  padding: 3px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-xs);
+}
+
+.market-price-tools .btn {
+  min-height: 32px;
+  border-radius: calc(var(--radius-md) - 4px);
+  box-shadow: none;
 }
 
 .market-price-refresh-record {
-  max-width: 260px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  max-width: 320px;
+  margin-left: 6px;
+  padding: 0 9px 0 10px;
+  border-left: 1px solid var(--border-color);
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.market-price-refresh-record::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: var(--info);
+  box-shadow: 0 0 0 3px var(--info-soft);
+  flex: 0 0 auto;
 }
 
 .market-price-notice {
@@ -222,6 +264,8 @@
   padding: 12px 14px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .add-purchase-bar .label {
@@ -250,13 +294,18 @@
 }
 
 #panel-transactions .table-card {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 #panel-transactions table {
   width: 100%;
-  min-width: 1120px;
-  table-layout: fixed;
+  min-width: max(1360px, 100%);
+  table-layout: auto;
 }
 
 #panel-transactions th,
@@ -296,6 +345,110 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+#panel-transactions .tx-batch-bar {
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+}
+
+#panel-transactions .tx-batch-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+#panel-transactions .tx-batch-count strong {
+  margin: 0 4px;
+  color: var(--text-main);
+  font-family: var(--font-mono);
+}
+
+#panel-transactions .tx-account-cell {
+  display: inline-block;
+  max-width: 128px;
+  overflow: hidden;
+  color: var(--text-main);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#panel-transactions .tx-unlock-cell {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 118px;
+  line-height: 1.15;
+}
+
+#panel-transactions .tx-unlock-cell small {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+#panel-transactions .tx-unlock-cell.is-ready span {
+  color: var(--success);
+  font-weight: 650;
+}
+
+#panel-transactions .tx-unlock-cell.is-locked span {
+  color: var(--warning);
+  font-weight: 650;
+}
+
+#panel-transactions .tx-state-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+#panel-transactions .tx-state-pill.is-auto {
+  border-color: color-mix(in srgb, var(--success) 32%, transparent);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+#panel-transactions .tx-state-pill.is-manual,
+#panel-transactions .tx-state-pill.is-cooldown,
+#panel-transactions .tx-state-pill.is-pending {
+  border-color: color-mix(in srgb, var(--warning) 30%, transparent);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+#panel-transactions .tx-state-pill.is-listing {
+  border-color: color-mix(in srgb, var(--primary) 28%, transparent);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+#panel-transactions .tx-state-pill.is-sold {
+  border-color: color-mix(in srgb, var(--success) 28%, transparent);
+  color: var(--success);
+}
+
+#panel-transactions .tx-state-pill.is-error {
+  border-color: color-mix(in srgb, var(--danger) 28%, transparent);
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 #transactions-table-purchases th:nth-child(1),
@@ -386,7 +539,7 @@
 }
 
 #analytics-table {
-  min-width: 980px;
+  min-width: max(1120px, 100%);
 }
 
 #analytics-table th:first-child,
@@ -468,4 +621,153 @@
 }
 .tx-action-danger:hover {
   background: var(--danger-soft);
+}
+
+#transactions-table-purchases th,
+#transactions-table-purchases td,
+#transactions-table-purchase-history th,
+#transactions-table-purchase-history td {
+  width: auto;
+}
+
+#transactions-table-purchases th:nth-child(1),
+#transactions-table-purchases td:nth-child(1),
+#transactions-table-purchase-history th:nth-child(1),
+#transactions-table-purchase-history td:nth-child(1) {
+  width: 48px;
+}
+
+#transactions-table-purchases th:nth-child(2),
+#transactions-table-purchases td:nth-child(2),
+#transactions-table-purchase-history th:nth-child(2),
+#transactions-table-purchase-history td:nth-child(2) {
+  width: 142px;
+  color: var(--text-secondary);
+}
+
+#transactions-table-purchases th:nth-child(3),
+#transactions-table-purchases td:nth-child(3),
+#transactions-table-purchase-history th:nth-child(3),
+#transactions-table-purchase-history td:nth-child(3) {
+  min-width: 260px;
+}
+
+#transactions-table-purchases th:nth-child(4),
+#transactions-table-purchases td:nth-child(4),
+#transactions-table-purchase-history th:nth-child(4),
+#transactions-table-purchase-history td:nth-child(4) {
+  width: 96px;
+  min-width: 96px;
+  max-width: 96px;
+  text-align: center;
+}
+
+#transactions-table-purchases th:nth-child(5),
+#transactions-table-purchases td:nth-child(5) {
+  width: 142px;
+}
+
+#transactions-table-purchases th:nth-child(6),
+#transactions-table-purchases td:nth-child(6),
+#transactions-table-purchase-history th:nth-child(5),
+#transactions-table-purchase-history td:nth-child(5) {
+  width: 118px;
+}
+
+#transactions-table-purchases th:nth-child(7),
+#transactions-table-purchases td:nth-child(7),
+#transactions-table-purchase-history th:nth-child(6),
+#transactions-table-purchase-history td:nth-child(6) {
+  width: 128px;
+}
+
+#transactions-table-purchases th:nth-child(n+8),
+#transactions-table-purchases td:nth-child(n+8),
+#transactions-table-purchase-history th:nth-child(n+7),
+#transactions-table-purchase-history td:nth-child(n+7),
+#analytics-table th:not(:first-child),
+#analytics-table td:not(:first-child) {
+  text-align: right;
+}
+
+#transactions-table-purchases th:last-child,
+#transactions-table-purchases td:last-child,
+#transactions-table-purchase-history th:last-child,
+#transactions-table-purchase-history td:last-child {
+  width: 136px;
+}
+
+#transactions-table-purchases td:nth-child(4),
+#transactions-table-purchases td:nth-child(5),
+#transactions-table-purchases td:nth-child(6),
+#transactions-table-purchase-history td:nth-child(5) {
+  text-align: left;
+}
+
+#transactions-table-purchases td:nth-child(4),
+#transactions-table-purchase-history td:nth-child(4) {
+  text-align: center;
+}
+
+#transactions-table-purchases th:nth-child(4),
+#transactions-table-purchase-history th:nth-child(4) {
+  text-align: center;
+}
+
+#analytics-table th:first-child,
+#analytics-table td:first-child {
+  min-width: 280px;
+}
+
+#analytics-table th:not(:first-child),
+#analytics-table td:not(:first-child) {
+  width: 112px;
+}
+
+@media (min-width: 1600px) {
+  #panel-transactions table {
+    min-width: 100%;
+  }
+
+  #transactions-table-purchases th:nth-child(3),
+  #transactions-table-purchases td:nth-child(3),
+  #transactions-table-purchase-history th:nth-child(3),
+  #transactions-table-purchase-history td:nth-child(3) {
+    min-width: 360px;
+  }
+}
+
+@media (max-width: 900px) {
+  #panel-transactions .panel-toolbar-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  #panel-transactions .panel-toolbar-actions,
+  #panel-transactions .tx-batch-bar {
+    justify-content: flex-start;
+    margin-left: 0;
+    width: 100%;
+  }
+
+  #panel-transactions table {
+    min-width: 1320px;
+  }
+
+  .add-purchase-bar {
+    align-items: stretch;
+  }
+
+  .add-purchase-bar input[type="text"],
+  .add-purchase-bar input[type="number"],
+  .add-purchase-bar #add-purchase-steam-link,
+  .add-purchase-bar #add-purchase-quantity {
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .add-purchase-bar #btn-add-purchase {
+    width: 100%;
+  }
 }

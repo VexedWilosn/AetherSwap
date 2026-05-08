@@ -98,6 +98,7 @@ button {
 
 .main-content {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -171,7 +172,9 @@ button {
 .panel {
   display: none;
   flex: 1;
+  min-width: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 0 36px 36px;
   animation: panelSlideIn 0.5s var(--ease-spring);
 }
@@ -1369,6 +1372,8 @@ button {
 
 .tx-pane {
   display: none;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .tx-pane.active {

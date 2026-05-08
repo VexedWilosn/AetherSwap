@@ -526,6 +526,9 @@ function aggregateByItemName(purchases, resellRatio = 0.85) {
         totalPrice: 0,
         totalMp: 0,
         mpCount: 0,
+        heldCount: 0,
+        totalCurrentPrice: 0,
+        currentPriceCount: 0,
         soldCount: 0,
         totalSalePrice: 0,
         totalDiscountRatio: 0,
@@ -543,6 +546,13 @@ function aggregateByItemName(purchases, resellRatio = 0.85) {
       r.mpCount += 1;
     }
     const sold = t.sale_price != null && Number(t.sale_price) > 0;
+    if (!sold) {
+      r.heldCount += 1;
+      if (t.current_market_price != null) {
+        r.totalCurrentPrice += Number(t.current_market_price);
+        r.currentPriceCount += 1;
+      }
+    }
     if (sold) {
       const saleP = Number(t.sale_price);
       const cost = Number(t.price) || 0;
@@ -563,8 +573,11 @@ function aggregateByItemName(purchases, resellRatio = 0.85) {
     .map((r) => ({
       name: r.name,
       count: r.count,
+      heldCount: r.heldCount,
+      soldCount: r.soldCount,
       avgPrice: r.count > 0 ? r.totalPrice / r.count : 0,
       avgMp: r.mpCount > 0 ? r.totalMp / r.mpCount : null,
+      avgCurrentPrice: r.currentPriceCount > 0 ? r.totalCurrentPrice / r.currentPriceCount : null,
       totalSaleAmount: r.soldCount > 0 ? r.totalSalePrice : null,
       avgSalePrice: r.soldCount > 0 ? r.totalSalePrice / r.soldCount : null,
       avgDiscountRatio: r.soldCount > 0 && r.totalDiscountRatio > 0 ? r.totalDiscountRatio / r.soldCount : null,
@@ -580,10 +593,11 @@ function refreshAnalytics(purchases, resellRatio) {
   const render = (list, ratio) => {
     const rows = aggregateByItemName(list, ratio);
     const rowHtmls = rows.map((r) => {
+      const nameHtml = typeof buildItemNameHtml === "function" ? buildItemNameHtml(r.name) : escapeHtml(r.name);
       const avgPriceStr = r.avgPrice > 0 ? r.avgPrice.toFixed(2) : "—";
       const avgMpStr = r.avgMp != null ? r.avgMp.toFixed(2) : "—";
+      const avgCurrentStr = r.avgCurrentPrice != null ? r.avgCurrentPrice.toFixed(2) : "—";
       const totalSaleStr = r.totalSaleAmount != null ? r.totalSaleAmount.toFixed(2) : "—";
-      const avgSaleStr = r.avgSalePrice != null ? r.avgSalePrice.toFixed(2) : "—";
       const avgDiscountStr = r.avgDiscountRatio != null ? r.avgDiscountRatio.toFixed(4) : "—";
       const discountRatioClass = avgDiscountStr !== "—" ? (parseFloat(avgDiscountStr) > ratio ? "text-bad" : "text-ok") : "";
       const cashProfitStr = r.totalCashProfit != null ? (r.totalCashProfit >= 0 ? "+" : "") + r.totalCashProfit.toFixed(2) : "—";
@@ -591,9 +605,9 @@ function refreshAnalytics(purchases, resellRatio) {
       const avgDevPctStr = r.avgDeviationPct != null ? (r.avgDeviationPct >= 0 ? "+" : "") + r.avgDeviationPct.toFixed(2) + "%" : "";
       const avgDevStr = r.avgDeviation != null ? (r.avgDeviation >= 0 ? "+" : "") + r.avgDeviation.toFixed(2) + (avgDevPctStr ? " (" + avgDevPctStr + ")" : "") : "—";
       const devClass = r.avgDeviation != null ? (r.avgDeviation > 0 ? "text-ok" : r.avgDeviation < 0 ? "text-bad" : "") : "";
-      return `<tr><td>${escapeHtml(r.name)}</td><td class="mono">${r.count}</td><td class="mono">${avgPriceStr}</td><td class="mono">${avgMpStr}</td><td class="mono">${totalSaleStr}</td><td class="mono">${avgSaleStr}</td><td class="mono ${discountRatioClass}">${avgDiscountStr}</td><td class="mono ${cashClass}">${cashProfitStr}</td><td class="mono ${devClass}">${avgDevStr}</td></tr>`;
+      return `<tr><td>${nameHtml}</td><td class="mono">${r.heldCount}</td><td class="mono">${r.soldCount}</td><td class="mono">${avgPriceStr}</td><td class="mono">${avgMpStr}</td><td class="mono">${avgCurrentStr}</td><td class="mono">${totalSaleStr}</td><td class="mono ${discountRatioClass}">${avgDiscountStr}</td><td class="mono ${cashClass}">${cashProfitStr}</td><td class="mono ${devClass}">${avgDevStr}</td></tr>`;
     });
-    tbody.innerHTML = rowHtmls.length ? rowHtmls.join("") : "<tr><td colspan='9' class='text-muted'>暂无数据</td></tr>";
+    tbody.innerHTML = rowHtmls.length ? rowHtmls.join("") : "<tr><td colspan='10' class='text-muted'>暂无数据</td></tr>";
   };
   if (purchases != null && resellRatio != null) {
     render(purchases, resellRatio);
@@ -606,7 +620,7 @@ function refreshAnalytics(purchases, resellRatio) {
       })
       .catch((e) => {
         toast("加载数据分析失败", e.message || "");
-        tbody.innerHTML = "<tr><td colspan='9' class='text-muted'>加载失败</td></tr>";
+        tbody.innerHTML = "<tr><td colspan='10' class='text-muted'>加载失败</td></tr>";
       });
   }
 }
