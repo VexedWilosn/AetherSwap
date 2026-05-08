@@ -131,6 +131,8 @@ def get_account_steam_guard(account: Optional[dict], cfg: Optional[dict] = None)
 def public_account(account: dict, cfg: Optional[dict] = None) -> dict:
     """Return an account payload with compatibility guard status metadata."""
     out = copy.deepcopy(account)
+    out["has_password"] = bool((out.get("password") or "").strip())
+    out.pop("password", None)
     out["account_note"] = (out.get("account_note") or "").strip()
     guard = _normalize_steam_guard(out.get("steam_guard") or {})
     resolved = get_account_steam_guard(out, cfg)

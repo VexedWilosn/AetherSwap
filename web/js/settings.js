@@ -794,29 +794,54 @@ function _showWizard(startAtBuffStep = false) {
         const username = (el("wiz-account-username")?.value || "").trim();
         const password = (el("wiz-account-password")?.value || "").trim();
         const accountNote = (el("wiz-account-note")?.value || "").trim();
-        if (!username && !accountNote) return;
         try {
           const accData = await fetchJson(API + "/accounts");
+          const accountList = accData.accounts || [];
           const existing = (accData.accounts || []).find((a) =>
             username && a.username === username
           );
+          const current = accountList.find((a) => a.id === accData.current_id) || accountList[0];
+          if (!username && !accountNote) {
+            if (current?.has_password) return true;
+            toast("请填写 Steam 用户名和密码", "保存密码后才能自动保活和执行交易");
+            return false;
+          }
           if (existing) {
-            if (accountNote) {
+            if (!password && !existing.has_password) {
+              toast("请填写 Steam 密码", "该账号还没有保存密码，无法自动保活和执行交易");
+              return false;
+            }
+            const body = {};
+            if (accountNote) body.account_note = accountNote;
+            if (password) body.password = password;
+            if (Object.keys(body).length) {
               await fetchJson(API + "/accounts/" + encodeURIComponent(existing.id), {
                 method: "PUT",
-                body: JSON.stringify({ account_note: accountNote }),
+                body: JSON.stringify(body),
               });
             }
             await fetchJson(API + "/accounts/" + encodeURIComponent(existing.id) + "/set_current", { method: "POST" });
           } else if (!username && accountNote) {
-            const target = (accData.accounts || []).find((a) => a.id === accData.current_id) || (accData.accounts || [])[0];
-            if (target) {
-              await fetchJson(API + "/accounts/" + encodeURIComponent(target.id), {
-                method: "PUT",
-                body: JSON.stringify({ account_note: accountNote }),
-              });
+            const target = current;
+            if (!target) {
+              toast("请填写 Steam 用户名和密码", "保存密码后才能自动保活和执行交易");
+              return false;
             }
+            if (!password && !target.has_password) {
+              toast("请填写 Steam 密码", "该账号还没有保存密码，无法自动保活和执行交易");
+              return false;
+            }
+            const body = { account_note: accountNote };
+            if (password) body.password = password;
+            await fetchJson(API + "/accounts/" + encodeURIComponent(target.id), {
+              method: "PUT",
+              body: JSON.stringify(body),
+            });
           } else if (username) {
+            if (!password) {
+              toast("请填写 Steam 密码", "保存密码后才能自动保活和执行交易");
+              return false;
+            }
             const r = await fetchJson(API + "/accounts", {
               method: "POST",
               body: JSON.stringify({
@@ -833,11 +858,12 @@ function _showWizard(startAtBuffStep = false) {
           try { await refreshAccounts(); } catch { }
         } catch (e) {
           toast("账号保存失败", e.message || "请稍后在账号管理中添加");
+          return false;
         }
       } else if (currentStep === 2) {
         const ss = (el("wiz-shared-secret")?.value || "").trim();
         const is = (el("wiz-identity-secret")?.value || "").trim();
-        if (!ss && !is) return;
+        if (!ss && !is) return true;
         let accountSaved = false;
         try {
           const accData = await fetchJson(API + "/accounts");
@@ -870,7 +896,7 @@ function _showWizard(startAtBuffStep = false) {
         }
       } else if (currentStep === 3) {
         const tok = (el("wiz-pushplus-token")?.value || "").trim();
-        if (!tok) return;
+        if (!tok) return true;
         const notify = { ...(cfg.notify || {}), pushplus_token: tok };
         await fetchJson(API + "/config", {
           method: "POST",
@@ -881,8 +907,10 @@ function _showWizard(startAtBuffStep = false) {
       }
       // step 4 (Buff) is handled by its own buttons
       try { updateUXStatus(((await fetchJson(API + "/config")).config || {})); } catch { }
+      return true;
     } catch (e) {
       toast("保存失败", e.message || "请稍后手动在设置页填写");
+      return false;
     }
   }
 
@@ -907,7 +935,8 @@ function _showWizard(startAtBuffStep = false) {
 
   btnNext.onclick = async () => {
     if (currentStep < TOTAL_STEPS) {
-      await saveCurrentStep();
+      const ok = await saveCurrentStep();
+      if (!ok) return;
       goToStep(currentStep + 1);
     } else {
       closeWizard("accounts");
@@ -928,9 +957,22 @@ function _showWizard(startAtBuffStep = false) {
     };
   }
 
-  btnSkip.onclick = () => {
+  btnSkip.onclick = async () => {
     if (currentStep === 0 || currentStep === TOTAL_STEPS) {
       closeWizard(null);
+    } else if (currentStep === 1) {
+      try {
+        const accData = await fetchJson(API + "/accounts");
+        const list = accData.accounts || [];
+        if (!list.some((a) => a.has_password)) {
+          toast("请先保存 Steam 密码", "没有已保存密码的账号时，无法跳过账号配置");
+          return;
+        }
+      } catch {
+        toast("账号检查失败", "请填写 Steam 用户名和密码后继续");
+        return;
+      }
+      goToStep(currentStep + 1);
     } else if (currentStep === 4 && _buffReloginStarted) {
       // 已打开浏览器但选择跳过：取消 relogin
       fetchJson(API + "/auth/buff/relogin_finish", {

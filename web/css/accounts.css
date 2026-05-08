@@ -787,8 +787,350 @@
   margin-top: 14px;
 }
 
+.account-workbench-card {
+  padding: 20px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-xs);
+}
+
+.account-workbench-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 16px;
+}
+
+.account-workbench-title {
+  color: var(--text-main);
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.account-workbench-desc {
+  margin-top: 5px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.account-workbench-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-color);
+}
+
+.account-strategy-head-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.account-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
+
+.account-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.account-toggle-track {
+  position: relative;
+  width: 38px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  transition: background 0.2s var(--ease-out), border-color 0.2s var(--ease-out);
+}
+
+.account-toggle-track::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-xs);
+  transition: transform 0.2s var(--ease-out);
+}
+
+.account-toggle input:checked + .account-toggle-track {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.account-toggle input:checked + .account-toggle-track::after {
+  transform: translateX(16px);
+}
+
+.account-toggle input:focus-visible + .account-toggle-track {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.account-strategy-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.account-strategy-field {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-body);
+  transition: border-color 0.2s var(--ease-out), background 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out);
+}
+
+.account-strategy-field.is-custom {
+  border-color: color-mix(in srgb, var(--primary) 36%, var(--border-color));
+  background: color-mix(in srgb, var(--primary-light) 42%, var(--bg-surface));
+}
+
+.account-strategy-field.is-disabled {
+  opacity: 0.78;
+}
+
+.account-strategy-field-head,
+.account-secret-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.account-strategy-field label,
+.account-secret-label label {
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.account-field-mode,
+.account-secret-label span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.account-strategy-field.is-custom .account-field-mode,
+.account-secret-field.is-filled .account-secret-label span {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.account-strategy-field input,
+.account-strategy-field select,
+.account-secret-input input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 14px;
+  padding: 0 12px;
+  outline: none;
+  transition: border-color 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out), background 0.2s var(--ease-out);
+}
+
+.account-strategy-field input:focus,
+.account-strategy-field select:focus,
+.account-secret-input input:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+.account-strategy-field input:disabled,
+.account-strategy-field select:disabled {
+  color: var(--text-muted);
+  background: var(--bg-input);
+  cursor: not-allowed;
+}
+
+.account-field-hint {
+  margin-top: 7px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.account-field-error {
+  display: none;
+  margin-top: 7px;
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.account-field-error.is-visible {
+  display: block;
+}
+
+.account-guard-console {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+  margin-bottom: 14px;
+}
+
+.account-guard-console .account-guard-code {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 112px;
+  padding: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-body);
+  color: inherit;
+  cursor: pointer;
+}
+
+.account-guard-console .account-guard-code:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-input);
+}
+
+.guard-code-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.account-guard-console .guard-code-text {
+  color: var(--text-main);
+  font-family: var(--font-mono);
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+.account-guard-console .guard-code-hint {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.account-config-alert {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.account-config-alert.is-warning {
+  border: 1px solid color-mix(in srgb, var(--warning) 28%, transparent);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.account-secret-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.account-secret-field {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-body);
+}
+
+.account-secret-field.is-filled {
+  border-color: color-mix(in srgb, var(--success) 26%, var(--border-color));
+}
+
+.account-secret-input {
+  position: relative;
+}
+
+.account-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.account-icon-btn:hover {
+  color: var(--text-main);
+  background: var(--bg-input);
+}
+
+.account-icon-btn:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.account-icon-btn svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.account-secret-input input {
+  padding-right: 44px;
+}
+
 @media (max-width: 900px) {
   .account-trade-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .account-strategy-grid,
+  .account-secret-grid {
     grid-template-columns: 1fr;
   }
 
@@ -796,8 +1138,20 @@
     grid-template-columns: 1fr;
   }
 
+  .account-guard-console {
+    grid-template-columns: 1fr;
+  }
+
   .account-trade-header {
     flex-direction: column;
+  }
+
+  .account-workbench-head {
+    flex-direction: column;
+  }
+
+  .account-strategy-head-actions {
+    justify-content: flex-start;
   }
 }
 
@@ -848,4 +1202,18 @@
     grid-template-columns: 1fr;
     gap: 4px;
   }
+
+  .account-workbench-card {
+    padding: 16px;
+  }
+
+  .account-workbench-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .account-workbench-actions .btn {
+    width: 100%;
+  }
+
 }

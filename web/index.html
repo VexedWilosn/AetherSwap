@@ -672,15 +672,15 @@
         <div id="account-form-overlay" class="overlay hidden">
           <div class="overlay-content account-form-card">
             <h3 id="account-form-title">添加账号</h3>
-            <p class="form-hint">密码为可选项：仅用于自动填充，界面不会展示明文。</p>
+            <p class="form-hint">密码用于 Steam 自动登录、Cookie 保活和交易恢复；会以明文保存在本机 config/accounts.json，请注意账号安全。</p>
             <div class="form-grid" style="margin-top:16px">
               <div class="field">
                 <label>Steam 用户名</label>
                 <input type="text" id="acc-username" placeholder="登录名" autocomplete="username" />
               </div>
               <div class="field">
-                <label>密码（可选，用于自动填充）</label>
-                <input type="password" id="acc-password" placeholder="保存后仅用于自动填充" autocomplete="current-password" />
+                <label>Steam 密码</label>
+                <input type="password" id="acc-password" placeholder="用于自动登录、保活和交易" autocomplete="current-password" />
               </div>
               <div class="field field--full">
                 <label>账号备注</label>
@@ -1987,15 +1987,15 @@
             <input type="text" id="wiz-account-username" placeholder="用于自动登录的用户名" autocomplete="username" />
           </div>
           <div class="field">
-            <label for="wiz-account-password">Steam 密码</label>
-            <input type="password" id="wiz-account-password" placeholder="可选，仅用于自动填充登录" autocomplete="new-password" />
+            <label for="wiz-account-password">Steam 密码 <span class="wizard-tag">必填</span></label>
+            <input type="password" id="wiz-account-password" placeholder="用于自动登录、保活和交易" autocomplete="new-password" />
           </div>
         </div>
         <div class="field">
           <label for="wiz-account-note">账号备注</label>
           <input type="text" id="wiz-account-note" placeholder="例如：主号 / 小号 / 用途" />
         </div>
-        <p class="wizard-hint">Steam 昵称、Steam ID 和头像会在验证或登录后自动获取。已在「账号管理」添加过账号时可直接下一步。</p>
+        <p class="wizard-hint">填写密码后才能在 Cookie 过期时自动保活，并支撑库存刷新、自动上架等交易链路。密码会以明文保存在本机 config/accounts.json，请注意账号安全。</p>
       </div>
 
       <!-- 步骤 2：Steam 令牌 -->
@@ -2013,7 +2013,7 @@
             <input type="password" id="wiz-identity-secret" placeholder="Steam 身份密钥" autocomplete="off" />
           </div>
         </div>
-        <p class="wizard-hint">后续可在「账号管理 → Steam 令牌」按账号维护。</p>
+        <p class="wizard-hint">账号令牌会以明文保存在本机 config/accounts.json；旧全局令牌兼容配置保存在 config/app_config.json。请勿把这些文件发给他人。</p>
       </div>
 
       <!-- 步骤 3：推送通知 -->

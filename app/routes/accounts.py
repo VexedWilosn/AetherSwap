@@ -93,15 +93,13 @@ def api_sync_account_balance(account_id: str):
     acc = get_account(account_id)
     if not acc:
         return {"ok": False, "error": "账号不存在"}
-    current = get_current_account()
-    if not current or current.get("id") != account_id:
-        login = verify_steam_auto_login(account_id)
-        if not login.get("ok"):
-            return {
-                "ok": False,
-                "status": login.get("status", "error"),
-                "error": login.get("message", "无法登录账号，余额同步失败"),
-            }
+    login = verify_steam_auto_login(account_id)
+    if not login.get("ok"):
+        return {
+            "ok": False,
+            "status": login.get("status", "error"),
+            "error": login.get("message", "无法登录账号，余额同步失败"),
+        }
     try:
         from app.services.account_region import sync_account_currency_region
         result = sync_account_currency_region(account_id)
