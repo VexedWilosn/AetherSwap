@@ -1,6 +1,6 @@
 <h1 align="center">SteamTradingSite ID Mapper</h1>
 
-This repository provides an ID mapping for DOTA2 & CS2 tradeable items between the Steam Market and major trading platforms. 
+This repository provides an ID mapping for DOTA2 & CS2 tradeable items between the Steam Market and major trading platforms.
 
 该仓库旨在提供 DOTA2 & CS2 在 Steam Market 与主要的第三方交易平台的饰品 ID 对照表，以便于相关程序的开发。
 
@@ -39,11 +39,3 @@ Please note that we cannot guarantee the completeness, accuracy, or timeliness o
 
 - **Key:** `market_hash_name` of the item.
 - **Value:** the ID of the item on the respective platform. If the item is currently not found, the value is `-1`.
-
-
-
-
-
-
-
-
