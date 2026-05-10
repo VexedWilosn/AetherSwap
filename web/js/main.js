@@ -6,6 +6,7 @@ function formatTimeHHMM(d = new Date()) {
 }
 function tabSwitch(name) {
   console.log("tabSwitch called with name:", name);
+  if (!name) return;
   document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
   document.querySelectorAll(".nav-item").forEach((b) => b.classList.remove("active"));
   const panel = el("panel-" + name);
@@ -24,10 +25,25 @@ function tabSwitch(name) {
   if (name === "analytics") refreshAnalytics();
   if (name === "accounts") refreshAccounts();
   if (name === "steam-guard") initSteamGuardPanel();
+  if (name === "radar") {
+    if (typeof window.loadRadar === "function") window.loadRadar();
+  }
+  if (name === "order-monitor") {
+    if (typeof loadOrders === "function") loadOrders();
+  }
+  if (name === "execution-records") {
+    if (typeof loadRecords === "function") loadRecords();
+  }
   if (name !== "steam-guard") stopSteamGuardTimer();
   if (name === "proxy") {
     loadProxyConfig();
   }
+}
+
+function tabFromHash() {
+  const hash = String(window.location.hash || "").replace(/^#/, "").trim();
+  if (!hash) return "";
+  return document.getElementById("panel-" + hash) ? hash : "";
 }
 
 let lastStatus = "idle";
@@ -195,7 +211,6 @@ async function refreshStatus() {
   }
 }
 let reloginType = "steam";
-let inventoryRefreshInFlight = false;
 function showReloginModal(type, opts = {}) {
   reloginType = type || "steam";
   const overlay = el("relogin-overlay");
@@ -223,8 +238,6 @@ function hideReloginModal() {
   if (overlay) overlay.classList.add("hidden");
 }
 async function refreshInventory(forceRefresh = true) {
-  if (inventoryRefreshInFlight) return;
-  inventoryRefreshInFlight = true;
   try {
     const d = await fetchJson(API + "/inventory" + (forceRefresh ? "?refresh=1" : ""));
     if (d.auth_expired && _hasAnyAccount) {
@@ -281,11 +294,12 @@ async function refreshInventory(forceRefresh = true) {
     const v = el("inv-total-value");
     if (v) v.textContent = totalValue.toFixed(2);
     const taxEl = el("inv-tax-value");
-    if (taxEl) taxEl.textContent = (totalValue / 1.15).toFixed(2);
+    if (taxEl) {
+      const afterTax = typeof steamSaleNetPrice === "function" ? steamSaleNetPrice(totalValue) : (totalValue / 1.15);
+      taxEl.textContent = afterTax != null ? afterTax.toFixed(2) : "0.00";
+    }
   } catch (e) {
     toast("刷新库存失败", e.message || "请检查 Steam Cookie");
-  } finally {
-    inventoryRefreshInFlight = false;
   }
 }
 async function refreshMarketPrices() {
@@ -317,7 +331,10 @@ async function refreshMarketPrices() {
         const v = el("inv-total-value");
         if (v) v.textContent = totalValue.toFixed(2);
         const taxEl = el("inv-tax-value");
-        if (taxEl) taxEl.textContent = (totalValue / 1.15).toFixed(2);
+        if (taxEl) {
+          const afterTax = typeof steamSaleNetPrice === "function" ? steamSaleNetPrice(totalValue) : (totalValue / 1.15);
+          taxEl.textContent = afterTax != null ? afterTax.toFixed(2) : "0.00";
+        }
       }
     }
     if (!lastEnrichData) {
@@ -376,7 +393,7 @@ function aggregateByItemName(purchases, resellRatio = 0.85) {
       const saleP = Number(t.sale_price);
       const cost = Number(t.price) || 0;
       const mp = t.market_price != null ? Number(t.market_price) : 0;
-      const afterTax = saleP / 1.15;
+      const afterTax = (typeof steamSaleNetPrice === "function" ? steamSaleNetPrice(saleP) : (saleP / 1.15)) || 0;
       r.soldCount += 1;
       r.totalSalePrice += saleP;
       if (afterTax > 0 && cost > 0) r.totalDiscountRatio += cost / afterTax;
@@ -861,6 +878,8 @@ async function init() {
   }
 
   await refreshStatus();
+  const hashTab = tabFromHash();
+  if (hashTab) tabSwitch(hashTab);
   setInterval(refreshStatus, 2000);
   setInterval(() => {
     if (document.querySelector("#panel-debug.active")) refreshLog();

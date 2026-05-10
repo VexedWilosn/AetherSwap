@@ -1,12 +1,28 @@
 import json
 import math
 import os
+import sqlite3
 import threading
+import time
 from pathlib import Path
 from typing import List, Optional
-from sqlmodel import Field, Session, SQLModel, create_engine, select
-_CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
-_DB_PATH = _CONFIG_DIR / "app.db"
+from sqlmodel import Field, Session, SQLModel, select
+from sqlalchemy import Index, inspect, text as sa_text
+from DataEngine.database import (
+    ArbitrageOpportunity,
+    Base as DataEngineBase,
+    ItemBase,
+    MarketPrice,
+    PlatformMapping,
+    SessionLocal,
+    SteamDTOpportunity,
+    engine,
+)
+from DataEngine.sqlite_pragmas import install_sqlite_pragmas
+BASE_DIR = Path(__file__).resolve().parent.parent
+_CONFIG_DIR = BASE_DIR / "config"
+_DB_PATH = _CONFIG_DIR / "market_data.db"
+_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 _TRANSACTIONS_JSON = _CONFIG_DIR / "transactions.json"
 _TRANSACTIONS_BAK = _CONFIG_DIR / "transactions.json.bak"
 _WILSON_Z = 1.96
@@ -90,47 +106,185 @@ class SteamDealGame(SQLModel, table=True):
     discount_ph: Optional[str] = None
     fetched_at: float = 0.0                 
     wilson_score: Optional[float] = None    
+
+
+class TradeExecutionRecord(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    created_at: float = Field(default=0.0, index=True)
+    action: str = Field(default="", index=True)
+    channel: str = Field(default="", index=True)
+    item_id: int = Field(default=0, index=True)
+    market_hash_name: str = Field(default="")
+    platform: str = Field(default="", index=True)
+    quantity: int = 1
+    target_price: Optional[float] = None
+    reference_price: Optional[float] = None
+    status: str = Field(default="queued", index=True)
+    request_payload: Optional[str] = None
+    response_payload: Optional[str] = None
+    error_message: Optional[str] = None
+
+
+class PlatformAction(SQLModel, table=True):
+    __tablename__ = "platform_action"
+    __table_args__ = (
+        Index("ix_platform_action_state_next_check_at", "state", "next_check_at"),
+        Index("ix_platform_action_platform_state_next_check_at", "platform", "state", "next_check_at"),
+        Index("ix_platform_action_item_state", "item_id", "state"),
+        Index("ix_platform_action_risk_category_state", "risk_category", "state"),
+        Index("ix_platform_action_platform_order_id", "platform", "platform_order_id"),
+        Index("ix_platform_action_trade_offer_id", "trade_offer_id"),
+        Index("ix_platform_action_assetid", "assetid"),
+        Index("ix_platform_action_idempotency_key", "idempotency_key", unique=True),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    created_at: float = Field(default_factory=time.time)
+    updated_at: float = Field(default_factory=time.time)
+    finished_at: Optional[float] = None
+    next_check_at: float = Field(default_factory=time.time)
+    lease_until: Optional[float] = None
+
+    action_type: str = Field(default="", max_length=64)
+    platform: str = Field(default="", max_length=50)
+    state: str = Field(default="queued", max_length=40)
+    channel: str = Field(default="auto", max_length=40)
+
+    item_id: int = 0
+    market_hash_name: str = Field(default="", max_length=255)
+    risk_category: str = Field(default="", max_length=255)
+    quantity: int = 1
+    target_price: Optional[float] = None
+    reference_price: Optional[float] = None
+    cost_basis_cny: Optional[float] = None
+    expected_profit_rate: Optional[float] = None
+    locked_budget_cny: float = 0.0
+    filled_quantity: int = 0
+    remaining_quantity: Optional[int] = None
+    filled_amount_cny: float = 0.0
+    released_budget_cny: float = 0.0
+
+    platform_order_id: Optional[str] = Field(default=None, max_length=128)
+    platform_listing_id: Optional[str] = Field(default=None, max_length=128)
+    trade_offer_id: Optional[str] = Field(default=None, max_length=128)
+    assetid: Optional[str] = Field(default=None, max_length=128)
+    idempotency_key: Optional[str] = Field(default=None, max_length=255)
+
+    retry_count: int = 0
+    max_retries: int = 3
+    error_code: Optional[str] = Field(default=None, max_length=80)
+    error_message: Optional[str] = None
+    request_payload: Optional[str] = None
+    response_payload: Optional[str] = None
+    raw_context: Optional[str] = None
+
 _engine = None
 _engine_lock = threading.Lock()
+
 def get_engine():
-    global _engine
-    if _engine is not None:
-        return _engine
-    with _engine_lock:
-        if _engine is not None:
-            return _engine
-        _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        _engine = create_engine(
-            f"sqlite:///{_DB_PATH}",
-            echo=False,
-            connect_args={"check_same_thread": False},
-        )
-        return _engine
+    install_sqlite_pragmas(engine)
+    return engine
+
 def get_session() -> Session:
-    return Session(get_engine())
-def init_db() -> None:
-    """Create all tables if they don't exist, and run lightweight migrations."""
+    return SessionLocal()
+
+def _create_all_app_tables() -> None:
+    """确保 app 层的 SQLModel 表结构在空库时也会被创建。"""
+    SQLModel.metadata.create_all(bind=engine)
+
+
+def _ensure_wilson_score_column() -> None:
     from sqlalchemy import text as sa_text
-    engine = get_engine()
-    SQLModel.metadata.create_all(engine)
+
     with engine.connect() as conn:
         try:
             conn.execute(sa_text("ALTER TABLE steamdealgame ADD COLUMN wilson_score REAL"))
             conn.commit()
         except Exception:
-            pass  
+            pass
+
+
+def _ensure_platform_action_partial_fill_columns() -> None:
+    columns = {
+        "risk_category": "VARCHAR(255) NOT NULL DEFAULT ''",
+        "filled_quantity": "INTEGER NOT NULL DEFAULT 0",
+        "remaining_quantity": "INTEGER",
+        "filled_amount_cny": "FLOAT NOT NULL DEFAULT 0",
+        "released_budget_cny": "FLOAT NOT NULL DEFAULT 0",
+    }
     with engine.connect() as conn:
-        rows = conn.execute(
-            sa_text("SELECT id, positive_rate, total_reviews FROM steamdealgame WHERE wilson_score IS NULL")
-        ).fetchall()
-        if rows:
-            for row in rows:
-                ws = _compute_wilson_score(row[1], row[2])
-                conn.execute(
-                    sa_text("UPDATE steamdealgame SET wilson_score = :ws WHERE id = :id"),
-                    {"ws": ws, "id": row[0]},
+        try:
+            inspector = inspect(conn)
+            if "platform_action" not in inspector.get_table_names():
+                return
+            existing = {col["name"] for col in inspector.get_columns("platform_action")}
+            for name, ddl in columns.items():
+                if name not in existing:
+                    conn.execute(sa_text(f"ALTER TABLE platform_action ADD COLUMN {name} {ddl}"))
+            conn.execute(
+                sa_text(
+                    "CREATE INDEX IF NOT EXISTS ix_platform_action_risk_category_state "
+                    "ON platform_action (risk_category, state)"
                 )
+            )
             conn.commit()
+        except Exception:
+            pass
+
+
+def _backfill_wilson_scores() -> None:
+    from sqlalchemy import text as sa_text
+
+    with engine.connect() as conn:
+        table_exists = conn.execute(
+            sa_text("SELECT name FROM sqlite_master WHERE type='table' AND name='steamdealgame'")
+        ).fetchone()
+        if not table_exists:
+            return
+
+        try:
+            rows = conn.execute(
+                sa_text("SELECT id, positive_rate, total_reviews FROM steamdealgame WHERE wilson_score IS NULL")
+            ).fetchall()
+        except Exception:
+            # 表存在但迁移尚未就绪时直接跳过回填，避免启动阶段崩溃
+            return
+
+        if not rows:
+            return
+
+        for row in rows:
+            ws = _compute_wilson_score(row[1], row[2])
+            conn.execute(
+                sa_text("UPDATE steamdealgame SET wilson_score = :ws WHERE id = :id"),
+                {"ws": ws, "id": row[0]},
+            )
+        conn.commit()
+
+
+def init_db() -> None:
+    """创建全部表结构，并执行必要的轻量迁移。"""
+    DataEngineBase.metadata.create_all(bind=engine)
+    _create_all_app_tables()
+    _ensure_wilson_score_column()
+    _ensure_platform_action_partial_fill_columns()
+    _backfill_wilson_scores()
+    try:
+        SQLModel.metadata.create_all(bind=engine)
+    except Exception:
+        pass
+    try:
+        db_file = Path(__file__).resolve().parent.parent / "config" / "market_data.db"
+        with sqlite3.connect(str(db_file), timeout=10) as conn:
+            conn.execute("ALTER TABLE item_base ADD COLUMN radar_last_matched_at DATETIME")
+            print("✅ 原生 SQLite 成功添加 radar_last_matched_at 字段")
+    except sqlite3.OperationalError as e:
+        if "duplicate column name" in str(e).lower():
+            pass
+        else:
+            print(f"⚠️ 原生 SQL 补丁跳过: {e}")
+    except Exception as e:
+        print(f"⚠️ 补丁发生异常: {e}")
 def _purchase_from_dict(d: dict) -> Purchase:
     return Purchase(
         name=d.get("name", ""),
@@ -187,36 +341,55 @@ def _sale_to_dict(s: Sale) -> dict:
         d["assetid"] = s.assetid
     return d
 def migrate_from_json() -> bool:
-    """
-    One-time migration: read transactions.json → insert into SQLite →
-    rename JSON to .bak.  Returns True if migration happened.
-    """
-    if not _TRANSACTIONS_JSON.exists():
+    """迁移基础饰品数据到统一的 market_data.db。"""
+    items_json = _CONFIG_DIR / "items.json"
+    if not items_json.exists():
         return False
+
+    count = 0
     with get_session() as session:
-        existing = session.exec(select(Purchase).limit(1)).first()
-        if existing is not None:
-            return False
-    try:
-        with open(_TRANSACTIONS_JSON, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except Exception:
-        return False
-    purchases = data.get("purchases", [])
-    sales = data.get("sales", [])
-    with get_session() as session:
-        for p in purchases:
-            session.add(_purchase_from_dict(p))
-        for s in sales:
-            session.add(_sale_from_dict(s))
-        session.commit()
-    try:
-        if _TRANSACTIONS_BAK.exists():
-            os.remove(str(_TRANSACTIONS_BAK))
-        os.rename(str(_TRANSACTIONS_JSON), str(_TRANSACTIONS_BAK))
-    except OSError:
-        pass
-    return True
+        try:
+            data = json.loads(items_json.read_text(encoding="utf-8") or "[]")
+            if not isinstance(data, list):
+                return False
+
+            for row in data:
+                if not isinstance(row, dict):
+                    continue
+                market_hash_name = str(row.get("market_hash_name", "")).strip()
+                if not market_hash_name:
+                    continue
+                item = session.execute(select(ItemBase).where(ItemBase.market_hash_name == market_hash_name)).scalars().first()
+                if item is None:
+                    item = ItemBase(
+                        market_hash_name=market_hash_name,
+                        cn_name=row.get("cn_name"),
+                        buff_goods_id=int(row["buff_goods_id"]) if row.get("buff_goods_id") is not None else None,
+                        uuyp_template_id=int(row["uuyp_template_id"]) if row.get("uuyp_template_id") is not None else None,
+                        eco_goods_id=int(row["eco_goods_id"]) if row.get("eco_goods_id") is not None else None,
+                        game=str(row.get("game", "csgo")),
+                    )
+                    session.add(item)
+                    count += 1
+                else:
+                    changed = False
+                    for key in ("cn_name", "buff_goods_id", "uuyp_template_id", "eco_goods_id", "game"):
+                        value = row.get(key)
+                        if key.endswith("_id") and value is not None:
+                            value = int(value)
+                        if value is not None and getattr(item, key, None) != value:
+                            setattr(item, key, value)
+                            changed = True
+                    if changed:
+                        session.add(item)
+                        count += 1
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+
+    print(f"数据迁移成功，共写入 {count} 条记录至 {_DB_PATH}")
+    return count > 0
 _PURCHASE_UPDATABLE = frozenset({
     "name", "price", "goods_id", "market_price", "sale_price",
     "sold_at", "pending_receipt", "assetid", "listing", "listing_status",
@@ -228,7 +401,7 @@ def db_append_purchase(p: dict) -> None:
         session.commit()
 def db_get_purchases() -> list:
     with get_session() as session:
-        rows = session.exec(select(Purchase).order_by(Purchase.id)).all()
+        rows = session.execute(select(Purchase).order_by(Purchase.id)).scalars().all()
         return [_purchase_to_dict(r) for r in rows]
 def db_append_sale(s: dict) -> None:
     with get_session() as session:
@@ -236,19 +409,19 @@ def db_append_sale(s: dict) -> None:
         session.commit()
 def db_get_sales() -> list:
     with get_session() as session:
-        rows = session.exec(select(Sale).order_by(Sale.id)).all()
+        rows = session.execute(select(Sale).order_by(Sale.id)).scalars().all()
         return [_sale_to_dict(r) for r in rows]
 def db_clear_transactions() -> None:
     from sqlmodel import delete as sql_delete
     with get_session() as session:
-        session.exec(sql_delete(Purchase))
-        session.exec(sql_delete(Sale))
+        session.execute(sql_delete(Purchase))
+        session.execute(sql_delete(Sale))
         session.commit()
 def db_replace_transactions(purchases: list, sales: list) -> None:
     from sqlmodel import delete as sql_delete
     with get_session() as session:
-        session.exec(sql_delete(Purchase))
-        session.exec(sql_delete(Sale))
+        session.execute(sql_delete(Purchase))
+        session.execute(sql_delete(Sale))
         for p in purchases:
             session.add(_purchase_from_dict(p))
         for s in sales:
@@ -257,7 +430,7 @@ def db_replace_transactions(purchases: list, sales: list) -> None:
 def db_delete_purchase(idx: int) -> bool:
     """Delete purchase by positional index (0-based, ordered by id)."""
     with get_session() as session:
-        rows = session.exec(select(Purchase).order_by(Purchase.id)).all()
+        rows = session.execute(select(Purchase).order_by(Purchase.id)).scalars().all()
         if 0 <= idx < len(rows):
             session.delete(rows[idx])
             session.commit()
@@ -265,7 +438,7 @@ def db_delete_purchase(idx: int) -> bool:
     return False
 def db_delete_sale(idx: int) -> bool:
     with get_session() as session:
-        rows = session.exec(select(Sale).order_by(Sale.id)).all()
+        rows = session.execute(select(Sale).order_by(Sale.id)).scalars().all()
         if 0 <= idx < len(rows):
             session.delete(rows[idx])
             session.commit()
@@ -274,7 +447,7 @@ def db_delete_sale(idx: int) -> bool:
 def db_update_purchase(idx: int, data: dict) -> bool:
     """按位置索引更新（兼容旧接口，UI 路由使用）。"""
     with get_session() as session:
-        rows = session.exec(select(Purchase).order_by(Purchase.id)).all()
+        rows = session.execute(select(Purchase).order_by(Purchase.id)).scalars().all()
         if 0 <= idx < len(rows):
             row = rows[idx]
             for k, v in data.items():
@@ -311,7 +484,7 @@ def db_delete_purchase_by_id(db_id: int) -> bool:
         return True
 def db_update_sale(idx: int, data: dict) -> bool:
     with get_session() as session:
-        rows = session.exec(select(Sale).order_by(Sale.id)).all()
+        rows = session.execute(select(Sale).order_by(Sale.id)).scalars().all()
         if 0 <= idx < len(rows):
             row = rows[idx]
             for k, v in data.items():
@@ -334,15 +507,15 @@ def db_delete_sale_by_id(db_id: int) -> bool:
         return True
 def db_get_item_nameid(market_hash_name: str) -> Optional[str]:
     with get_session() as session:
-        item = session.exec(
+        item = session.execute(
             select(ItemNameId).where(ItemNameId.market_hash_name == market_hash_name)
-        ).first()
+        ).scalars().first()
         return item.item_nameid if item else None
 def db_set_item_nameid(market_hash_name: str, item_nameid: str) -> None:
     with get_session() as session:
-        item = session.exec(
+        item = session.execute(
             select(ItemNameId).where(ItemNameId.market_hash_name == market_hash_name)
-        ).first()
+        ).scalars().first()
         if item:
             item.item_nameid = item_nameid
         else:
@@ -379,9 +552,9 @@ def db_upsert_steam_deal(data: dict) -> None:
         data.get("positive_rate"), data.get("total_reviews")
     )
     with get_session() as session:
-        existing = session.exec(
+        existing = session.execute(
             select(SteamDealGame).where(SteamDealGame.app_id == str(data["app_id"]))
-        ).first()
+        ).scalars().first()
         if existing:
             for k, v in data.items():
                 if k != "id" and hasattr(existing, k):
@@ -436,7 +609,7 @@ def db_get_steam_deals(
             else:
                 stmt = stmt.order_by(col(order_col).asc())
             stmt = stmt.offset(offset).limit(limit)
-        rows = session.exec(stmt).all()
+        rows = session.execute(stmt).scalars().all()
         return [_game_row_to_dict(r) for r in rows]
 def db_get_steam_deals_count(search: str = "") -> int:
     from sqlmodel import col, func, or_
@@ -449,18 +622,18 @@ def db_get_steam_deals_count(search: str = "") -> int:
                     col(SteamDealGame.name_en).contains(search)
                 )
             )
-        return session.exec(stmt).one()
+        return session.execute(stmt).scalar_one()
 def db_get_steam_deals_last_update() -> Optional[float]:
     from sqlmodel import func
     with get_session() as session:
-        result = session.exec(
+        result = session.execute(
             select(func.max(SteamDealGame.fetched_at))
-        ).first()
+        ).scalars().first()
         return result if result else None
 def db_clear_steam_deals() -> None:
     from sqlmodel import delete as sql_delete
     with get_session() as session:
-        session.exec(sql_delete(SteamDealGame))
+        session.execute(sql_delete(SteamDealGame))
         session.commit()
 def db_get_steam_deals_price_snapshot() -> list:
     """Lightweight fetch: only price-related columns for ALL games.
@@ -496,8 +669,8 @@ def db_get_steam_deals_by_app_ids(app_ids: List[str]) -> list:
         return []
     from sqlmodel import col
     with get_session() as session:
-        rows = session.exec(
+        rows = session.execute(
             select(SteamDealGame).where(col(SteamDealGame.app_id).in_(app_ids))
-        ).all()
+        ).scalars().all()
         id_to_row = {r.app_id: _game_row_to_dict(r) for r in rows}
         return [id_to_row[aid] for aid in app_ids if aid in id_to_row]

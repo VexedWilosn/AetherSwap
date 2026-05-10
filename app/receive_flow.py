@@ -177,6 +177,7 @@ def try_receive_once(
     scan_inventory: Optional[Callable[[], Tuple[bool, List[dict], str]]] = None,
     update_purchase_by_id: Optional[Callable[[int, dict], bool]] = None,
 ) -> int:
+    # NOTE: 保留接收逻辑实现，但当前启动流程已不再自动调度该循环任务。
     """Accept pending Buff→Steam trade offers and update purchase records.
     Uses ``update_purchase_by_id`` (O(1), keyed on SQLite primary key) when
     available to avoid the race condition where positional indices shift

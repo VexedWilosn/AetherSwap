@@ -1,6 +1,6 @@
 const Theme = {
   get() {
-    return localStorage.getItem("theme") || "system";
+    return localStorage.getItem("theme") || "dark";
   },
   set(mode) {
     localStorage.setItem("theme", mode);
@@ -14,7 +14,7 @@ const Theme = {
   },
   cycle() {
     const cur = this.get();
-    const next = cur === "system" ? "light" : cur === "light" ? "dark" : "system";
+    const next = cur === "dark" ? "light" : cur === "light" ? "system" : "dark";
     this.set(next);
     toast("主题已切换", next === "system" ? "跟随系统" : next === "dark" ? "深色" : "浅色");
   },

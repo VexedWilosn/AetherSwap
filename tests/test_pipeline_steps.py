@@ -4,11 +4,11 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.pipeline_steps import _compute_sell_pressure_from_orders, filter_iflow_rows
+from app.pipeline_steps import _compute_sell_pressure_from_orders, filter_market_rows
 
 
 def _行(name="Test Item", min_price="10.00", platform="https://buff.163.com/goods/12345", **kw):
-    """构造一条最小化 iflow 行，省得每次都写全"""
+    """构造一条最小化 market 行，省得每次都写全"""
     row = SimpleNamespace(
         name=name,
         min_price=min_price,
@@ -26,8 +26,7 @@ def _行(name="Test Item", min_price="10.00", platform="https://buff.163.com/goo
 
 
 _基础配置 = {
-    "pipeline": {"exclude_keywords": ["印花", "胶囊"], "iflow_top_n": 0},
-    "iflow": {"sort_by": "sell"},
+    "pipeline": {"exclude_keywords": ["印花", "胶囊"], "market_top_n": 0, "sort_by": "sell"},
 }
 
 # ── 卖压计算测试 ──────────────────────────────────────────────────────────
@@ -67,11 +66,11 @@ def test_卖压_价格断层识别():
     assert p1 < p2
 
 
-# ── iflow行过滤测试 ────────────────────────────────────────────────────────
+# ── market行过滤测试 ────────────────────────────────────────────────────────
 
 def test_过滤_正常行通过():
     rows = [_行(name="AWP | Dragon Lore")]
-    result = filter_iflow_rows(rows, _基础配置)
+    result = filter_market_rows(rows, _基础配置)
     assert len(result) == 1
 
 
@@ -81,7 +80,7 @@ def test_过滤_关键词命中被去掉():
         _行(name="胶囊 | 某队伍"),
         _行(name="AWP | 正常枪"),
     ]
-    result = filter_iflow_rows(rows, _基础配置)
+    result = filter_market_rows(rows, _基础配置)
     assert len(result) == 1
     assert result[0]["name"] == "AWP | 正常枪"
 
@@ -92,7 +91,7 @@ def test_过滤_价格非正被去掉():
         _行(name="零价格", min_price="0"),
         _行(name="正常价格", min_price="10.0"),
     ]
-    result = filter_iflow_rows(rows, _基础配置)
+    result = filter_market_rows(rows, _基础配置)
     assert len(result) == 1
     assert result[0]["name"] == "正常价格"
 
@@ -102,19 +101,19 @@ def test_过滤_非buff链接被去掉():
         _行(name="c5game的", platform="https://c5game.com/item/999"),
         _行(name="buff的"),
     ]
-    result = filter_iflow_rows(rows, _基础配置)
+    result = filter_market_rows(rows, _基础配置)
     assert len(result) == 1
     assert result[0]["name"] == "buff的"
 
 
 def test_过滤_topN限制数量():
     rows = [_行(name=f"物品{i}") for i in range(20)]
-    cfg = {**_基础配置, "pipeline": {**_基础配置["pipeline"], "iflow_top_n": 5}}
-    result = filter_iflow_rows(rows, cfg)
+    cfg = {**_基础配置, "pipeline": {**_基础配置["pipeline"], "market_top_n": 5}}
+    result = filter_market_rows(rows, cfg)
     assert len(result) <= 5
 
 
 def test_过滤_goods_id从url解析():
     rows = [_行(platform="https://buff.163.com/goods/98765")]
-    result = filter_iflow_rows(rows, _基础配置)
+    result = filter_market_rows(rows, _基础配置)
     assert result[0]["goods_id"] == 98765

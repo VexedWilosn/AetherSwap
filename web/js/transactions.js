@@ -3,6 +3,13 @@ let holdingsMultiSelectMode = false;
 let historyMultiSelectMode = false;
 let lastEnrichTime = 0;
 let lastEnrichData = null;
+function steamSaleNetPrice(price) {
+  const gross = Number(price) || 0;
+  if (gross <= 0) return null;
+  const steamFee = Math.max(gross * 0.05, 0.01);
+  const publisherFee = Math.max(gross * 0.10, 0.01);
+  return Math.max(0, gross - steamFee - publisherFee);
+}
 function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, multiSelectMode = false) {
   const ratio = Math.max(0.01, Math.min(1, Number(resellRatio) || 0.85));
   const rowHtmls = [];
@@ -32,7 +39,7 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
         plCell = `<td class="mono ${cls}">${diff >= 0 ? "+" : ""}${diff.toFixed(2)} (${diff >= 0 ? "+" : ""}${pct})</td>`;
       }
       const cost = Number(t.price) || 0;
-      const afterTaxVal = cur != null && cur > 0 ? cur / 1.15 : null;
+      const afterTaxVal = cur != null && cur > 0 ? steamSaleNetPrice(cur) : null;
       const afterTax = afterTaxVal != null ? afterTaxVal.toFixed(2) : "";
       const discountRatio = afterTaxVal != null && afterTaxVal > 0 && cost > 0 ? (cost / afterTaxVal).toFixed(4) : "";
       const discountRatioClass = discountRatio ? (parseFloat(discountRatio) > ratio ? "text-bad" : "text-ok") : "";
@@ -135,7 +142,7 @@ function renderPurchaseHistoryTable(tbody, list, resellRatio = 0.85, multiSelect
     const salePriceStr = sold ? Number(t.sale_price).toFixed(2) : "—";
     let discountRatioStr = "—", cashProfitStr = "—", selfUseStr = "—", discountRatioClass = "";
     if (sold) {
-      const afterTax = Number(t.sale_price) / 1.15;
+      const afterTax = steamSaleNetPrice(Number(t.sale_price)) || 0;
       discountRatioStr = afterTax > 0 && cost > 0 ? (cost / afterTax).toFixed(4) : "—";
       discountRatioClass = discountRatioStr !== "—" ? (parseFloat(discountRatioStr) > ratio ? "text-bad" : "text-ok") : "";
       const cashProfit = afterTax > 0 && cost >= 0 ? afterTax * ratio - cost : 0;
@@ -220,11 +227,11 @@ function applyTransactionsToUI(all, summaryEl, tbodyP, tbodyS, tbodyHistory, res
     const totalPrice = purchases.reduce((s, t) => s + (Number(t.price) || 0), 0);
     const totalMp = purchases.reduce((s, t) => s + (t.market_price != null ? Number(t.market_price) : 0), 0);
     const totalSalePrice = purchases.reduce((s, t) => s + (t.sale_price != null && Number(t.sale_price) > 0 ? Number(t.sale_price) : 0), 0);
-    const totalAfterTax = totalSalePrice > 0 ? totalSalePrice / 1.15 : null;
+    const totalAfterTax = totalSalePrice > 0 ? steamSaleNetPrice(totalSalePrice) : null;
     const soldItems = purchases.filter((t) => t.sale_price != null && Number(t.sale_price) > 0);
     let ratioSum = 0, ratioCount = 0, totalCashProfit = 0, totalSelfUseProfit = 0;
     soldItems.forEach((t) => {
-      const afterTax = Number(t.sale_price) / 1.15;
+      const afterTax = steamSaleNetPrice(Number(t.sale_price)) || 0;
       const cost = Number(t.price) || 0;
       if (afterTax > 0 && cost > 0) { ratioSum += cost / afterTax; ratioCount += 1; }
       totalCashProfit += afterTax * ratio - cost;
@@ -270,13 +277,13 @@ function applyTransactionsToUI(all, summaryEl, tbodyP, tbodyS, tbodyHistory, res
     const plClass = totalPl != null && totalPl > 0 ? "text-ok" : totalPl != null && totalPl < 0 ? "text-bad" : "";
     const cmpStr = totalCmp != null ? totalCmp.toFixed(2) : "—";
     const plStr = totalPl != null ? `${totalPl >= 0 ? "+" : ""}${totalPl.toFixed(2)} (${totalPl >= 0 ? "+" : ""}${totalPlPct})` : "—";
-    const totalAfterTax = totalCmp != null && totalCmp > 0 ? totalCmp / 1.15 : null;
+    const totalAfterTax = totalCmp != null && totalCmp > 0 ? steamSaleNetPrice(totalCmp) : null;
     const afterTaxStr = totalAfterTax != null ? totalAfterTax.toFixed(2) : "—";
     let ratioSum = 0, ratioCount = 0, totalCashProfit = 0, totalSelfUseProfit = 0;
     holdings.forEach((t) => {
       const cmp = t.current_market_price != null ? Number(t.current_market_price) : null;
       if (cmp == null || cmp <= 0) return;
-      const afterTax = cmp / 1.15;
+      const afterTax = steamSaleNetPrice(cmp) || 0;
       const cost = Number(t.price) || 0;
       if (afterTax > 0 && cost > 0) { ratioSum += cost / afterTax; ratioCount += 1; }
       totalCashProfit += afterTax * ratio - cost;

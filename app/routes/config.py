@@ -61,6 +61,10 @@ def api_data_init():
         "proxy_pool": {
             "enabled": False,
             "strategy": 1,
+            "global_proxies": [],
+            "steam_proxies": [],
+            "buff_proxies": [],
+            "uuyp_proxies": [],
             "proxies": [],
             "webshare_api_key": "",
         },

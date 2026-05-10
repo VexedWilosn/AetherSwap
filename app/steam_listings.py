@@ -9,6 +9,7 @@ STEAM_REQUEST_TIMEOUT = 25
 STEAM_REQUEST_RETRIES = 2
 STEAM_REQUEST_RETRY_DELAY = 3
 from utils.proxy_manager import get_proxy_manager
+from DataEngine.profit_model import steam_sale_gross_price_from_net
 try:
     import urllib3
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -304,7 +305,7 @@ def fetch_my_history_sold(cookies, debug_fn: Optional[Callable[[str], None]] = N
                         if rate:
                             cny_raw = raw * rate
                             _debug(debug_fn, f"[myhistory] {cur_code} {raw} -> CNY {cny_raw:.4f}")
-                    sold[assetid] = round(cny_raw * 1.15, 2)
+                    sold[assetid] = round(steam_sale_gross_price_from_net(cny_raw), 2)
                 except (ValueError, TypeError):
                     pass
         _debug(debug_fn, f"[myhistory] 行->assetid: hover {hover_hits}, fallback {fallback_hits}; Sold 行 {sold_rows}, sold_map 条数 {len(sold)}, 示例: {list(sold.items())[:5]}")

@@ -43,8 +43,8 @@ def test_validate_字符串转float():
 
 
 def test_validate_字符串转int():
-    result = validate_and_fill({"pipeline": {"iflow_top_n": "30"}}, DEFAULTS)
-    assert result["pipeline"]["iflow_top_n"] == 30
+    result = validate_and_fill({"pipeline": {"max_staleness_minutes": "30"}}, DEFAULTS)
+    assert result["pipeline"]["max_staleness_minutes"] == 30
 
 
 def test_validate_缺少section用默认值():
