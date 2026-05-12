@@ -810,6 +810,27 @@
           <input type="number" id="add-purchase-quantity" value="1" min="1" placeholder="数量" title="批量添加条数" />
           <button id="btn-add-purchase" class="btn btn-primary">添加</button>
         </div>
+        <div class="uuyp-order-panel">
+          <div class="uuyp-order-head">
+            <span class="label">UUYP 求购 / 人工直购</span>
+            <span id="uuyp-manual-status" class="uuyp-status">已暂停</span>
+            <button id="btn-uuyp-manual-start" class="btn btn-sm btn-primary">启动</button>
+            <button id="btn-uuyp-manual-pause" class="btn btn-sm btn-secondary">暂停</button>
+          </div>
+          <div class="uuyp-order-grid">
+            <input type="text" id="uuyp-order-name" placeholder="英文物品名" />
+            <input type="text" id="uuyp-order-template-id" placeholder="templateId（可选）" />
+            <input type="number" id="uuyp-order-price" step="0.01" min="0.01" placeholder="目标价" />
+            <input type="number" id="uuyp-order-quantity" value="1" min="1" placeholder="数量" />
+            <input type="text" id="uuyp-order-no" placeholder="订单号（可选）" />
+          </div>
+          <div class="uuyp-order-actions">
+            <button id="btn-uuyp-purchase-order" class="btn btn-sm btn-primary">创建求购单</button>
+            <button id="btn-uuyp-manual-open" class="btn btn-sm btn-secondary">打开人工直购页</button>
+            <button id="btn-uuyp-manual-record" class="btn btn-sm btn-outline">加入待收货</button>
+            <a id="uuyp-manual-link" class="link-btn hidden" href="#" target="_blank">上次页面</a>
+          </div>
+        </div>
         <div class="table-container">
           <table id="transactions-table-purchases">
             <thead>

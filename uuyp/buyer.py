@@ -23,6 +23,7 @@ _USER_AGENTS = [
 ]
 
 UUYP_API_BASE = "https://api.youpin898.com"
+UUYP_WEB_BASE = "https://www.youpin898.com"
 UUYP_BUY_ORDER_URL = f"{UUYP_API_BASE}/api/youpin/bff/trade/purchase/order/savePurchaseOrder"
 UUYP_TEMPLATE_ORDER_URL = f"{UUYP_API_BASE}/api/youpin/bff/trade/purchase/order/getTemplatePurchaseOrderListPC"
 UUYP_DIRECT_BUY_URL = f"{UUYP_API_BASE}/api/youpin/bff/trade/order/buy"
@@ -60,10 +61,34 @@ def _load_extra_headers() -> dict[str, str]:
     return {}
 
 
+def _first_list(data: Any) -> list:
+    if isinstance(data, list):
+        return data
+    if not isinstance(data, dict):
+        return []
+    for key in ("Data", "data", "list", "rows", "items", "purchaseOrderResponseList"):
+        value = data.get(key)
+        if isinstance(value, list):
+            return value
+        if isinstance(value, dict):
+            nested = _first_list(value)
+            if nested:
+                return nested
+    return []
+
+
 class UuypBuyer:
     """UUYP purchase API wrapper."""
 
-    def __init__(self, cookie_str: str | dict[str, Any]):
+    def __init__(self, cookie_str: str | dict[str, Any] | None = None):
+        if cookie_str is None:
+            try:
+                from config import get
+
+                uuyp_cfg = get("uuyp", default={}) or {}
+                cookie_str = uuyp_cfg.get("cookies") or uuyp_cfg
+            except Exception:
+                cookie_str = ""
         if isinstance(cookie_str, dict):
             self.raw_credentials = dict(cookie_str)
             self.cookies_dict = _force_uuyp_cny({str(k): str(v) for k, v in cookie_str.items() if v is not None})
@@ -138,6 +163,10 @@ class UuypBuyer:
         self.cookies_dict = _force_uuyp_cny(self.cookies_dict)
         self.session.cookies.update(self.cookies_dict)
         self._ensure_risk_headers()
+
+    @staticmethod
+    def market_url(template_id: str | int, game_id: str | int = 730, list_type: str | int = 10) -> str:
+        return f"{UUYP_WEB_BASE}/market/goods-list?listType={list_type}&templateId={template_id}&gameId={game_id}"
 
     def _ensure_risk_headers(self) -> None:
         device_id = self.headers.get("deviceId") or self.headers.get("deviceid")
@@ -306,6 +335,57 @@ class UuypBuyer:
             "typeId": type_id,
         }
         return self._request("POST", UUYP_TEMPLATE_ORDER_URL, data=json.dumps(payload, ensure_ascii=False), headers={"platform": "pc"})
+
+    def query_on_sale_commodity_list(
+        self,
+        template_id: str | int,
+        page_index: int = 1,
+        page_size: int = 10,
+        *,
+        max_price: float | None = None,
+    ) -> dict:
+        payload: dict[str, Any] = {
+            "gameId": "730",
+            "listType": "10",
+            "templateId": str(template_id),
+            "listSortType": 1,
+            "sortType": 0,
+            "pageIndex": int(page_index),
+            "pageSize": int(page_size),
+        }
+        if max_price is not None and float(max_price) > 0:
+            payload["maxPrice"] = round(float(max_price), 2)
+            payload["maxSaleVal"] = round(float(max_price), 2)
+        return self._request(
+            "POST",
+            f"{UUYP_API_BASE}/api/homepage/pc/goods/market/queryOnSaleCommodityList",
+            json=payload,
+            headers={"platform": "pc", "Referer": self.market_url(template_id)},
+        )
+
+    def select_best_listing(self, template_id: str | int, max_price: float | None = None) -> Optional[dict]:
+        data = self.query_on_sale_commodity_list(template_id, page_size=20, max_price=max_price)
+        best: Optional[dict] = None
+        for item in _first_list(data):
+            if not isinstance(item, dict):
+                continue
+            raw_price = (
+                item.get("price")
+                or item.get("sellPrice")
+                or item.get("sellingPrice")
+                or item.get("discountPrice")
+                or item.get("Price")
+            )
+            try:
+                price = float(raw_price)
+            except Exception:
+                continue
+            if max_price is not None and price > float(max_price):
+                continue
+            if best is None or price < float(best.get("price", 0) or 0):
+                best = dict(item)
+                best["price"] = price
+        return best
 
     def query_order_status(
         self,

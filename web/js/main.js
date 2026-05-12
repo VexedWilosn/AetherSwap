@@ -22,6 +22,7 @@ function tabSwitch(name) {
   if (name === "debug") refreshLog();
   if (name === "inventory") refreshInventory(false);
   if (name === "purchases" || name === "sales" || name === "purchase-history") refreshTransactions();
+  if (name === "purchases") refreshUuypManualStatus();
   if (name === "analytics") refreshAnalytics();
   if (name === "accounts") refreshAccounts();
   if (name === "steam-guard") initSteamGuardPanel();
@@ -473,6 +474,122 @@ async function copyPayLink() {
     toast("已复制链接");
   }
 }
+function readUuypOrderForm() {
+  const name = (el("uuyp-order-name")?.value || "").trim();
+  const templateId = (el("uuyp-order-template-id")?.value || "").trim();
+  const price = parseFloat(el("uuyp-order-price")?.value || "");
+  let quantity = parseInt(el("uuyp-order-quantity")?.value || "1", 10);
+  const orderNo = (el("uuyp-order-no")?.value || "").trim();
+  if (!name) {
+    toast("请填写 UUYP 英文物品名");
+    return null;
+  }
+  if (!Number.isFinite(price) || price <= 0) {
+    toast("请填写 UUYP 目标价");
+    return null;
+  }
+  if (!Number.isFinite(quantity) || quantity < 1) quantity = 1;
+  return { market_hash_name: name, template_id: templateId || null, price, quantity, order_no: orderNo || null };
+}
+function applyUuypManualStatus(status) {
+  const node = el("uuyp-manual-status");
+  if (!node) return;
+  const active = status?.enabled && !status?.paused;
+  node.textContent = active ? "运行中" : "已暂停";
+  node.classList.toggle("active", !!active);
+  const link = el("uuyp-manual-link");
+  if (link && status?.last_url) {
+    link.href = status.last_url;
+    link.classList.remove("hidden");
+  }
+}
+async function refreshUuypManualStatus() {
+  try {
+    const r = await fetchJson(API + "/uuyp/manual-direct/status");
+    applyUuypManualStatus(r.status || {});
+  } catch {
+  }
+}
+async function setUuypManualControl(enabled, paused) {
+  const r = await fetchJson(API + "/uuyp/manual-direct/control", {
+    method: "POST",
+    body: JSON.stringify({ enabled, paused }),
+  });
+  applyUuypManualStatus(r.status || {});
+  toast(paused ? "UUYP 人工直购已暂停" : "UUYP 人工直购已启动");
+}
+async function createUuypPurchaseOrder(btn) {
+  const payload = readUuypOrderForm();
+  if (!payload) return;
+  if (!confirm(`创建 UUYP 求购单：${payload.market_hash_name} x${payload.quantity} @ ${payload.price.toFixed(2)}？`)) return;
+  btn.disabled = true;
+  try {
+    const r = await fetchJson(API + "/uuyp/purchase-order", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) {
+      toast("UUYP 求购单失败", r.error || "");
+      return;
+    }
+    toast("UUYP 求购单已创建", r.order_no ? `订单号 ${r.order_no}` : "");
+    await refreshTransactions();
+    refreshStatus();
+  } catch (e) {
+    toast("UUYP 求购单失败", e.message || "");
+  } finally {
+    btn.disabled = false;
+  }
+}
+async function openUuypManualDirect(btn) {
+  const payload = readUuypOrderForm();
+  if (!payload) return;
+  btn.disabled = true;
+  try {
+    const r = await fetchJson(API + "/uuyp/manual-direct/open", {
+      method: "POST",
+      body: JSON.stringify({ ...payload, target_price: payload.price, open_browser: true }),
+    });
+    if (!r.ok) {
+      toast("UUYP 人工直购未打开", r.error || "");
+      return;
+    }
+    const link = el("uuyp-manual-link");
+    if (link && r.url) {
+      link.href = r.url;
+      link.classList.remove("hidden");
+    }
+    toast("已打开 UUYP 页面", r.listing?.price ? `最低价 ${Number(r.listing.price).toFixed(2)}` : "");
+    refreshUuypManualStatus();
+  } catch (e) {
+    toast("UUYP 人工直购未打开", e.message || "");
+  } finally {
+    btn.disabled = false;
+  }
+}
+async function recordUuypManualDirect(btn) {
+  const payload = readUuypOrderForm();
+  if (!payload) return;
+  if (!confirm("确认已在 UUYP 人工下单，并加入待收货记录？")) return;
+  btn.disabled = true;
+  try {
+    const r = await fetchJson(API + "/uuyp/manual-direct/record", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) {
+      toast("加入待收货失败", r.error || "");
+      return;
+    }
+    toast("已加入待收货", `数量 ${r.quantity || payload.quantity}`);
+    await refreshTransactions();
+    refreshStatus();
+  } catch (e) {
+    toast("加入待收货失败", e.message || "");
+  } finally {
+    btn.disabled = false;
+  }
+}
 function bindEvents() {
   document.querySelectorAll(".nav-item").forEach((btn) => {
     btn.addEventListener("click", () => tabSwitch(btn.dataset.tab));
@@ -556,6 +673,15 @@ function bindEvents() {
       toast("添加失败", e.message || "");
     }
   });
+  el("btn-uuyp-manual-start")?.addEventListener("click", () =>
+    setUuypManualControl(true, false).catch((e) => toast("UUYP 启动失败", e.message || ""))
+  );
+  el("btn-uuyp-manual-pause")?.addEventListener("click", () =>
+    setUuypManualControl(true, true).catch((e) => toast("UUYP 暂停失败", e.message || ""))
+  );
+  el("btn-uuyp-purchase-order")?.addEventListener("click", (e) => createUuypPurchaseOrder(e.currentTarget));
+  el("btn-uuyp-manual-open")?.addEventListener("click", (e) => openUuypManualDirect(e.currentTarget));
+  el("btn-uuyp-manual-record")?.addEventListener("click", (e) => recordUuypManualDirect(e.currentTarget));
   el("btn-clear-log")?.addEventListener("click", clearLog);
   el("btn-toggle-pause")?.addEventListener("click", togglePause);
   el("btn-toggle-scroll")?.addEventListener("click", toggleAutoScroll);
@@ -878,6 +1004,7 @@ async function init() {
   }
 
   await refreshStatus();
+  await refreshUuypManualStatus();
   const hashTab = tabFromHash();
   if (hashTab) tabSwitch(hashTab);
   setInterval(refreshStatus, 2000);

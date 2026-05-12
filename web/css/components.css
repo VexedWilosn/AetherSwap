@@ -1988,6 +1988,71 @@ tr:hover td:first-child {
   width: 80px;
 }
 
+.uuyp-order-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 14px 20px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.uuyp-order-head,
+.uuyp-order-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.uuyp-order-head .label {
+  color: var(--text-main);
+  font-size: 14px;
+  font-weight: 600;
+  margin-right: auto;
+}
+
+.uuyp-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.uuyp-status.active {
+  color: var(--success);
+}
+
+.uuyp-order-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) minmax(130px, 1fr) minmax(100px, 0.8fr) minmax(80px, 0.6fr) minmax(150px, 1fr);
+  gap: 10px;
+}
+
+.uuyp-order-actions .link-btn {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .uuyp-order-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .uuyp-order-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .console-wrapper {
   background: var(--bg-surface);
   border-radius: var(--radius-lg);
