@@ -18,6 +18,7 @@ class TaskStatus(str, enum.Enum):
     SUCCESS = "success"
     FAILED = "failed"
     RETRYING = "retrying"
+    CANCELLED = "cancelled"
 @dataclass
 class TaskInfo:
     task_id: str
@@ -30,6 +31,8 @@ class TaskInfo:
     finished_at: Optional[float] = None
     attempts: int = 0
     max_retries: int = 0
+    cancel_requested: bool = False
+    future: Optional[Future] = None
 class TaskQueue:
     """
     In-memory task queue backed by ThreadPoolExecutor.
@@ -75,7 +78,7 @@ class TaskQueue:
         with self._lock:
             self._trim_history()
             self._tasks[task_id] = info
-        self._executor.submit(
+        future = self._executor.submit(
             self._run_with_retries,
             info,
             fn,
@@ -83,6 +86,8 @@ class TaskQueue:
             kwargs,
             retry_base_delay,
         )
+        with self._lock:
+            info.future = future
         return task_id
     def get_task(self, task_id: str) -> Optional[dict]:
         with self._lock:
@@ -97,6 +102,29 @@ class TaskQueue:
     def active_count(self) -> int:
         with self._lock:
             return sum(1 for t in self._tasks.values() if t.status in (TaskStatus.PENDING, TaskStatus.RUNNING, TaskStatus.RETRYING))
+    def cancel_task(self, task_id: str) -> bool:
+        with self._lock:
+            info = self._tasks.get(task_id)
+            if info is None or info.status in (TaskStatus.SUCCESS, TaskStatus.FAILED, TaskStatus.CANCELLED):
+                return False
+            info.cancel_requested = True
+            cancelled = bool(info.future and info.future.cancel())
+            if cancelled or info.status == TaskStatus.PENDING:
+                info.status = TaskStatus.CANCELLED
+                info.finished_at = time.time()
+            return True
+    def cancel_all(self) -> int:
+        with self._lock:
+            task_ids = [
+                tid
+                for tid, info in self._tasks.items()
+                if info.status in (TaskStatus.PENDING, TaskStatus.RUNNING, TaskStatus.RETRYING)
+            ]
+        cancelled = 0
+        for task_id in task_ids:
+            if self.cancel_task(task_id):
+                cancelled += 1
+        return cancelled
     def shutdown(self, wait: bool = True) -> None:
         self._executor.shutdown(wait=wait)
     def _run_with_retries(
@@ -108,23 +136,41 @@ class TaskQueue:
         retry_base_delay: float,
     ) -> None:
         while True:
+            if info.cancel_requested:
+                info.status = TaskStatus.CANCELLED
+                info.finished_at = time.time()
+                return
             info.attempts += 1
             info.status = TaskStatus.RUNNING
             info.started_at = time.time()
             try:
                 result = fn(*args, **kwargs)
+                if info.cancel_requested:
+                    info.status = TaskStatus.CANCELLED
+                    info.finished_at = time.time()
+                    return
                 info.status = TaskStatus.SUCCESS
                 info.result = result
                 info.finished_at = time.time()
                 return
             except Exception as exc:
+                if info.cancel_requested:
+                    info.status = TaskStatus.CANCELLED
+                    info.finished_at = time.time()
+                    return
                 tb = traceback.format_exc()
                 info.error = f"{exc}\n{tb}"
                 if info.attempts <= info.max_retries:
                     info.status = TaskStatus.RETRYING
                     delay = retry_base_delay * (2 ** (info.attempts - 1))
                     delay = min(delay, 300)  
-                    time.sleep(delay)
+                    deadline = time.time() + delay
+                    while time.time() < deadline:
+                        if info.cancel_requested:
+                            info.status = TaskStatus.CANCELLED
+                            info.finished_at = time.time()
+                            return
+                        time.sleep(min(0.25, deadline - time.time()))
                 else:
                     info.status = TaskStatus.FAILED
                     info.finished_at = time.time()
@@ -134,7 +180,7 @@ class TaskQueue:
             return
         finished = [
             (tid, t) for tid, t in self._tasks.items()
-            if t.status in (TaskStatus.SUCCESS, TaskStatus.FAILED)
+            if t.status in (TaskStatus.SUCCESS, TaskStatus.FAILED, TaskStatus.CANCELLED)
         ]
         finished.sort(key=lambda x: x[1].finished_at or 0)
         to_remove = len(self._tasks) - self._max_history + 20
@@ -153,6 +199,7 @@ class TaskQueue:
             "finished_at": info.finished_at,
             "attempts": info.attempts,
             "max_retries": info.max_retries,
+            "cancel_requested": info.cancel_requested,
         }
 _queue: Optional[TaskQueue] = None
 _queue_lock = threading.Lock()

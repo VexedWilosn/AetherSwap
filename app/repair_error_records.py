@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 import requests
 from bs4 import BeautifulSoup
+from DataEngine.profit_model import steam_sale_gross_price_from_net
 try:
     import urllib3
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -129,7 +130,7 @@ def _fetch_sold_with_names(cookies: dict) -> tuple:
                     rate = rate_map.get(cur_code)
                     if rate:
                         cny_raw = raw * rate
-                sale_price = round(cny_raw * 1.15, 2)
+                sale_price = round(steam_sale_gross_price_from_net(cny_raw), 2)
                 sold[assetid] = sale_price
                 sold_names[assetid] = name
             except (ValueError, TypeError):
