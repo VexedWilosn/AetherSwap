@@ -58,7 +58,6 @@ async function refreshLog() {
     if (hasLogFilter()) {
       renderLogFull();
     } else {
-      // append color-coded spans for new lines
       const frag = document.createDocumentFragment();
       lines.forEach((l, i) => {
         if (i > 0) frag.appendChild(document.createTextNode("\n"));

@@ -2,11 +2,14 @@ import json
 import random
 import time
 import logging
-from typing import Optional
+from typing import Optional, Any
+
+from app.services.market_platform import BaseMarketPlatform
 
 logger = logging.getLogger(__name__)
 import requests
 import urllib3
+from urllib.parse import unquote
 from utils.delay import jittered_sleep
 _USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -29,6 +32,7 @@ def _is_auth_error(status_code: int, data: dict) -> bool:
     if "login" in code or "login" in msg or "未登录" in msg or "登录" in msg:
         return True
     return False
+PAY_METHOD_WALLET = 1
 PAY_METHOD_ALIPAY = 51
 PAY_METHOD_WECHAT = 6
 API_HISTORY = "https://buff.163.com/api/market/buy_order/history"
@@ -39,7 +43,10 @@ API_PAGE_PAY = "https://buff.163.com/api/market/bill_order/page_pay"
 API_WX_PAY_QRCODE = "https://buff.163.com/api/market/bill_order/wx_pay_qrcode"
 API_BATCH_BUY_CREATE = "https://buff.163.com/api/market/goods/batch_buy/create"
 API_BATCH_WX_PAY_QRCODE = "https://buff.163.com/api/market/goods/batch_buy/wx_pay_qrcode"
+API_BUY_ORDER_CREATE = "https://buff.163.com/api/market/buy_order/create"
 API_ASK_SELLER_SEND = "https://buff.163.com/api/market/bill_order/ask_seller_to_send_offer"
+API_SELL_ORDER_CANCEL = "https://buff.163.com/api/market/sell_order/cancel"
+API_SELL_ORDER_CHANGE = "https://buff.163.com/api/market/sell_order/change"
 def _parse_cookies(cookie_str: str) -> dict:
     out = {}
     for item in cookie_str.split(";"):
@@ -48,11 +55,25 @@ def _parse_cookies(cookie_str: str) -> dict:
             k, _, v = s.partition("=")
             out[k.strip()] = v.strip()
     return out
+
+
+def _force_buff_cny(cookies_dict: dict) -> dict:
+    out = dict(cookies_dict or {})
+    out["locale"] = "zh-Hans"
+    out["Locale-Supported"] = "zh-Hans"
+    out["currency"] = "CNY"
+    return out
+
+
 def _csrf(cookies_dict: dict) -> str:
-    return cookies_dict.get("csrf_token", "").strip('"')
-class BuffBuyer:
+    for key in ("csrf_token", "csrfToken", "csrf", "X-CSRFToken"):
+        value = cookies_dict.get(key)
+        if value:
+            return unquote(str(value)).strip().strip('"').strip("'")
+    return ""
+class BuffBuyer(BaseMarketPlatform):
     def __init__(self, cookie_str: str, pay_method: int = PAY_METHOD_ALIPAY, use_ssl: bool = True):
-        self.cookies_dict = _parse_cookies(cookie_str)
+        self.cookies_dict = _force_buff_cny(_parse_cookies(cookie_str))
         self.csrf_token = _csrf(self.cookies_dict)
         self.pay_method = pay_method
         self.use_ssl = use_ssl
@@ -60,11 +81,15 @@ class BuffBuyer:
             "Host": "buff.163.com",
             "Accept": "application/json, text/javascript, */*; q=0.01",
             "X-Requested-With": "XMLHttpRequest",
+            "X-CSRFToken": self.csrf_token,
             "X-Csrftoken": self.csrf_token,
             "User-Agent": random.choice(_USER_AGENTS),
             "Content-Type": "application/json",
             "Accept-Language": "zh-CN,zh;q=0.9",
+            "Cookie": "; ".join(f"{k}={v}" for k, v in self.cookies_dict.items()),
         }
+        if self.csrf_token:
+            self.headers["Referer"] = "https://buff.163.com/market/csgo"
     def _make_request(self, method: str, url: str, **kwargs) -> dict:
         h = self.headers.copy()
         if method.upper() == "GET":
@@ -76,6 +101,9 @@ class BuffBuyer:
                     h.pop(k, None)
                 else:
                     h[k] = v
+        self.cookies_dict = _force_buff_cny(self.cookies_dict)
+        h["Accept-Language"] = "zh-CN,zh;q=0.9"
+        h["Cookie"] = "; ".join(f"{k}={v}" for k, v in self.cookies_dict.items())
         verify = kwargs.pop("verify", self.use_ssl)
         timeout = kwargs.pop("timeout", 10)
         r = requests.request(
@@ -87,6 +115,19 @@ class BuffBuyer:
             timeout=timeout,
             **kwargs
         )
+        if r.status_code in (403, 419) or "页面已过期" in (r.text or ""):
+            self._refresh_csrf_from_market_page()
+            h["X-CSRFToken"] = self.csrf_token
+            h["X-Csrftoken"] = self.csrf_token
+            r = requests.request(
+                method,
+                url,
+                headers=h,
+                cookies=self.cookies_dict,
+                verify=verify,
+                timeout=timeout,
+                **kwargs
+            )
         try:
             data = r.json() if r.text else {}
         except ValueError:
@@ -94,6 +135,37 @@ class BuffBuyer:
         if _is_auth_error(r.status_code, data):
             raise BuffAuthExpired()
         return data
+
+    def _refresh_csrf_from_market_page(self) -> None:
+        try:
+            resp = requests.get(
+                "https://buff.163.com/market/csgo",
+                headers={k: v for k, v in self.headers.items() if k.lower() != "content-type"},
+                cookies=self.cookies_dict,
+                verify=self.use_ssl,
+                timeout=10,
+            )
+            self.cookies_dict.update(resp.cookies.get_dict())
+            self.cookies_dict = _force_buff_cny(self.cookies_dict)
+            csrf = _csrf(self.cookies_dict)
+            if csrf:
+                self.csrf_token = csrf
+                self.headers["X-CSRFToken"] = csrf
+                self.headers["X-Csrftoken"] = csrf
+        except Exception as exc:
+            logger.debug("Buff CSRF refresh failed: %s", exc)
+    def get_price(self, search_name: str, game: str = "csgo") -> Optional[float]:
+        return self.get_goods_steam_price_cny(search_name, game)
+
+    def buy(self, goods_id: int, price_tolerance: float, game: str = "csgo") -> None:
+        return self.get_and_buy(goods_id, price_tolerance, game)
+
+    def sell(self, *args: Any, **kwargs: Any):
+        return self.lock_and_get_pay_url(*args, **kwargs)
+
+    def query_inventory(self, *args: Any, **kwargs: Any):
+        return self.get_sell_orders(*args, **kwargs)
+
     def check_wait_pay_orders(self, game: str = "csgo") -> bool:
         params = {
             "game": game,
@@ -110,13 +182,127 @@ class BuffBuyer:
                 for item in items:
                     if self.pay_method == PAY_METHOD_WECHAT:
                         self._fetch_wechat_url(game, item["id"])
-                    else:
+                    elif self.pay_method == PAY_METHOD_ALIPAY:
                         self._fetch_pay_url(game, item["id"])
+                    else:
+                        logger.info("BUFF platform wallet payment selected; no external payment URL requested for order %s", item["id"])
                 return True
             return False
+        except BuffAuthExpired:
+            raise
         except Exception as e:
             logger.exception("检查订单失败: %s", e)
         return False
+    def query_order_status(
+        self,
+        *,
+        order_nums: list[str] | None = None,
+        game: str = "csgo",
+        page_size: int = 50,
+        states: list[str] | None = None,
+    ) -> dict[str, Any]:
+        order_ids = {str(x).strip() for x in (order_nums or []) if str(x).strip()}
+        rows: list[dict[str, Any]] = []
+        last_error: dict[str, Any] | None = None
+        page_size = max(1, min(int(page_size or 50), 100))
+        max_pages = 5 if order_ids else 1
+
+        # BUFF buy_order/history currently accepts query without explicit state filters.
+        # State-filtered calls may return "Invalid Argument" and hide real FAIL states.
+        for page_num in range(1, max_pages + 1):
+            params = {
+                "game": game,
+                "page_num": str(page_num),
+                "page_size": str(page_size),
+                "_": str(int(time.time() * 1000)),
+            }
+            try:
+                res = self._make_request("GET", API_HISTORY, params=params)
+            except BuffAuthExpired:
+                raise
+            except Exception as exc:
+                last_error = {"success": False, "msg": str(exc)}
+                break
+            if res.get("code") != "OK":
+                last_error = {
+                    "success": False,
+                    "msg": res.get("msg") or res.get("error") or "BUFF history query failed",
+                    "raw": res,
+                }
+                break
+            items = res.get("data", {}).get("items", []) or []
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                row = dict(item)
+                row.setdefault("order_status", row.get("state") or "pending")
+                rows.append(row)
+                if order_ids and any(
+                    str(row.get(key) or "").strip() in order_ids
+                    for key in ("id", "order_id", "bill_order_id", "buy_order_id")
+                ):
+                    return {"success": True, "msg": "BUFF order status loaded", "data": row}
+            if len(items) < page_size:
+                break
+
+        # Legacy fallback for environments where unfiltered history endpoint changes behavior.
+        if order_ids and not rows:
+            states = states or [
+                "wait_pay",
+                "wait_seller_send_offer",
+                "wait_buyer_confirm",
+                "wait_confirm",
+                "wait_send",
+                "success",
+                "done",
+                "cancel",
+                "canceled",
+                "closed",
+            ]
+            for state in states:
+                params = {
+                    "game": game,
+                    "page_num": "1",
+                    "page_size": str(page_size),
+                    "state": state,
+                    "_": str(int(time.time() * 1000)),
+                }
+                try:
+                    res = self._make_request("GET", API_HISTORY, params=params)
+                except BuffAuthExpired:
+                    raise
+                except Exception as exc:
+                    last_error = {"success": False, "msg": str(exc), "state": state}
+                    continue
+                if res.get("code") != "OK":
+                    last_error = {
+                        "success": False,
+                        "msg": res.get("msg") or res.get("error") or "BUFF history query failed",
+                        "raw": res,
+                    }
+                    continue
+                items = res.get("data", {}).get("items", []) or []
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    row = dict(item)
+                    row.setdefault("order_status", row.get("state") or state)
+                    rows.append(row)
+                    if any(
+                        str(row.get(key) or "").strip() in order_ids
+                        for key in ("id", "order_id", "bill_order_id", "buy_order_id")
+                    ):
+                        return {"success": True, "msg": "BUFF order status loaded", "data": row}
+
+        if not order_ids:
+            return {"success": True, "msg": "BUFF order status loaded", "data": rows}
+        if last_error and not rows:
+            return last_error
+        return {
+            "success": True,
+            "msg": "BUFF order not found in recent history; keep waiting",
+            "data": [{"order_id": next(iter(order_ids)), "order_status": "pending", "not_found_in_recent_history": True}],
+        }
     def get_sell_orders(self, goods_id: int, game: str = "csgo") -> Optional[list]:
         params = {
             "game": str(game),
@@ -138,6 +324,29 @@ class BuffBuyer:
             raise
         except Exception:
             return None
+    def search_goods_id(self, market_hash_name: str, game: str = "csgo") -> Optional[int]:
+        params = {
+            "game": game,
+            "page_num": "1",
+            "search": market_hash_name.strip(),
+            "tab": "selling",
+            "_": str(int(time.time() * 1000)),
+        }
+        h = {"Referer": "https://buff.163.com/market/csgo"}
+        try:
+            data = self._make_request("GET", API_GOODS, params=params, headers=h)
+            items = data.get("data", {}).get("items", []) or []
+            if data.get("code") != "OK" or not items:
+                logger.debug("Buff 搜索失败或为空: %s", data)
+                return None
+            return int(items[0].get("id"))
+        except BuffAuthExpired:
+            raise
+        except (ValueError, TypeError, KeyError):
+            return None
+        except Exception:
+            return None
+
     def get_goods_steam_price_cny(self, search_name: str, game: str = "csgo") -> Optional[float]:
         params = {
             "game": game,
@@ -240,8 +449,10 @@ class BuffBuyer:
                 if self.pay_method == PAY_METHOD_WECHAT:
                     jittered_sleep(0.5)
                     self._fetch_wechat_url(game, new_order_id)
-                else:
+                elif self.pay_method == PAY_METHOD_ALIPAY:
                     self._fetch_pay_url(game, new_order_id)
+                else:
+                    logger.info("BUFF platform wallet payment selected; no external payment URL requested")
                 return "SUCCESS"
             error_code = str(res.get("code", ""))
             err_msg = res.get("error") or res.get("msg") or f"接口返回异常 Code: {error_code}"
@@ -323,12 +534,102 @@ class BuffBuyer:
                 jittered_sleep(0.5)
                 pay_url = self._get_wechat_pay_url(game, new_order_id)
                 return {"success": True, "pay_url": pay_url, "pay_type": "wechat", "order_id": new_order_id}
+            if self.pay_method != PAY_METHOD_ALIPAY:
+                return {"success": True, "pay_url": None, "pay_type": "wallet", "order_id": new_order_id}
             pay_url = self._get_alipay_url(game, new_order_id)
             return {"success": True, "pay_url": pay_url, "pay_type": "alipay", "order_id": new_order_id}
         except BuffAuthExpired:
             raise
         except Exception as e:
             return {"success": False, "code": "FAIL", "msg": str(e)}
+
+    def direct_buy(
+        self,
+        goods_id: int,
+        price: float,
+        num: int = 1,
+        game: str = "csgo",
+        sell_order_id: str | None = None,
+        price_tolerance: float = 0.0,
+    ) -> dict:
+        max_price = float(price)
+        quantity = max(1, int(num or 1))
+        orders: list[dict[str, Any]] = []
+        if sell_order_id:
+            orders = [{"id": str(sell_order_id), "price": f"{max_price:.2f}"}]
+        else:
+            fetched = self.get_sell_orders(goods_id, game) or []
+            orders = [row for row in fetched if isinstance(row, dict)]
+            if not orders:
+                return {"success": False, "reason": "not_found", "msg": "BUFF sell order not found"}
+
+        locked_orders: list[dict[str, Any]] = []
+        failures: list[dict[str, Any]] = []
+        for row in orders:
+            if len(locked_orders) >= quantity:
+                break
+            row_id = str(row.get("id") or row.get("sell_order_id") or row.get("sellOrderId") or "").strip()
+            if not row_id:
+                continue
+            try:
+                row_price = float(row.get("price") or 0)
+            except (TypeError, ValueError):
+                continue
+            if row_price <= 0:
+                continue
+            if row_price > max_price + float(price_tolerance or 0):
+                if sell_order_id:
+                    return {
+                        "success": False,
+                        "reason": "price_too_high",
+                        "msg": f"BUFF sell order price {row_price:.2f} exceeds target {max_price:.2f}",
+                    }
+                continue
+            result = self.lock_and_get_pay_url(game, goods_id, row_id, f"{row_price:.2f}")
+            if result.get("success"):
+                locked_orders.append(
+                    {
+                        "sell_order_id": row_id,
+                        "price": row_price,
+                        "order_id": result.get("order_id"),
+                        "pay_type": result.get("pay_type"),
+                        "pay_url": result.get("pay_url"),
+                    }
+                )
+            else:
+                failures.append({"sell_order_id": row_id, "price": row_price, "result": result})
+                code = str(result.get("code") or "").upper()
+                if code == "COOLING_DOWN":
+                    break
+            jittered_sleep(0.5)
+
+        if locked_orders:
+            locked_amount = round(sum(float(row["price"]) for row in locked_orders), 2)
+            return {
+                "success": True,
+                "msg": "BUFF direct buy submitted",
+                "order_id": locked_orders[0].get("order_id"),
+                "bill_order_id": locked_orders[0].get("order_id"),
+                "platform_listing_id": locked_orders[0].get("sell_order_id"),
+                "sell_order_id": locked_orders[0].get("sell_order_id"),
+                "order_status": "pending",
+                "filled_quantity": 0,
+                "remaining_quantity": quantity,
+                "filled_amount_cny": 0.0,
+                "remaining_amount_cny": locked_amount,
+                "data": {
+                    "orders": locked_orders,
+                    "order_ids": [row.get("order_id") for row in locked_orders if row.get("order_id")],
+                    "bill_order_ids": [row.get("order_id") for row in locked_orders if row.get("order_id")],
+                    "failures": failures,
+                },
+            }
+        return {
+            "success": False,
+            "reason": "not_found" if not failures else str(failures[-1].get("result", {}).get("code") or "direct_buy_failed").lower(),
+            "msg": "No BUFF sell order at or below target price",
+            "data": {"failures": failures},
+        }
     def _get_alipay_url(self, game: str, order_id: str) -> Optional[str]:
         params = {"bill_order_id": str(order_id), "_": str(int(time.time() * 1000))}
         h = {
@@ -380,6 +681,33 @@ class BuffBuyer:
             time.sleep(30)
         except Exception as e:
             logger.exception("生成二维码失败: %s", e)
+    def create_buy_order(self, goods_id: int, price: float, num: int = 1, game: str = "csgo") -> dict:
+        price_str = f"{float(price):.2f}"
+        payload = {
+            "game": game,
+            "goods_id": int(goods_id),
+            "price": price_str,
+            "num": int(num),
+            "pay_method": self.pay_method,
+            "allow_tradable_cooldown": 0,
+        }
+        h = {"Referer": f"https://buff.163.com/goods/{goods_id}"}
+        try:
+            logger.info("正在发布求购订单: goods_id=%s, price=%s, num=%s, game=%s", goods_id, price_str, num, game)
+            res = self._make_request("POST", API_BUY_ORDER_CREATE, headers=h, data=json.dumps(payload))
+            if res.get("code") == "OK":
+                buy_order_id = res.get("data", {}).get("id")
+                logger.info("求购发布成功！订单号: %s", buy_order_id)
+                return {"success": True, "buy_order_id": buy_order_id, "msg": "求购发布成功"}
+            err_msg = res.get("error") or res.get("msg") or f"接口代码非 OK (Code: {res.get('code', 'N/A')})"
+            logger.warning("求购发布失败: %s", err_msg)
+            return {"success": False, "msg": str(err_msg)}
+        except BuffAuthExpired:
+            raise
+        except Exception as e:
+            logger.exception("求购发布异常: %s", e)
+            return {"success": False, "msg": str(e)}
+
     def batch_buy_create(
         self,
         goods_id: int,
@@ -429,6 +757,127 @@ class BuffBuyer:
             return data.get("url") or data.get("qrcode") or None
         except Exception:
             return None
+    def cancel_sale(
+        self,
+        sell_orders: list[str] | tuple[str, ...] | str,
+        *,
+        exclude_sell_orders: list[str] | None = None,
+        game: str = "csgo",
+    ) -> dict[str, Any]:
+        if isinstance(sell_orders, (str, int)):
+            order_ids = [str(sell_orders).strip()]
+        else:
+            order_ids = [str(order_id).strip() for order_id in sell_orders if str(order_id).strip()]
+        if not order_ids:
+            return {"success": False, "msg": "sell_order_id is required", "reason": "validation_error"}
+
+        exclude = [str(order_id).strip() for order_id in (exclude_sell_orders or []) if str(order_id).strip()]
+        success_ids: list[str] = []
+        problems: dict[str, Any] = {}
+        raw_batches: list[dict[str, Any]] = []
+        h = {"Referer": f"https://buff.163.com/market/sell_order?game={game}"}
+        for index in range(0, len(order_ids), 50):
+            batch = order_ids[index:index + 50]
+            payload = {
+                "game": game,
+                "sell_orders": batch,
+                "exclude_sell_orders": exclude,
+            }
+            try:
+                res = self._make_request("POST", API_SELL_ORDER_CANCEL, headers=h, data=json.dumps(payload))
+            except BuffAuthExpired:
+                raise
+            except Exception as exc:
+                return {"success": False, "msg": str(exc), "raw": {"success_ids": success_ids, "problems": problems}}
+            raw_batches.append(res)
+            if res.get("code") != "OK":
+                return {
+                    "success": False,
+                    "msg": res.get("msg") or res.get("error") or "BUFF cancel sale failed",
+                    "raw": res,
+                }
+            data = res.get("data") or {}
+            if isinstance(data, dict):
+                for order_id, status in data.items():
+                    if status == "OK":
+                        success_ids.append(str(order_id))
+                    else:
+                        problems[str(order_id)] = status
+
+        return {
+            "success": not problems and len(success_ids) == len(order_ids),
+            "msg": "BUFF sell order cancelled" if not problems else "BUFF sell order cancel partially failed",
+            "data": {
+                "cancelled": success_ids,
+                "problems": problems,
+                "order_status": "cancelled" if not problems else "pending",
+            },
+            "raw": raw_batches,
+        }
+    def change_price(
+        self,
+        sell_orders: list[dict[str, Any]] | dict[str, Any],
+        *,
+        game: str = "csgo",
+    ) -> dict[str, Any]:
+        if isinstance(sell_orders, dict):
+            rows = [sell_orders]
+        else:
+            rows = [row for row in sell_orders if isinstance(row, dict)]
+        normalized_rows = []
+        for row in rows:
+            sell_order_id = str(row.get("sell_order_id") or row.get("sellOrderId") or row.get("id") or "").strip()
+            price = row.get("price")
+            if not sell_order_id or price in (None, ""):
+                continue
+            normalized_rows.append(
+                {
+                    "sell_order_id": sell_order_id,
+                    "price": str(price),
+                    "desc": str(row.get("desc") or ""),
+                }
+            )
+        if not normalized_rows:
+            return {"success": False, "msg": "sell_order_id and price are required", "reason": "validation_error"}
+
+        success_ids: list[str] = []
+        problems: dict[str, Any] = {}
+        raw_batches: list[dict[str, Any]] = []
+        h = {"Referer": f"https://buff.163.com/market/sell_order?game={game}"}
+        for index in range(0, len(normalized_rows), 50):
+            batch = normalized_rows[index:index + 50]
+            payload = {"appid": "730", "sell_orders": batch}
+            try:
+                res = self._make_request("POST", API_SELL_ORDER_CHANGE, headers=h, data=json.dumps(payload))
+            except BuffAuthExpired:
+                raise
+            except Exception as exc:
+                return {"success": False, "msg": str(exc), "raw": {"success_ids": success_ids, "problems": problems}}
+            raw_batches.append(res)
+            if res.get("code") != "OK":
+                return {
+                    "success": False,
+                    "msg": res.get("msg") or res.get("error") or "BUFF change price failed",
+                    "raw": res,
+                }
+            data = res.get("data") or {}
+            if isinstance(data, dict):
+                for order_id, status in data.items():
+                    if status == "OK":
+                        success_ids.append(str(order_id))
+                    else:
+                        problems[str(order_id)] = status
+
+        return {
+            "success": not problems and len(success_ids) == len(normalized_rows),
+            "msg": "BUFF sell order price changed" if not problems else "BUFF sell order price partially failed",
+            "data": {
+                "changed": success_ids,
+                "problems": problems,
+                "order_status": "reprice_submitted" if not problems else "pending",
+            },
+            "raw": raw_batches,
+        }
     def batch_buy_finalize(
         self,
         game: str,
@@ -468,15 +917,17 @@ class BuffBuyer:
             raise
         except Exception:
             return None
-    def ask_seller_to_send(self, bill_order_id_or_ids, game: str = "csgo") -> bool:
+    def ask_seller_to_send(self, bill_order_id_or_ids, game: str = "csgo") -> dict[str, Any]:
         if isinstance(bill_order_id_or_ids, (list, tuple)):
             ids = [str(x) for x in bill_order_id_or_ids if x is not None]
         else:
             ids = [str(bill_order_id_or_ids)] if bill_order_id_or_ids is not None else []
         if not ids:
-            return False
+            return {"success": False, "msg": "bill_order_id is required", "reason": "validation_error"}
         h = {"Referer": f"https://buff.163.com/market/buy_order/history?game={game}"}
-        any_success = False
+        success_ids: list[str] = []
+        failures: dict[str, Any] = {}
+        raw_results: list[dict[str, Any]] = []
         for i, order_id in enumerate(ids):
             if i > 0:
                 jittered_sleep(1.5)
@@ -487,10 +938,22 @@ class BuffBuyer:
             }
             try:
                 res = self._make_request("POST", API_ASK_SELLER_SEND, headers=h, data=json.dumps(payload))
+                raw_results.append(res)
                 if res.get("code") == "OK":
-                    any_success = True
+                    success_ids.append(order_id)
+                else:
+                    failures[order_id] = res.get("msg") or res.get("error") or res.get("code") or "ask_seller_failed"
             except BuffAuthExpired:
                 raise
-            except Exception:
-                pass
-        return any_success
+            except Exception as exc:
+                failures[order_id] = str(exc)
+        return {
+            "success": bool(success_ids) and not failures,
+            "msg": "BUFF seller offer requested" if success_ids else "BUFF seller offer request failed",
+            "data": {
+                "requested": success_ids,
+                "failures": failures,
+                "order_status": "wait_buyer_confirm" if success_ids else "wait_seller_send_offer",
+            },
+            "raw": raw_results,
+        }

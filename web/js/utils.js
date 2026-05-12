@@ -4,18 +4,29 @@ const REFRESH_INTERVAL_DEFAULT = 60;
 function el(id) {
   return document.getElementById(id);
 }
-function toast(title, detail = "") {
+function toast(title, detail = "", durationMs = 3500) {
   const host = el("toast-host");
   if (!host) return;
   const node = document.createElement("div");
   node.className = "toast";
-  node.innerHTML = `<div class="t">${escapeHtml(title)}</div>${detail ? `<div class="d">${escapeHtml(detail)}</div>` : ""}`;
+  node.innerHTML = `
+    <button type="button" class="toast-close" aria-label="关闭提示">×</button>
+    <div class="t">${escapeHtml(title)}</div>
+    ${detail ? `<div class="d">${escapeHtml(detail)}</div>` : ""}
+  `;
+  const ttl = Math.max(1200, Number(durationMs) || 3500);
+  node.style.setProperty("--toast-duration", `${ttl}ms`);
   host.appendChild(node);
-  const ttl = 3500;
-  setTimeout(() => {
+  let removed = false;
+  const removeToast = () => {
+    if (removed) return;
+    removed = true;
     node.classList.add("toast-exit");
-  }, ttl - 400);
-  setTimeout(() => node.remove(), ttl);
+    setTimeout(() => node.remove(), 320);
+  };
+  const closeBtn = node.querySelector(".toast-close");
+  closeBtn?.addEventListener("click", removeToast);
+  setTimeout(removeToast, ttl);
 }
 function escapeHtml(s) {
   const div = document.createElement("div");

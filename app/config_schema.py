@@ -1,18 +1,5 @@
-from typing import Any, Optional
+﻿from typing import Any, Optional
 DEFAULTS = {
-    "iflow": {
-        "page_num": 1,
-        "page_size": 200,
-        "platforms": "buff",
-        "sort_by": "sell",
-        "min_price": 2,
-        "max_price": 5000,
-        "min_volume": 200,
-        "type": "swap",
-        "want_to_get": "STEAM_BALANCE",
-        "sale_plan": "STEAM_SELL_PRICE",
-        "fetch_timeout": 15,
-    },
     "buff": {
         "pay_method": "alipay",
         "game": "csgo",
@@ -38,8 +25,7 @@ DEFAULTS = {
         "target_balance": 100,
         "max_discount": 0.9,
         "huge_profit_offset": 0.05,
-        "iflow_top_n": 50,
-        "exclude_keywords": ["印花"],
+        "exclude_keywords": ["鍗拌姳"],
         "sell_price_ratio": 1.0,
         "verbose_debug": False,
         "sell_strategy": 4,
@@ -48,9 +34,13 @@ DEFAULTS = {
         "sell_price_max_ignore_volume": 4,
         "sell_trend_days": 7,
         "retry_interval_seconds": 300,
+
         "buff_retry_delay_seconds": 5,
         "current_price_refresh_minutes": 10,
-        "resell_ratio": 0.85,
+        "max_staleness_minutes": 10,
+        "purchase_order_jit_bypass_minutes": 10,
+        "resell_ratio": 0.70,
+        "steam_balance_cost_ratio": 0.70,
         "safe_purchase_hard_qty_cap": 50,
         "safe_purchase_liquidity_ratio": 0.05,
         "safe_purchase_low_price_threshold": 5.0,
@@ -79,8 +69,8 @@ DEFAULTS = {
         "email_pass": "",
         "imap_server": "imap.qq.com",
         "target_sender": "",
-        "subject_success": "已确认成功付款",
-        "subject_fail": "已确认付款失败",
+        "subject_success": "payment confirmation success",
+        "subject_fail": "payment confirmation failed",
         "allowed_sender": "",
         "email_timeout_seconds": 300,
     },
@@ -102,6 +92,10 @@ DEFAULTS = {
         "test_url": "https://ipv4.webshare.io/",
         "timeout_seconds": 10,
         "webshare_api_key": "",
+        "global_proxies": [],
+        "steam_proxies": [],
+        "buff_proxies": [],
+        "uuyp_proxies": [],
         "proxies": [],
     },
     "steam_deals": {
@@ -109,6 +103,219 @@ DEFAULTS = {
         "auto_refresh_days": 7,
         "max_game_threads": 5,
         "max_region_threads": 16,
+    },
+    "steamdt": {
+        "enabled": False,
+        "endpoint": "https://www.steamdt.com/api/user/ranking/v1/hanging-knife",
+        "interval_seconds": 600,
+        "timeout": 15,
+        "page_size": 200,
+        "max_pages": 1,
+        "min_sell_price": "1",
+        "max_sell_price": "10",
+        "min_transaction_count": "100",
+        "platform_list": ["C5", "YOUPIN", "BUFF"],
+        "type": "swap",
+        "cooldown_seconds_on_waf": 300,
+        "sleep_min_seconds": 1.0,
+        "sleep_max_seconds": 3.0,
+        "use_proxy": False,
+        "device_id": "",
+        "cookie": "",
+        "min_volume_for_high_quality": 1,
+        "strategies": [],
+        "openapi_enabled": False,
+        "openapi_sync_interval_seconds": 86400,
+        "openapi_endpoint": "",
+        "openapi_base_url": "https://open.steamdt.com",
+        "openapi_base_path": "/open/cs2/v1/base",
+        "openapi_timeout_seconds": 20,
+        "openapi_use_proxy": True,
+        "openapi": {
+            "enabled": False,
+            "sync_interval_seconds": 86400,
+            "endpoint": "",
+            "base_url": "https://open.steamdt.com",
+            "base_path": "/open/cs2/v1/base",
+            "timeout_seconds": 20,
+            "max_retries": 2,
+            "use_proxy": True,
+            "api_key": "",
+            "tracked_platforms": ["steam", "buff", "uuyp", "eco"],
+        },
+        "openapi_price": {
+            "enabled": True,
+            "base_url": "https://open.steamdt.com",
+            "timeout_seconds": 20,
+            "batch_requests_per_minute": 1,
+            "single_requests_per_minute": 60,
+            "single_reserved_for_jit": 15,
+            "batch_size": 100,
+            "p2_target_minutes": 60,
+            "p3_target_minutes": 30,
+            "mode": "stable",
+            "stable_pool_cycle_minutes": 60,
+            "discovery_target_minutes": 720,
+            "custom_pool_share_pct": 70,
+            "auto_switch_to_stable_on_idle_complete": True,
+            "use_proxy": True,
+            "tracked_platforms": ["steam", "buff", "uuyp", "eco"],
+            "api_key": "",
+        },
+    },
+    "session_capsules": {
+        "steamdt": {
+            "enabled": True,
+            "lease_ttl_seconds": 45,
+            "timeout_cooldown_seconds": 60,
+            "empty_soft_block_cooldown_seconds": 120,
+            "waf_block_cooldown_seconds": 300,
+            "auth_invalid_cooldown_seconds": 1800,
+            "auto_retire_after": 3,
+            "auto_retire_reasons": ["waf_block", "empty_soft_block"],
+            "min_ready_capsules": 1,
+            "recapture_alert_interval_seconds": 3600,
+        }
+    },
+    "priority_scheduler": {
+        "enabled": True,
+        "global_interval_seconds": 900,
+        "min_volume_24h": 10,
+        "min_liquidity_score": 0.6,
+        "min_net_profit_rate": 0.03,
+        "p1_to_p2_score": 25,
+        "p2_to_p3_score": 50,
+        "p2_to_p1_score": 12,
+        "p3_to_p2_score": 18,
+        "p3_to_p2_no_profit_rounds": 3,
+        "p2_to_p1_no_hit_rounds": 3,
+        "p2_to_p3_hit_rounds": 2,
+        "steamdt_fresh_minutes": 60,
+        "jit_ttl_minutes": 10,
+        "respect_manual_watch": True,
+        "manual_watch_min_priority": 3,
+        "respect_ttl": True,
+        "respect_cooldown": True,
+        "cashout_excellent_balance_cost_ratio": 0.55,
+        "cashout_good_balance_cost_ratio": 0.63,
+        "cashout_pass_balance_cost_ratio": 0.70,
+        "cashout_excellent_score_floor": 75,
+        "cashout_good_score_floor": 60,
+        "cashout_pass_score_floor": 50,
+    },
+    "crawl_layers": {
+        "low_interval_seconds": 28800,
+        "mid_interval_seconds": 900,
+        "low_limit": 500,
+        "mid_limit": 200,
+        "high_limit": 100,
+    },
+    "action_policy": {
+        "enabled": True,
+        "decision_ttl_minutes": 15,
+        "direct_buy_min_profit_rate": 0.08,
+        "buy_order_min_profit_rate": 0.12,
+        "sell_min_profit_rate": 0.03,
+        "min_24h_volume": 20,
+        "direct_buy_requires_jit": True,
+        "sell_requires_jit": True,
+        "allow_direct_buy": True,
+        "allow_buy_order": True,
+        "allow_auto_sell": False,
+        "risk_segment_count": 3,
+        "risk_segments": [
+            {"min_price": 0, "max_price": 10, "max_capital_per_item": 80, "max_inventory_per_item": 8},
+            {"min_price": 10, "max_price": 100, "max_capital_per_item": 300, "max_inventory_per_item": 3},
+            {"min_price": 100, "max_price": None, "max_capital_per_item": 800, "max_inventory_per_item": 1},
+        ],
+    },
+    "cash_platform_trading": {
+        "enabled": True,
+        "primary_platform": "buff",
+        "platforms": {
+            "buff": {
+                "enabled": True,
+                "allow_direct_buy": True,
+                "allow_purchase_order": True,
+                "order_poll_interval_seconds": 60,
+                "purchase_order_weight": 1,
+            },
+            "uuyp": {
+                "enabled": True,
+                "allow_direct_buy": False,
+                "allow_purchase_order": True,
+                "order_poll_interval_seconds": 90,
+                "purchase_order_weight": 2,
+            },
+            "eco": {
+                "enabled": True,
+                "allow_direct_buy": True,
+                "allow_purchase_order": True,
+                "order_poll_interval_seconds": 45,
+                "purchase_order_weight": 3,
+            },
+            "c5game": {
+                "enabled": False,
+                "allow_direct_buy": False,
+                "allow_purchase_order": False,
+                "order_poll_interval_seconds": 120,
+                "purchase_order_weight": 1,
+            },
+        },
+        "direct_buy_first": True,
+        "cancel_excess_orders_on_fill": True,
+        "max_order_adjustments_per_minute": 6,
+    },
+    "low_price_exposure_guard": {
+        "enabled": True,
+        "rule": "0-0-0.02-2-0.05-4-0.10-8-0.30",
+        "price_basis": "buy_price",
+        "hide_signals": True,
+        "block_execution": True,
+        "cache_ttl_seconds": 30,
+        "include_inventory": True,
+        "include_purchases": True,
+        "include_active_orders": True,
+        "include_pending_receipt": True,
+    },
+    "trading_worker": {
+        "enabled": False,
+        "safe_mode": True,
+        "poll_interval_seconds": 10,
+        "batch_size": 10,
+        "lease_seconds": 60,
+        "error_backoff_seconds": 60,
+    },
+    "automation_modules": {
+        "auto_trading_enabled": True,
+        "autostart_on_webui_boot": False,
+    },
+    "trading_live_canary": {
+        "enabled": False,
+        "kill_switch": True,
+        "require_channel": "live_canary",
+        "max_action_cny": 1.0,
+        "max_daily_cny": 10.0,
+        "allowed_platforms": [],
+        "allowed_action_types": [],
+        "allowed_item_ids": [],
+        "allowed_market_hash_names": [],
+        "require_recent_smoke_seconds": 900,
+        "require_manual_run_once": True,
+        "allow_background_worker": False,
+    },
+    "seller_snapshot_scanner": {
+        "enabled": False,
+        "commit": False,
+        "interval_seconds": 3600,
+        "error_backoff_seconds": 300,
+        "include_inventory": True,
+        "include_steam_listings": True,
+        "include_c5_orders": True,
+        "listing_platform": "steam",
+        "delivery_platform": "c5game",
+        "channel": "seller_snapshot_scanner",
+        "snapshot_payload": {},
     },
 }
 def merge(default: dict, overrides: dict) -> dict:
@@ -120,7 +327,7 @@ def merge(default: dict, overrides: dict) -> dict:
             out[k] = v
     return out
 def _validate_ranges(cfg: dict) -> dict:
-    # 简单校验一下，防止用户乱填配置搞崩程序
+    # 绠€鍗曟牎楠屼竴涓嬶紝闃叉鐢ㄦ埛涔卞～閰嶇疆鎼炲穿绋嬪簭
     import warnings
     pipe = cfg.get("pipeline") or {}
     stab = cfg.get("stability") or {}
@@ -129,28 +336,28 @@ def _validate_ranges(cfg: dict) -> dict:
     if isinstance(pipe.get("max_discount"), (int, float)):
         v = pipe["max_discount"]
         if not (0 < v <= 1):
-            warnings.warn(f"[config] pipeline.max_discount={v} 超出范围(0,1]，已修正为 {min(max(v, 0.001), 1.0):.4g}")
+            warnings.warn(f"[config] pipeline.max_discount={v} 瓒呭嚭鑼冨洿(0,1]锛屽凡淇涓?{min(max(v, 0.001), 1.0):.4g}")
             pipe["max_discount"] = min(max(v, 0.001), 1.0)
 
     if isinstance(stab.get("cv_threshold"), (int, float)):
         v = stab["cv_threshold"]
         if not (0 < v < 1):
-            warnings.warn(f"[config] stability.cv_threshold={v} 超出范围(0,1)，已修正")
+            warnings.warn(f"[config] stability.cv_threshold={v} 瓒呭嚭鑼冨洿(0,1)锛屽凡淇")
             stab["cv_threshold"] = max(0.001, min(v, 0.999))
 
     if isinstance(stab.get("r2_threshold"), (int, float)):
         v = stab["r2_threshold"]
         if not (0 < v < 1):
-            warnings.warn(f"[config] stability.r2_threshold={v} 超出范围(0,1)，已修正")
+            warnings.warn(f"[config] stability.r2_threshold={v} 瓒呭嚭鑼冨洿(0,1)锛屽凡淇")
             stab["r2_threshold"] = max(0.001, min(v, 0.999))
 
     if isinstance(stab.get("price_percentile_ceil"), (int, float)):
         v = stab["price_percentile_ceil"]
         if not (0 < v <= 1):
-            warnings.warn(f"[config] stability.price_percentile_ceil={v} 超出范围(0,1]，已修正")
+            warnings.warn(f"[config] stability.price_percentile_ceil={v} 瓒呭嚭鑼冨洿(0,1]锛屽凡淇")
             stab["price_percentile_ceil"] = max(0.001, min(v, 1.0))
 
-    # price_percentile_ceil_rising 同上
+    # price_percentile_ceil_rising 鍚屼笂
     if isinstance(stab.get("price_percentile_ceil_rising"), (int, float)):
         v = stab["price_percentile_ceil_rising"]
         if not (0 < v <= 1):
@@ -159,8 +366,12 @@ def _validate_ranges(cfg: dict) -> dict:
     if isinstance(buff.get("price_tolerance"), (int, float)):
         v = buff["price_tolerance"]
         if v < 0:
-            warnings.warn(f"[config] buff.price_tolerance={v} 不能为负数，已修正为0")
+            warnings.warn(f"[config] buff.price_tolerance={v} 涓嶈兘涓鸿礋鏁帮紝宸蹭慨姝ｄ负0")
             buff["price_tolerance"] = 0.0
+    pay_method = str(buff.get("pay_method") or "").strip().lower()
+    if pay_method and pay_method not in {"alipay", "wechat", "wallet", "balance", "pending", "nepay", "platform_wallet", "wallet_balance", "account_balance", "netease_pay"}:
+        warnings.warn(f"[config] buff.pay_method={pay_method} is not recognized; using wallet")
+        buff["pay_method"] = "wallet"
 
     return cfg
 

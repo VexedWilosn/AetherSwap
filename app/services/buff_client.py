@@ -1,6 +1,7 @@
 from typing import Any, Dict, List, Optional, Tuple, Union
 from app.services.retry import with_retry
-from buff.buyer import BuffAuthExpired, BuffBuyer, PAY_METHOD_ALIPAY, PAY_METHOD_WECHAT
+from app.services.platform_sessions import resolve_buff_pay_method
+from buff.buyer import BuffAuthExpired, BuffBuyer, PAY_METHOD_WECHAT
 buff_timeout = 15
 buff_retry_attempts = 2
 def count_lowest_price_orders(orders: List[dict]) -> Tuple[float, int]:
@@ -37,7 +38,7 @@ class BuffClient:
         pay_method: str = "alipay",
         timeout_sec: int = buff_timeout,
     ) -> None:
-        pm = PAY_METHOD_WECHAT if (pay_method or "alipay").strip().lower() == "wechat" else PAY_METHOD_ALIPAY
+        pm = resolve_buff_pay_method(pay_method)
         self._buyer = BuffBuyer(cookies, pay_method=pm)
         self._pay_method = pay_method
         self._timeout = timeout_sec
@@ -45,7 +46,7 @@ class BuffClient:
         return self._buyer.get_sell_orders(goods_id, game)
     def get_goods_steam_price_cny(self, search_name: str, game: str = "csgo") -> Optional[float]:
         return self._buyer.get_goods_steam_price_cny(search_name, game)
-    def ask_seller_to_send(self, bill_order_id_or_ids: Union[str, List[str]], game: str = "csgo") -> bool:
+    def ask_seller_to_send(self, bill_order_id_or_ids: Union[str, List[str]], game: str = "csgo") -> dict[str, Any]:
         return self._buyer.ask_seller_to_send(bill_order_id_or_ids, game)
     @with_retry(max_attempts=buff_retry_attempts, fatal_exceptions=(BuffAuthExpired,))
     def lock_and_get_pay_url(

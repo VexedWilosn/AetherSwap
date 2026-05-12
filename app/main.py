@@ -39,8 +39,9 @@ def main():
     t.start()
     time.sleep(1.2)
     if HAS_WEBVIEW:
+        storage_path = str((Path("config") / "webview_profile").resolve())
         webview.create_window("aetherswap", URL, width=1280, height=800, zoomable=True, maximized=True)
-        webview.start()
+        webview.start(private_mode=False, storage_path=storage_path)
         print(f"窗口已关闭，后端仍在运行。在浏览器打开 {URL} 可继续查看状态。按 Ctrl+C 退出。")
         try:
             while t.is_alive():

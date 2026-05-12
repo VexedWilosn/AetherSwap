@@ -1,3 +1,7 @@
 {
-    "targets": []
+  "targets": [],
+  "notify": {
+    "enabled": false,
+    "webhook_url": ""
+  }
 }

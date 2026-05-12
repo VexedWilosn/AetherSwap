@@ -22,6 +22,7 @@ from app.accounts import (
     set_current,
     update_account,
 )
+from app.services.steam_trade_link import fetch_steam_trade_link
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 def _verify_steam_cookies_valid(cookie_str: str, steam_id: str = "") -> bool:
     """Use an actual HTTP request to verify if Steam cookies are truly valid.
@@ -290,7 +291,13 @@ def _try_steam_auto_relogin_impl() -> tuple:
     ok, err_code, cookie_dict = _do_steampy_login(username, password, steam_guard_dict)
     if ok and cookie_dict.get("steamLoginSecure"):
         cookie_str, session_id, steam_id = _extract_creds_from_cookie_dict(cookie_dict)
-        update_steam_creds(cookie_str, session_id or "")
+        trade_link_result = fetch_steam_trade_link(cookie_str, steam_id=steam_id or cur.get("steam_id", ""))
+        update_steam_creds(
+            cookie_str,
+            session_id or "",
+            steam_id=steam_id or cur.get("steam_id", ""),
+            trade_link=trade_link_result.trade_link if trade_link_result.ok else None,
+        )
         try:
             dn, av = fetch_steam_profile_via_api(steam_id or cur.get("steam_id", ""), cookie_str)
             update_account(account_id,
@@ -337,7 +344,13 @@ def verify_steam_auto_login(account_id: str) -> dict:
     ok, err_code, cookie_dict = _do_steampy_login(username, password, steam_guard_dict)
     if ok and cookie_dict.get("steamLoginSecure"):
         cookie_str, session_id, steam_id = _extract_creds_from_cookie_dict(cookie_dict)
-        update_steam_creds(cookie_str, session_id or "")
+        trade_link_result = fetch_steam_trade_link(cookie_str, steam_id=steam_id or "")
+        update_steam_creds(
+            cookie_str,
+            session_id or "",
+            steam_id=steam_id or "",
+            trade_link=trade_link_result.trade_link if trade_link_result.ok else None,
+        )
         cur_acc = get_account(account_id)
         if cur_acc:
             try:

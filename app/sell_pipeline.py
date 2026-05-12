@@ -14,6 +14,7 @@ from app.pipeline_context import PipelineContext
 from app.state import get_state, append_sale
 from app.steam_confirm import auto_confirm_once
 from app.steam_listings import fetch_my_listings
+from DataEngine.profit_model import steam_sale_net_price
 from steam.market import list_item
 from steam.market_orders import compute_smart_list_price, get_sell_orders_cny
 from steam.session import create_market_session
@@ -274,8 +275,12 @@ def _build_listing_plan(
                 buy_price = float(buy_record.get("price") or 0)
                 market_price_at_buy = float(buy_record.get("market_price") or 0)
                 if buy_price > 0 and market_price_at_buy > 0 and list_price > 0:
-                    current_ratio = buy_price / (list_price / 1.15)
-                    original_ratio = buy_price / (market_price_at_buy / 1.15)
+                    current_after_tax = steam_sale_net_price(list_price)
+                    original_after_tax = steam_sale_net_price(market_price_at_buy)
+                    if current_after_tax <= 0 or original_after_tax <= 0:
+                        continue
+                    current_ratio = buy_price / current_after_tax
+                    original_ratio = buy_price / original_after_tax
                     ratio_limit = original_ratio * 1.05
                     if current_ratio > ratio_limit:
                         ctx.log(

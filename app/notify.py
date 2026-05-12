@@ -6,6 +6,7 @@ from email.header import decode_header
 from urllib.parse import quote
 from typing import Callable, Optional
 import requests
+from DataEngine.profit_model import steam_sale_net_price
 def send_pushplus(token: str, title: str, content: str, template: str = "html") -> bool:
     if not token or not token.strip():
         return False
@@ -191,7 +192,7 @@ def build_holdings_report_content(
     resell_ratio: float = 0.85,
 ) -> str:
     total_price, total_mp, total_cmp, pl, pl_pct, ratio = compute_holdings_stats(holdings, resell_ratio)
-    total_after_tax = total_cmp / 1.15 if total_cmp and total_cmp > 0 else None
+    total_after_tax = steam_sale_net_price(total_cmp) if total_cmp and total_cmp > 0 else None
     discount_ratio = (total_price / total_after_tax) if total_after_tax and total_after_tax > 0 and total_price > 0 else None
     cash_profit = (total_after_tax * ratio - total_price) if total_after_tax is not None and total_price >= 0 else None
     self_use_profit = (total_after_tax - total_price) if total_after_tax is not None else None

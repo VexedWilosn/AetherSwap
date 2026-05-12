@@ -91,7 +91,31 @@ def fetch_buff_steam_trade(buff_cookies: str) -> Tuple[bool, List[Dict[str, Any]
         return True, pending, ""
     except Exception as e:
         return False, [], str(e)[:120]
-def accept_steam_trade_offer(trade_offer_id: str, steam_cookies: Dict[str, str]) -> bool:
+def _classify_steam_offer_accept_failure(*, status_code: int = 0, body: dict | None = None, text: str = "") -> str:
+    raw = " ".join(
+        str(value or "")
+        for value in (
+            status_code,
+            text,
+            (body or {}).get("strError") if isinstance(body, dict) else "",
+            (body or {}).get("message") if isinstance(body, dict) else "",
+            (body or {}).get("eresult") if isinstance(body, dict) else "",
+        )
+    ).lower()
+    if status_code in {401, 403} or any(token in raw for token in ("login", "session", "not logged", "access denied")):
+        return "steam_auth_required"
+    if status_code == 404 or any(token in raw for token in ("expired", "not available", "invalid trade offer", "not found", "already")):
+        return "offer_expired"
+    if any(token in raw for token in ("declined", "rejected", "cancelled", "canceled")):
+        return "offer_declined"
+    if any(token in raw for token in ("mobile", "confirmation", "confirm")):
+        return "mobile_confirm_required"
+    if status_code == 429 or "rate" in raw or "timeout" in raw:
+        return "transient_error"
+    return "trade_offer_accept_failed"
+
+
+def accept_steam_trade_offer_result(trade_offer_id: str, steam_cookies: Dict[str, str]) -> dict:
     from utils.proxy_manager import get_proxy_manager
     pm = get_proxy_manager()
     try:
@@ -118,23 +142,34 @@ def accept_steam_trade_offer(trade_offer_id: str, steam_cookies: Dict[str, str])
             return requests.post(url, headers=headers, cookies=steam_cookies, proxies=proxies, data=data, verify=False, timeout=15)
         r = steam_request(3, _call)
         if r.status_code != 200:
-            return False
+            reason = _classify_steam_offer_accept_failure(status_code=r.status_code, text=r.text or "")
+            return {"success": False, "reason": reason, "status_code": r.status_code, "body": (r.text or "")[:500]}
         raw_text = (r.text or "").strip()
         if not raw_text:
-            return False
+            return {"success": False, "reason": "empty_response", "status_code": r.status_code}
         try:
             body = r.json()
         except Exception:
-            return False
+            reason = _classify_steam_offer_accept_failure(status_code=r.status_code, text=raw_text)
+            return {"success": False, "reason": reason, "status_code": r.status_code, "body": raw_text[:500]}
         if not isinstance(body, dict):
-            return False
+            return {"success": False, "reason": "malformed_response", "status_code": r.status_code, "body": raw_text[:500]}
         if body.get("tradeid"):
-            return True
+            return {"success": True, "reason": "", "tradeid": body.get("tradeid"), "status_code": r.status_code, "body": body}
         if body.get("strError"):
-            return False
-        return "tradeid" in body or body.get("success") == 1
-    except Exception:
-        return False
+            reason = _classify_steam_offer_accept_failure(status_code=r.status_code, body=body, text=raw_text)
+            return {"success": False, "reason": reason, "status_code": r.status_code, "body": body}
+        success = "tradeid" in body or body.get("success") == 1
+        reason = "" if success else _classify_steam_offer_accept_failure(status_code=r.status_code, body=body, text=raw_text)
+        return {"success": bool(success), "reason": reason, "status_code": r.status_code, "body": body}
+    except requests.Timeout:
+        return {"success": False, "reason": "transient_error", "msg": "steam offer accept timeout"}
+    except Exception as exc:
+        return {"success": False, "reason": "trade_offer_accept_exception", "msg": str(exc)[:300]}
+
+
+def accept_steam_trade_offer(trade_offer_id: str, steam_cookies: Dict[str, str]) -> bool:
+    return bool(accept_steam_trade_offer_result(trade_offer_id, steam_cookies).get("success"))
 def _match_purchase_for_item(
     item: dict,
     pending_purchases: List[dict],
@@ -177,6 +212,7 @@ def try_receive_once(
     scan_inventory: Optional[Callable[[], Tuple[bool, List[dict], str]]] = None,
     update_purchase_by_id: Optional[Callable[[int, dict], bool]] = None,
 ) -> int:
+    # NOTE: 保留接收逻辑实现，但当前启动流程已不再自动调度该循环任务。
     """Accept pending Buff→Steam trade offers and update purchase records.
     Uses ``update_purchase_by_id`` (O(1), keyed on SQLite primary key) when
     available to avoid the race condition where positional indices shift

@@ -36,7 +36,9 @@ def _try_steam_auto_relogin():
     from app.services.steam_auth import try_steam_auto_relogin
     return try_steam_auto_relogin()
 @router.get("/api/inventory")
-def api_inventory(refresh: bool = False):
+def api_inventory(refresh: bool = False, cached_only: bool = False):
+    if cached_only:
+        return {"items": get_inventory()}
     if refresh or not get_inventory():
         if not is_steam_background_allowed():
             return {"items": get_inventory()}

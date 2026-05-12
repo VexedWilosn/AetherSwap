@@ -315,7 +315,7 @@ def api_generate_deal_card(app_id: str):
         engine = get_engine()
         with Session(engine) as session:
             stmt = select(SteamDealGame).where(col(SteamDealGame.app_id) == app_id)
-            game = session.exec(stmt).first()
+            game = session.execute(stmt).scalars().first()
             if not game:
                 return {"ok": False, "error": "未找到该游戏的折扣记录，请先在列表中获取它"}
                 

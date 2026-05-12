@@ -43,8 +43,8 @@ def test_validate_字符串转float():
 
 
 def test_validate_字符串转int():
-    result = validate_and_fill({"pipeline": {"iflow_top_n": "30"}}, DEFAULTS)
-    assert result["pipeline"]["iflow_top_n"] == 30
+    result = validate_and_fill({"pipeline": {"max_staleness_minutes": "30"}}, DEFAULTS)
+    assert result["pipeline"]["max_staleness_minutes"] == 30
 
 
 def test_validate_缺少section用默认值():
@@ -89,3 +89,64 @@ def test_range_price_tolerance负数被限制():
         warnings.simplefilter("always")
         result = _validate_ranges(cfg)
     assert result["buff"]["price_tolerance"] >= 0.0
+
+
+def test_buff_wallet_pay_method_is_allowed():
+    cfg = merge(DEFAULTS, {"buff": {"pay_method": "wallet"}})
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = _validate_ranges(cfg)
+    assert result["buff"]["pay_method"] == "wallet"
+    assert not [w for w in caught if "pay_method" in str(w.message)]
+
+
+def test_cash_platform_partial_update_keeps_other_platform_settings():
+    current = merge(
+        DEFAULTS,
+        {
+            "cash_platform_trading": {
+                "platforms": {
+                    "uuyp": {"purchase_order_weight": 9, "order_poll_interval_seconds": 77},
+                    "eco": {"allow_direct_buy": False},
+                }
+            }
+        },
+    )
+
+    result = merge(
+        current,
+        {
+            "cash_platform_trading": {
+                "primary_platform": "buff",
+                "platforms": {"buff": {"order_poll_interval_seconds": 15}},
+            }
+        },
+    )
+
+    assert result["cash_platform_trading"]["platforms"]["buff"]["order_poll_interval_seconds"] == 15
+    assert result["cash_platform_trading"]["platforms"]["uuyp"]["purchase_order_weight"] == 9
+    assert result["cash_platform_trading"]["platforms"]["uuyp"]["order_poll_interval_seconds"] == 77
+    assert result["cash_platform_trading"]["platforms"]["eco"]["allow_direct_buy"] is False
+
+
+def test_uuyp_direct_buy_default_is_disabled():
+    result = validate_and_fill({}, DEFAULTS)
+
+    assert result["cash_platform_trading"]["platforms"]["uuyp"]["allow_direct_buy"] is False
+    assert result["cash_platform_trading"]["platforms"]["uuyp"]["allow_purchase_order"] is True
+
+
+def test_validate_preserves_disabled_auto_trading_module():
+    result = validate_and_fill({"automation_modules": {"auto_trading_enabled": False}}, DEFAULTS)
+    assert result["automation_modules"]["auto_trading_enabled"] is False
+    assert result["automation_modules"]["autostart_on_webui_boot"] is False
+
+
+def test_validate_fills_low_price_exposure_guard_defaults():
+    result = validate_and_fill({}, DEFAULTS)
+
+    guard = result["low_price_exposure_guard"]
+    assert guard["enabled"] is True
+    assert guard["rule"] == "0-0-0.02-2-0.05-4-0.10-8-0.30"
+    assert guard["hide_signals"] is True
+    assert guard["block_execution"] is True

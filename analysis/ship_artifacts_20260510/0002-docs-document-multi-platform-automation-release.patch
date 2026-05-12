@@ -1,0 +1,343 @@
+From 4e62e9e1f10846fe8f8a94c39e642409a1680c99 Mon Sep 17 00:00:00 2001
+From: Nuoxin <b2829148267@gmail.com>
+Date: Sun, 10 May 2026 17:33:18 +0800
+Subject: [PATCH 2/2] docs: document multi-platform automation release
+
+Co-Authored-By: OpenAI Codex <noreply@openai.com>
+---
+ .../SteamTradingSite-ID-Mapper-main/README.md |  10 +-
+ README.md                                     | 141 +++++++++++++++++-
+ TODOS.md                                      |  30 ++--
+ ...platform_automation_completion_20260510.md |  17 +++
+ 4 files changed, 171 insertions(+), 27 deletions(-)
+
+diff --git a/DataEngine/SteamTradingSite-ID-Mapper-main/README.md b/DataEngine/SteamTradingSite-ID-Mapper-main/README.md
+index 8bcdcc6..8e498f7 100644
+--- a/DataEngine/SteamTradingSite-ID-Mapper-main/README.md
++++ b/DataEngine/SteamTradingSite-ID-Mapper-main/README.md
+@@ -1,6 +1,6 @@
+ <h1 align="center">SteamTradingSite ID Mapper</h1>
+ 
+-This repository provides an ID mapping for DOTA2 & CS2 tradeable items between the Steam Market and major trading platforms. 
++This repository provides an ID mapping for DOTA2 & CS2 tradeable items between the Steam Market and major trading platforms.
+ 
+ 该仓库旨在提供 DOTA2 & CS2 在 Steam Market 与主要的第三方交易平台的饰品 ID 对照表，以便于相关程序的开发。
+ 
+@@ -39,11 +39,3 @@ Please note that we cannot guarantee the completeness, accuracy, or timeliness o
+ 
+ - **Key:** `market_hash_name` of the item.
+ - **Value:** the ID of the item on the respective platform. If the item is currently not found, the value is `-1`.
+-
+-
+-
+-
+-
+-
+-
+-
+diff --git a/README.md b/README.md
+index 117e494..1ccc344 100644
+--- a/README.md
++++ b/README.md
+@@ -17,6 +17,12 @@ AetherSwap 是一个面向 CS2 / Steam 饰品市场的数据采集、套利雷
+ - SQLite WAL：数据库开启 WAL 与 `synchronous=NORMAL`，改善 WebUI 查询和主引擎写入并发。
+ - 交易记录与通知：手动/自动执行结果写入 SQLite；下单成功可触发 Webhook 通知。
+ - 源头币种锁定：请求层强制 CNY，避免代理地区导致 USD/CNY 混价。
++- 平台能力注册表：`BUFF` / `UUYP` / `ECO` / `C5Game` / `Steam` 的买入、求购、上架、改价、撤单、发货、报价接收能力集中声明，可通过 API 自检。
++- PlatformAction 自动化账本：自动买入、动态求购、Steam 求购、Steam/第三方上架、改价、撤单、发货、接受报价统一进入 `platform_action` 状态机。
++- 持久化 worker：后台按 `PlatformAction.next_check_at` 轮询执行，支持租约、重试、等待平台、等待报价、等待 Steam 确认和资金占用释放。
++- 风控预算：当前默认记录 20% 短线回撤容忍，并执行单饰品 ¥3000、单品类 ¥5000、单平台日自动成交 ¥5000、Steam 余额锁定 5 天上限等约束。
++- 卖侧自动化底座：库存、Steam 在架和 C5 订单快照可规划上架、改价、撤单、发货与报价接收动作；默认只规划不提交。
++- SAFE_MODE 烟测：平台能力和 worker 闭环默认不实例化真实平台客户端，便于先验证状态机、风控和队列行为。
+ 
+ ## 快速启动
+ 
+@@ -63,6 +69,12 @@ python DataEngine\trade_executor.py
+ 
+ # 测试 SteamDT 补充源；未配置 api_url 时会安全跳过
+ python DataEngine\steamdt_fetcher.py
++
++# 应用正式数据库迁移；默认目标是 config/market_data.db
++python -m alembic upgrade head
++
++# 交易自动化核心测试
++python -m pytest tests/test_platform_action.py tests/test_trading_worker_runtime.py tests/test_trading_platform_adapters.py tests/test_trading_safe_mode_loop.py
+ ```
+ 
+ ## 目录结构
+@@ -73,6 +85,7 @@ AetherSwap/
+ │  ├─ api.py                    主 API 入口
+ │  └─ services/
+ │     ├─ platform_sessions.py   平台登录态 Provider 与健康状态
++│     ├─ trading/               PlatformAction、adapter、worker、风控和卖侧自动化
+ │     └─ notifier.py            Webhook 通知
+ ├─ DataEngine/                  行情抓取、基准同步、JIT、交易执行
+ │  ├─ master_loop.py            主调度循环
+@@ -81,9 +94,12 @@ AetherSwap/
+ │  ├─ proxy_pool.py             请求级代理选择与日志标签
+ │  ├─ sync_baseline.py          CSGOTrader / 本地 mapper 同步
+ │  └─ steamdt_fetcher.py        SteamDT 高频补充源
++├─ alembic/                     正式数据库迁移，包含 platform_action 表
+ ├─ buff/                        Buff 买入/求购与平台接口
+ ├─ uuyp/                        UUYP 买入/求购与平台接口
+ ├─ eco/                         ECO 平台接口
++├─ c5game/                      C5Game OpenAPI 发货、订单和报价查询客户端
++├─ steam/                       Steam 平台辅助接口
+ ├─ utils/                       配置、代理、日志等公共工具
+ ├─ web/                         原生 HTML / JS / CSS 前端
+ ├─ config/                      本地配置与状态文件
+@@ -108,9 +124,79 @@ Smart JIT 复验
+         ↓
+ 平台 Provider 预检与交易执行
+         ↓
+-交易记录 / Webhook 通知
++PlatformAction 账本 / 状态机 / 风控预算
++        ↓
++持久化 worker 执行、轮询与重试
++        ↓
++交易记录 / Webhook 通知 / 自动化面板
++```
++
++### 自动化交易底座
++
++`PlatformAction` 是本期开始的交易执行唯一事实源。旧的 `TradeExecutionRecord` 仍用于兼容历史记录和 UI 查询，但新的自动化动作都应进入 `platform_action`，由状态机、风险预算和 worker 统一推进。
++
++支持的动作类型：
++
++- 买入侧：`direct_buy`、`purchase_order`、`steam_buy_order`、`poll_order`。
++- 卖出侧：`steam_listing`、`platform_listing`、`reprice_listing`、`cancel_order`。
++- 交割侧：`deliver_order`、`accept_trade_offer`。
++
++核心状态：
++
++```text
++queued -> processing -> submitted / waiting_platform / waiting_trade_offer
++       -> waiting_steam_confirm / waiting_settlement / retry_wait
++       -> succeeded / failed / cancelled / expired / risk_blocked
+ ```
+ 
++关键行为：
++
++- `idempotency_key` 防止同一机会重复创建动作。
++- `filled_quantity`、`remaining_quantity`、`filled_amount_cny` 和 `released_budget_cny` 记录求购部分成交，worker 会释放未成交部分的活跃占用。
++- `risk_category` 用规范化饰品品类聚合风险，降低同一类饰品多磨损、多外观分散穿透限额的概率。
++- `TradeOfferService` 会先校验收货报价，不接受需要本账号额外给出物品的报价；不安全报价会被标记为 `unsafe_offer`。
++
++常用 API：
++
++```text
++GET  /api/trade/platform_capabilities
++GET  /api/trade/platform_actions
++GET  /api/trade/platform_action_summary
++GET  /api/trade/automation_overview
++POST /api/trade/platform_actions
++POST /api/trade/platform_actions/run_once
++POST /api/trade/platform_actions/smoke
++POST /api/trade/platform_actions/worker_start
++POST /api/trade/platform_actions/worker_stop
++POST /api/trade/platform_actions/worker_wake
++POST /api/trade/seller_actions/plan
++POST /api/trade/seller_actions/scan
++POST /api/trade/seller_actions/scanner_run_once
++```
++
++### 安全默认值
++
++自动化执行默认关闭，并且 SAFE_MODE 默认开启：
++
++```json
++{
++  "trading_worker": {
++    "enabled": false,
++    "safe_mode": true,
++    "poll_interval_seconds": 10,
++    "batch_size": 10,
++    "lease_seconds": 60
++  },
++  "seller_snapshot_scanner": {
++    "enabled": false,
++    "commit": false,
++    "interval_seconds": 3600
++  }
++}
++```
++
++`POST /api/trade/platform_actions/run_once` 默认按 SAFE_MODE 执行。`POST /api/trade/platform_actions/smoke` 可检查平台能力矩阵；当 `safe_mode=true` 时，即使传入 `live_preflight=true` 也不会实例化真实平台客户端。
++
+ ### 登录态与风控
+ 
+ 平台请求不再散落在业务代码中拼 Header，而是由 Provider 统一完成：
+@@ -203,6 +289,27 @@ python DataEngine\master_loop.py
+ 
+ SteamDT 写入时会标记 `data_source='steamdt'`，并通过 `upsert_market_price_if_fresh()` 执行时间戳覆盖防御。
+ 
++### SteamDT OpenAPI
++
++本期同时加入 SteamDT OpenAPI 基础映射同步和中频价格同步：
++
++- `DataEngine\steamdt_openapi.py` 同步 SteamDT 基础映射，写入 `platform_mapping`，并回填 `item_base` 中常用热字段。
++- `DataEngine\steamdt_openapi_price.py` 按 P2/P3 优先级同步 Steam / Buff / UUYP / ECO 行情，写入 `market_price`，`data_source='steamdt_openapi'`。
++- OpenAPI 价格写入使用真实 `updateTime`，仍走 `upsert_market_price_if_fresh()`，不会用旧数据覆盖新行情。
++- 行情同步带有 batch/single 配额状态、代理池失败冷却、条件型异常求购价过滤，以及对优先级调度和雷达快照的增量刷新。
++
++手动运行：
++
++```powershell
++$env:STEAMDT_OPENAPI_API_KEY="..."
++python DataEngine\steamdt_openapi.py --force
++
++$env:STEAMDT_OPENAPI_PRICE_ENABLED="true"
++python DataEngine\steamdt_openapi_price.py --once
++```
++
++Web 设置页可配置 OpenAPI key、中频行情同步配额、P2/P3 目标周期和 SteamDT 会话胶囊池。平台连通性自检会展示 SteamDT OpenAPI / OpenAPI Price 最近状态。
++
+ ## 配置文件
+ 
+ 常见配置文件：
+@@ -212,6 +319,8 @@ config/app_config.json              系统运行参数、代理池、SteamDT、
+ config/credentials.json             平台 Cookie、Token、账号相关敏感配置
+ config/platform_session_state.json  Provider 健康状态、冷却和最近错误
+ config/config.json                  轻量通知等通用配置
++config/session_capsules.json        SteamDT 等浏览器会话胶囊池
++config/platform_runtime_state.json  平台运行态健康摘要
+ ```
+ 
+ 敏感信息包括 Cookie、Token、`shared_secret`、`identity_secret`、代理账号密码等。不要提交到公开仓库，也不要贴到日志或 issue 中。
+@@ -242,11 +351,29 @@ config/config.json                  轻量通知等通用配置
+ - ECO 缺少平台 ID 时直接跳过并记录原因，不做阻塞式在线搜索。
+ - C5Game 目前保留 Provider 扩展位，适合后续接入 OpenAPI / 签名式调用。
+ 
++## 平台能力矩阵
++
++能力注册表位于 `app/services/trading/capabilities.py`，状态分为 `ready`、`partial`、`planned` 和 `missing`。当前能力概览：
++
++| 平台 | 已可用能力 | 部分可用 / 规划中 |
++| --- | --- | --- |
++| BUFF | 行情、卖单簿、直接买入、报价轮询、接受 Steam 报价 | 求购、改价、撤单、第三方上架 |
++| UUYP | 行情、卖单簿、直接买入、求购 | 改价、下架/撤单；第三方上架和报价接收仍规划中 |
++| ECO | 行情、卖单簿、直接买入、求购、订单状态 | 上架、改价、下架为 sale-only 底座 |
++| C5Game | 订单状态、发货、报价 ID 查询 | 行情、买入、求购和报价接收仍按 OpenAPI 继续补齐 |
++| Steam | 行情、卖单簿、Steam 上架、Steam 求购、接受报价、移动确认 | Steam listing 下架仍走既有 delist 路径 |
++
++这些状态会被 SAFE_MODE 烟测和自动化面板读取，便于后续按平台逐项补齐，而不是把接口散落到业务流程里。
++
+ ## 数据库策略
+ 
+ - SQLite engine 初始化启用 WAL：
+   - `PRAGMA journal_mode=WAL`
+   - `PRAGMA synchronous=NORMAL`
++- 正式迁移使用 Alembic，当前修订会创建 `platform_action` 并补齐部分成交与风险品类字段：
++  - `20260510_0001_platform_action`
++  - `20260510_0002_platform_action_partial_fill`
++  - `20260510_0003_platform_action_risk_category`
+ - 所有价格写入应携带真实数据时间：
+   - JIT 实时爬取：当前时间。
+   - CSGOTrader：HTTP `Last-Modified`。
+@@ -309,14 +436,22 @@ chcp 65001
+ - 优先复用现有 Provider、Fetcher、数据库 upsert 封装。
+ - 平台 ID 解析应优先使用数据库和本地 mapper，避免在交易执行链路临时在线搜索。
+ - 新数据源写入价格必须使用时间戳覆盖防御。
+-- 新平台下单必须先实现 Provider preflight，再接入 `trade_executor`。
++- 新平台下单必须先实现 Provider preflight，再接入 `app/services/trading/platform_adapters.py` 和能力注册表。
++- 自动化交易入口应优先创建 `PlatformAction`，不要绕过状态机直接长链路执行。
++- 涉及真实下单、上架、接受报价的验证先走 `safe_mode=true` 和 `/api/trade/platform_actions/smoke`。
+ - 修改后至少运行：
+ 
+ ```powershell
+ python -m compileall DataEngine app utils
+ ```
+ 
++## 发布文档
++
++- 本期完成度记录：[analysis/multi_platform_automation_completion_20260510.md](analysis/multi_platform_automation_completion_20260510.md)
++- 剩余工程跟进项：[TODOS.md](TODOS.md)
++- 本地 agent/gstack 技能说明：[AGENTS.md](AGENTS.md)
++- 平台 ID 映射数据来源：[DataEngine/SteamTradingSite-ID-Mapper-main/README.md](DataEngine/SteamTradingSite-ID-Mapper-main/README.md)
++
+ ## 免责声明
+ 
+ AetherSwap 不保证任何收益，不构成投资、交易或理财建议。虚拟饰品价格可能剧烈波动，第三方平台也可能调整接口、规则和风控策略。使用本项目进行任何自动化访问、下单、求购、出售或数据抓取前，请确认你理解并接受账号限制、资产冻结、接口封禁、资金损失和法律合规风险。
+-
+diff --git a/TODOS.md b/TODOS.md
+index 5fb4a95..5da3a22 100644
+--- a/TODOS.md
++++ b/TODOS.md
+@@ -2,21 +2,21 @@
+ 
+ ## SteamDT OpenAPI Follow-Ups
+ 
+-### P1 - Add operator-visible manual sync and health reporting
+-- What: Add a manual trigger and health summary for SteamDT OpenAPI base mapping sync.
+-- Why: When a mapping drift incident appears, operators need a first-class way to confirm whether the scheduled sync is healthy before touching code.
+-- Context: The current phase intentionally keeps sync in backend maintenance paths only. Once the mapping-first rollout lands, the next operational gap will be observability and manual recovery.
+-- Depends on / blocked by: Phase 1 SteamDT OpenAPI client and daily sync implementation.
++### P1 - Add UI/API manual force sync for SteamDT OpenAPI base mapping
++- What: Add an operator-facing button or API endpoint that calls `DataEngine/steamdt_openapi.py --force` and returns the latest mapping sync stats.
++- Why: When a mapping drift incident appears, operators need one-click recovery without opening a shell or waiting for the scheduled sync window.
++- Context: Daily base mapping sync, runtime state, and platform connectivity health are now implemented. The remaining gap is a first-class manual force trigger for the base mapping sync itself.
++- Depends on / blocked by: none; reuse `sync_steamdt_openapi_base(force=True)` and surface `config/steamdt_openapi_state.json` / `config/platform_runtime_state.json` in the response.
+ 
+-### P1 - Design quote-class separation before persisting supplemental quotes
+-- What: Define how execution-grade JIT quotes and supplemental SteamDT quotes can coexist without overwriting each other.
+-- Why: `market_price` is unique on `(item_id, platform_name)`, so blindly persisting SteamDT OpenAPI quotes would risk silent data contamination.
+-- Context: The reviewed plan explicitly avoids writing OpenAPI supplemental quote data into `market_price`. Any future attempt to use SteamDT price endpoints beyond runtime-only diagnostics must solve this first.
+-- Depends on / blocked by: none, but should be decided before any persistence work on `price_single`, `price_batch`, or `price_avg`.
++### P2 - Revisit quote-class separation if execution and supplemental feeds need parallel lanes
++- What: Decide whether `market_price` needs a separate quote-class key once execution-grade JIT quotes and supplemental SteamDT OpenAPI quotes must coexist at the same time.
++- Why: `market_price` is still unique on `(item_id, platform_name)`. The current implementation stores the freshest current quote per platform with `data_source='steamdt_openapi'`, which is sufficient for radar and priority scheduling but not for preserving multiple simultaneous quote lanes.
++- Context: SteamDT OpenAPI price persistence now uses `upsert_market_price_if_fresh()`, real `updateTime`, CNY filtering, liquidity fields, and outlier filtering. A separate quote-class table or unique key is only needed if later execution logic must compare source classes side by side.
++- Depends on / blocked by: a concrete execution use case that requires simultaneous per-source quote history.
+ 
+-### P2 - Evaluate OpenAPI market signals for priority scheduling
+-- What: Benchmark `price_avg`, `item_kline`, and `broad_index` as optional inputs to `priority_scheduler`.
+-- Why: These endpoints may improve crawl prioritization or market-regime awareness with lower operational cost than source-by-source probing.
+-- Context: This is intentionally deferred until mapping sync is stable and we have a clearer view of signal freshness and reliability relative to existing strategy inputs.
+-- Depends on / blocked by: stable phase 1 mapping sync and signal freshness benchmarking.
++## Completed
+ 
++### P2 - Evaluate OpenAPI market signals for priority scheduling
++- **Completed:** multi-platform automation core (2026-05-10)
++- What shipped: `DataEngine/steamdt_openapi_price.py` persists OpenAPI orderbook depth and liquidity signals, and `DataEngine/priority_scheduler.py` uses those signals for P2/P3 prioritization and cashout opportunity tiers.
++- Evidence: covered by `tests/test_runtime_hardening.py`, `tests/test_radar_snapshot.py`, and `tests/test_steamdt_openapi_price.py`.
+diff --git a/analysis/multi_platform_automation_completion_20260510.md b/analysis/multi_platform_automation_completion_20260510.md
+index dac082d..315d73a 100644
+--- a/analysis/multi_platform_automation_completion_20260510.md
++++ b/analysis/multi_platform_automation_completion_20260510.md
+@@ -17,12 +17,15 @@ Source plan: `C:/Users/chan/.gstack/projects/aetherswap/ceo-plans/2026-05-10-mul
+ | Purchase-order partial-fill accounting | Completed in this pass | `PlatformAction` fill columns, worker budget release, normalized order fill parsing |
+ | Category exposure cap | Completed in this pass | `risk_category` ledger field, normalized CS2 item category grouping, category budget tests |
+ | Platform automation smoke gate | Completed in this pass | `/api/trade/platform_actions/smoke`, capability readiness checks without live execution by default |
++| SteamDT OpenAPI price/priority loop | Done | `steamdt_openapi_price.py`, priority scheduler cashout tiers, radar snapshot updates, quota state |
++| Runtime/secrets hygiene | Done | `.gitignore` excludes credentials, DBs, session capsules, Playwright profiles, runtime state, logs and QA artifacts |
+ 
+ ## Remaining Gaps
+ 
+ | Gap | Priority | Notes |
+ |---|---:|---|
+ | Real small-value platform smoke loops | P1/manual gate | Automated smoke gate now exists; live small-value end-to-end platform smoke remains intentionally manual before enabling real spend/list/deliver. |
++| SteamDT base mapping force-sync UI/API | P1 | Daily sync and connectivity state exist; a first-class manual force trigger remains in `TODOS.md`. |
+ | Multi-account allocation | Deferred | Explicitly out of current phase until single-account lifecycle is stable. |
+ 
+ ## Latest Implementation Note
+@@ -44,3 +47,17 @@ The latest pass closed the highest-signal remaining engineering gaps without ena
+ - Added normalized category exposure control so wear variants of the same item share the user-level single-category cap.
+ - Added Steam Web API trade-offer detail fetch hook for `TradeOfferService` when a key is configured.
+ - Added `/api/trade/platform_actions/smoke` as a safe capability/preflight gate; SAFE_MODE smoke does not instantiate live platform clients.
++
++## Ship Snapshot
++
++- Local release commit: `81fa5781a28c4a3b6299612ee3112bfdec91b23e` (`feat: add multi-platform trading automation core`).
++- Branch: `ship/multi-platform-automation-core`.
++- Verification before documentation sync: full pytest `261 passed, 8 warnings`; compileall passed for `app`, `DataEngine`, `buff`, `uuyp`, `eco`, `steam`, and `c5game`; trading subset `101 passed`.
++- Push/PR status: local commit exists, but push was blocked by GitHub permission `Permission to VexedWilosn/AetherSwap.git denied to b2829148267-sys`; `gh` CLI is not installed in this environment.
++- Patch fallback: `I:/cs/AetherSwap/analysis/ship_artifacts_20260510/0001-feat-add-multi-platform-trading-automation-core.patch`.
++
++## Documentation Map
++
++- User-facing setup and operation notes live in `README.md`.
++- Remaining release follow-ups live in `TODOS.md`.
++- Platform ID mapper upstream notes live in `DataEngine/SteamTradingSite-ID-Mapper-main/README.md`.
+-- 
+2.49.0.windows.1
+

@@ -22,6 +22,7 @@ from app.services.steam_auth import (
     fetch_steam_profile_via_api,
     try_steam_auto_relogin,
 )
+from app.services.steam_trade_link import extract_steam_trade_link_from_text
 router = APIRouter()
 _relogin_lock = threading.Lock()
 _relogin_type = None
@@ -69,8 +70,14 @@ def _relogin_worker(relogin_type: str) -> None:
                 has_secure = any(c.get("name") == "steamLoginSecure" for c in selected)
                 cookie_str = "; ".join(f"{c['name']}={c['value']}" for c in selected)
                 session_id = next((c["value"] for c in selected if c.get("name") == "sessionid"), None) or next((c["value"] for c in cookies if c.get("name") == "sessionid"), None)
+                trade_link = ""
+                try:
+                    page.goto("https://steamcommunity.com/my/tradeoffers/privacy", wait_until="domcontentloaded", timeout=15000)
+                    trade_link = extract_steam_trade_link_from_text(page.content())
+                except Exception:
+                    trade_link = ""
                 if session_id and has_secure:
-                    update_steam_creds(cookie_str, session_id)
+                    update_steam_creds(cookie_str, session_id, trade_link=trade_link)
                 cur = get_current_account()
                 if cur:
                     steam_id = None

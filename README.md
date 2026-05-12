@@ -1,408 +1,468 @@
-<div align="center">
+# AetherSwap
 
+AetherSwap 是一个面向 CS2 / Steam 饰品市场的数据采集、套利雷达和半自动交易执行系统。项目当前以本地运行为主，采用 **FastAPI + SQLAlchemy + SQLite + 原生 HTML/JS + DataEngine**，重点解决多平台行情抓取、实时复验、平台登录态保持、代理池调度和交易记录沉淀。
 
-<h1>⚗️ AetherSwap</h1>
+> 本项目仅用于学习、研究和个人风控实验。第三方平台可能限制自动化请求、下单和批量访问，请务必遵守平台规则并自行承担账号、资金、网络和合规风险。
 
-<p><strong>全自动、零代码配置的 Steam 低价余额助手</strong><br>跨区购买 · 行情分析 · 数据复盘 · 全可视化控制台</p>
+## 当前能力
 
-[![Version](https://img.shields.io/badge/version-v0.1.0--beta-orange)](https://github.com)
-[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-lightgrey?logo=linux)](https://github.com)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com)
+- 多平台行情：Steam、Buff、UUYP、ECO，并预留 C5Game Provider 扩展位。
+- 套利雷达：支持利润率、成交量、价格区间等多维筛选，并展示平台价、Steam 价和差价。
+- Smart JIT：直接购买前按数据新鲜度决定是否跳过实时测价，求购单默认跳过 JIT，降低风控压力。
+- Graceful Degradation：下单失败后不立即穿透重爬，避免被秒杀或风控时触发请求风暴。
+- 平台会话管理：统一 Provider / Preflight 架构，集中处理 Cookie、Token、CSRF、设备头、冷却与健康状态。
+- 代理池调度：Steam / Buff 等请求会从代理池动态选择出口，并在日志中标记 `(Direct)` 或脱敏代理。
+- SteamDT 补充数据源：可选启用高频行情补充，并遵守时间戳覆盖风控。
+- 时间加权写入：只有新数据时间不早于数据库现有 `updated_at` 时才覆盖价格，防止旧数据污染新行情。
+- SQLite WAL：数据库开启 WAL 与 `synchronous=NORMAL`，改善 WebUI 查询和主引擎写入并发。
+- 交易记录与通知：手动/自动执行结果写入 SQLite；下单成功可触发 Webhook 通知。
+- 源头币种锁定：请求层强制 CNY，避免代理地区导致 USD/CNY 混价。
+- 平台能力注册表：`BUFF` / `UUYP` / `ECO` / `C5Game` / `Steam` 的买入、求购、上架、改价、撤单、发货、报价接收能力集中声明，可通过 API 自检。
+- PlatformAction 自动化账本：自动买入、动态求购、Steam 求购、Steam/第三方上架、改价、撤单、发货、接受报价统一进入 `platform_action` 状态机。
+- 持久化 worker：后台按 `PlatformAction.next_check_at` 轮询执行，支持租约、重试、等待平台、等待报价、等待 Steam 确认和资金占用释放。
+- 风控预算：当前默认记录 20% 短线回撤容忍，并执行单饰品 CNY 3000、单品类 CNY 5000、单平台日自动成交 CNY 5000、Steam 余额锁定 5 天上限等约束。
+- 卖侧自动化底座：库存、Steam 在架和 C5 订单快照可规划上架、改价、撤单、发货与报价接收动作；默认只规划不提交。
+- SAFE_MODE 烟测：平台能力和 worker 闭环默认不实例化真实平台客户端，便于先验证状态机、风控和队列行为。
 
-<p>
-  <a href="#-核心功能">功能亮点</a> ·
-  <a href="#-快速开始">快速开始</a> ·
-  <a href="#-工作原理">工作原理</a> ·
-  <a href="#%EF%B8%8F-进阶配置">进阶配置</a> ·
-  <a href="#-常见问题-faq">常见问题</a> ·
-  <a href="#-参与贡献">参与贡献</a> ·
-  <a href="#-免责声明">免责声明</a>
-</p>
+## 快速启动
 
-<br>
+Windows 环境推荐使用项目内虚拟环境：
 
-<br><br>
-
-> 从选品→下单→上架→确认，全程 **99% 无人工干预**；  
-> 每笔交易的成本与收益被永久记录，折扣率与盈亏一目了然；  
-> 选品与定价基于 **变异系数(CV)、趋势拟合(R²)** 等数学模型，而非靠感觉。
-
-</div>
-
-> [!NOTE]
-> **💡 项目定位与预期管理**
-> 本项目旨在**为新手降低“倒余额”门槛，为老手节省时间**。
-> 请注意，本程序并非专门的套利工具，也不是万能的无风险低价获取余额的神器。自动购买的饰品在经历 7 天（或数天）的交易冷却期后，其市场表现大部分情况下会趋于您所期望的余额价格。但这并非绝对保证，7 天冷却期结束后的实际折扣比例**有可能上升，也有可能下降**。
-> **如果您的目的是在短时间内快速获取余额，本工具并不适合您。**
-
----
-
-## ✨ 核心功能
-
-### 🌌 直观丝滑的全局仪表盘
-
-告别枯燥的命令行与繁杂的 JSON 配置！系统提供了一个直观、美观且响应丝滑的 Web 前端仪表盘（Dashboard）。所有运行状态、行情看板与系统设置均可在图形界面完成，零代码门槛，让你真正享受现代化的掌控体验。
-
-<div align="center">
-  <img src="./images/2.png" width="700" alt="直观丝滑的全局仪表盘展示">
-  <br>
-  <sup>▲ 图：响应式现代化 Web 仪表盘主页</sup>
-</div>
-
-### 🤖 几乎全自动的倒余额流程
-
-从 **选品 → 下单 → 入库 → 上架 → Steam Guard 确认**，整条链路无需人工守候。  
-内嵌 Playwright 浏览器自动完成 Steam 登录与 Cookie 提取；绑定移动令牌密钥（`identity_secret`）后，商品上架的二次确认也由程序自动签署。你只需要启动一次，剩下的交给 AetherSwap。
-
-### 📐 基于数学模型的智能选品与定价
-
-不靠感觉，不靠经验，只靠数据：
-- **变异系数 (CV)**：量化价格波动幅度，自动排除价格剧烈震荡的高风险品
-- **趋势拟合度 (R²)**：拟合历史价格线性趋势，识别持续下跌或走势紊乱的冷门品  
-- **参考价计算**：根据 Steam 寄售深度与历史成交数据，动态选取最优上架价格，而非简单挂最低价
-
-### 📈 实时行情与大盘追踪
-
-系统支持实时追踪现有饰品折扣状态以及大盘市场变动，让你对市场趋势一目了然，帮助你捕捉最佳交易时机。
-
-<div align="center">
-  <img src="./images/5.png" width="700" alt="实时市场追踪分析展示">
-  <br>
-  <sup>▲ 图：实时追踪现有饰品折扣状态以及市场变动</sup>
-</div>
-
-### 📜 历史饰品数据深度分析
-
-系统提供了深度的历史饰品数据分析功能，支持复盘特定饰品在长期时间线上的价格走势、成交量变动及盈亏表现，通过回溯历史数据帮助你进一步优化选品策略。
-
-<div align="center">
-  <img src="./images/4.png" width="700" alt="历史饰品数据深度分析展示">
-  <br>
-  <sup>▲ 图：饰品历史价格跳动与成交分析</sup>
-</div>
-
-### 🎮 Steam 游戏折扣获取与动态排序
-
-不仅是饰品倒卖，内置实用的 Steam 商店游戏折扣抓取助手：
-- **实时折扣拉取**：一键批量获取 Steam 平台当前打折游戏的数据。
-- **多维动态排序**：支持按折扣力度、玩家好评率、历史最低价（史低）等维度进行排序与筛选，方便在倒出 Steam 余额后快速寻找高性价比的消费目标。
-
-<div align="center">
-  <img src="./images/3.png" width="700" alt="Steam 游戏折扣面板展示">
-  <br>
-  <sup>▲ 图：折扣雷达——按好评率与降价幅度动态排序的 Steam 游戏列表（图片预留位）</sup>
-</div>
-
-### 🎨 一键生成高质量游戏折扣分享卡片
-
-在游戏折扣面板中，**右键点击**任意游戏卡片，即可一键生成 1920×1080 的高清专属折扣分享卡片：
-
-<div align="center">
-  <img src="./images/steam_deal_card_sample.png" width="700" alt="Steam 折扣分享卡片示例">
-  <br>
-  <sup>▲ 图：赛博朋克 2077 折扣分享卡片示例（右键游戏卡片 → 生成高质量折扣分享卡片）</sup>
-</div>
-
----
-
-### 📊 完整的进销存数据分析
-
-每一笔交易都被永久记录：购入成本、上架价格、最终成交额、实际获得的 Steam 余额，以及综合折扣比率，全部可在数据面板以图表形式呈现。你能清楚地知道每一分钱花在哪、赚了多少。
-
-<div align="center">
-  <img src="./images/1.png" width="700" alt="进销存数据看板">
-  <br>
-  <sup>▲ 图：直观的盈亏柱状图与综合余额转化率汇总看板（图片预留位）</sup>
-</div>
-
----
-
-### 其他功能（含安全与网路保护）
-
-| 功能模块 | 描述 |
-|---|---|
-| 🛡️ **Steam 令牌获取与验证** | 内置 Steam 移动令牌（Steam Guard）生成与管理模块，支持提取令牌密钥后在控制台直接生成两步验证码（2FA），无需频繁掏出手机；集成自动确认交易功能，彻底解放双手 |
-| � **智能代理池中转** | 针对 Steam 严格的风控与区域限制，内置强大的代理池管理（支持自定义长效静止 IP 及 Webshare 自动轮换动态 IP），防止同 IP 频繁请求导致的社区封禁或红信 |
-| �🎨 **Web 控制台** | 现代化可视化界面，零代码完成所有配置，实时掌控运行状态 |
-| 🔑 **内嵌 Steam 登录** | 直接在面板输入账号，自动完成登录与 Cookie 提取，无需手动抓包 |
-| 🔔 **多渠道消息推送** | 内置 PushPlus 微信推送 + 邮件预警，重要事件即时通知 |
-| 🔒 **一键出厂重置** | 彻底清理代理、令牌、数据库、日志等全部隐私数据，安全迁移无忧 |
-
----
-
-## 🚀 快速开始
-
-### 环境要求
-
-- **Python**: 3.10 或更高版本（[下载](https://www.python.org/downloads/)）
-- **操作系统**: Windows 10/11（推荐），或带有桌面环境的 Linux
-- **网络**: 需要能够正常访问 Steam 社区
-
-> [!IMPORTANT]
-> **国内用户必读：** 由于网络限制，运行前请务必开启 **Steam 加速器**（如 [Steam++/Watt Toolkit](https://steampp.net/)、加速器等），否则程序将无法正常连接 Steam 社区，导致登录失败或行情数据拉取超时。
-
-### 安装步骤
-
-**第 1 步：克隆项目**
-
-```bash
-git clone https://gitee.com/vexed-wilson/AetherSwap.git
-cd AetherSwap
-```
-
-**第 2 步：安装依赖**
-
-```bash
-# 安装 Python 依赖（国内用户推荐使用镜像加速）
-pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
-
-# 安装内嵌浏览器（用于自动化 Steam 登录）
-python -m playwright install chromium
-```
-
-**第 3 步：启动程序**
-
-```bash
+```powershell
+cd I:\cs\AetherSwap
+.\.venv\Scripts\activate
 python run.py
 ```
 
-程序启动后将自动弹出 Web 控制台，按照首页的**「快速开始」**卡片引导完成配置即可。
+`run.py` 会启动 FastAPI 后端并打开本地控制台：
 
-
-
-### 引导流程（约 3 分钟）
-
-```
-打开控制台 → 填写手机令牌密钥 → 添加 Steam 账号并验证 → 启动自动任务 🎉
+```text
+http://127.0.0.1:28472
 ```
 
-1. 观察首页**「快速开始」**待办卡片，逐项完成配置
-2. 在【系统设置】中填写 `shared_secret`、`identity_secret` 及通知 Token
-3. 在【账号管理】中添加 Steam 账号，点击「验证」自动完成模拟登录
-4. 返回首页，点击**「启动任务」**，坐等余额入账 🚀
+也可以手动启动 Web API：
 
----
-
-## ⚙️ 工作原理
-
-AetherSwap 由两条后台 Pipeline 协同驱动：
-
-### 采买 Pipeline
-
-```
-SteamDT 行情接口 → 折扣筛选 → 稳定性分析(CV/R²) → 防呆校验 → Buff 自动下单
+```powershell
+.\.venv\Scripts\activate
+python -m uvicorn app.api:app --host 127.0.0.1 --port 28472
 ```
 
-1. **实时选品**：对接 SteamDT 接口，拉取综合折扣最优的饰品列表
-2. **稳定性过滤**：请求 Steam 历史价格数据，计算 `CV`（变异系数）与 `R²`（趋势拟合度），自动剔除高波动品
-3. **安全下单**：验证每日限购数量、最低折扣等防呆条件后，在 Buff 自动模拟创建订单
+单独启动数据引擎：
 
-> **支付方式说明**：当前版本仅支持通过 **微信支付** 完成购买结账。支付宝等更多支付方式正在规划中，欢迎关注后续更新。
-
-### 出售 & 数据沉淀 Pipeline
-
-```
-库存监听 → 获取 Steam 寄售深度 → 自动上架 → 令牌签名确认 → 交易数据入库
+```powershell
+.\.venv\Scripts\activate
+python DataEngine\master_loop.py
 ```
 
-1. **库存监听**：智能检测 Steam 新入库饰品，自动触发上架流程
-2. **令牌无感确认**：使用 `identity_secret` 自动签署 Steam 商品上架二次确认
-3. **数据沉淀**：订单完成后永久记录进销存信息，精确计算每笔余额的实际折损比率
+## 常用命令
 
----
+```powershell
+# 基础语法检查
+python -m compileall DataEngine app utils
 
-## 🔧 进阶配置
+# 同步第三方静态基准数据和本地平台 ID 映射
+python DataEngine\sync_baseline.py
 
-所有参数均可在 Web 控制台的【系统设置】中实时调整，**修改立即生效，无需重启**。
+# 运行交易执行器，默认建议先保持 Safe Mode
+$env:SAFE_MODE_ENABLED="true"
+python DataEngine\trade_executor.py
 
-### 常用参数说明
+# 测试 SteamDT 补充源；未配置 api_url 时会安全跳过
+python DataEngine\steamdt_fetcher.py
 
-| 参数 | 默认值 | 说明 |
-|---|---|---|
-| `stability.days` | `30` | 历史价格回溯天数，天数越长分析越稳健 |
-| `stability.cv_threshold` | `0.05` | 波动率上限，调高可买入更多品类（风险同步上升） |
-| `stability.r2_threshold` | `0.7` | 趋势拟合度下限，调低可接受更多震荡走势品 |
-| `pipeline.max_daily_buy` | - | 每日最大购买金额上限，用于资金风控 |
-| `pipeline.sell_strategy` | `immediate` | 出售策略：`immediate`（立刻）/ `trend`（趋势延迟）/ `hold`（跌破成本不售）|
-| `proxy_pool` | - | 自定义代理列表，留空则使用内置 Webshare 自动轮换 |
+# 应用正式数据库迁移；默认目标是 config/market_data.db
+python -m alembic upgrade head
 
-> **保守策略提示**：默认参数极度保守（宁少赚不亏本）。若想提高买入频率，可将 `cv_threshold` 放宽至 `0.08`，并适当降低 `r2_threshold`。
-
-### 📩 自动化配置：关于“邮箱确认”
-
-在程序的自动抢购与下单流程中，支付完成后的确认环节分为两种模式。这取决于你是否在【系统设置】中配置了邮箱（IMAP）信息：
-
-- **自动化（配置了邮箱）：** 系统在生成支付链接后，如果你扫码完成了付款，交易平台通常会发送一封通知邮件（如含“已确认成功付款”的字样）。系统通过 IMAP 持续监听你的收件箱，一旦捕捉到付款成功的邮件，即可**自动流转**到后续的“提取并核销饰品、提醒卖家发货”等环节。
-- **纯手动（未配置或留空）：** 如果你不填写 `email_user` 或 `email_pass`，程序**不会报错或崩溃**，而是自动降级为纯手动确认模式。此时页面和后台日志将进入等待倒计时，你需要**在 5 分钟（即默认的 `email_timeout_seconds=300`）内手动在界面上点击确认已支付**。如果完成付款但未在 5 分钟内给予系统确认指令，系统会将其视为订单超时并跳过该饰品。
-
-> **💡 建议：** 如果你追求尽可能全程挂机和无感体验，建议配置一个专门接收付款通知的邮箱（如开启 IMAP 的 QQ 邮箱 / 网易邮箱等），这将带给你最流畅的半自动化交易流转。
-
----
-
-## 🏗 项目结构
-
+# 交易自动化核心测试
+python -m pytest tests/test_platform_action.py tests/test_trading_worker_runtime.py tests/test_trading_platform_adapters.py tests/test_trading_safe_mode_loop.py
 ```
+
+## 目录结构
+
+```text
 AetherSwap/
-├── app/                   # FastAPI 后端核心
-│   ├── main.py            # 应用入口 & 路由注册
-│   ├── pipeline_steps.py  # 采买 / 出售 Pipeline 逻辑
-│   ├── database.py        # SQLModel ORM & 数据库操作
-│   └── services/          # 后台任务队列与调度
-├── buff/                  # Buff 平台接口封装
-├── steam/                 # Steam API & Playwright 自动化
-├── steamdt/               # SteamDT 行情数据接口
-├── utils/                 # 公共工具（代理、推送、配置等）
-├── web/                   # 前端静态文件（HTML/JS/CSS）
-├── tests/                 # 单元测试套件
-├── run.py                 # 一键启动入口
-└── requirements.txt       # Python 依赖清单
+├─ app/                         FastAPI 后端、API 路由、WebUI 挂载
+│  ├─ api.py                    主 API 入口
+│  └─ services/
+│     ├─ platform_sessions.py   平台登录态 Provider 与健康状态
+│     ├─ trading/               PlatformAction、adapter、worker、风控和卖侧自动化
+│     └─ notifier.py            Webhook 通知
+├─ DataEngine/                  行情抓取、基准同步、JIT、交易执行
+│  ├─ master_loop.py            主调度循环
+│  ├─ main_engine.py            批量行情刷新与机会生成
+│  ├─ trade_executor.py         自动/手动交易执行逻辑
+│  ├─ proxy_pool.py             请求级代理选择与日志标签
+│  ├─ sync_baseline.py          CSGOTrader / 本地 mapper 同步
+│  └─ steamdt_fetcher.py        SteamDT 高频补充源
+├─ alembic/                     正式数据库迁移，包含 platform_action 表
+├─ buff/                        Buff 买入/求购与平台接口
+├─ uuyp/                        UUYP 买入/求购与平台接口
+├─ eco/                         ECO 平台接口
+├─ c5game/                      C5Game OpenAPI 发货、订单和报价查询客户端
+├─ steam/                       Steam 平台辅助接口
+├─ utils/                       配置、代理、日志等公共工具
+├─ web/                         原生 HTML / JS / CSS 前端
+├─ config/                      本地配置与状态文件
+├─ logs/                        运行日志
+└─ run.py                       本地一键启动入口
 ```
 
----
+## 核心架构
 
-## 🧪 运行测试
+### 数据流
 
-```bash
-# 运行全部单元测试
-pytest tests/ -v
-
-# 运行特定模块测试
-pytest tests/test_pipeline_steps.py -v
+```text
+静态底座(CSGOTrader / mapper)
+        ↓
+批量行情抓取(Steam / Buff / UUYP / ECO / SteamDT)
+        ↓
+时间戳覆盖防御(upsert_market_price_if_fresh)
+        ↓
+套利雷达筛选与监控池
+        ↓
+Smart JIT 复验
+        ↓
+平台 Provider 预检与交易执行
+        ↓
+PlatformAction 账本 / 状态机 / 风控预算
+        ↓
+持久化 worker 执行、轮询与重试
+        ↓
+交易记录 / Webhook 通知 / 自动化面板
 ```
 
----
+### 自动化交易底座
 
-## 💡 常见问题 FAQ
+`PlatformAction` 是本期开始的交易执行唯一事实源。旧的 `TradeExecutionRecord` 仍用于兼容历史记录和 UI 查询，但新的自动化动作都应进入 `platform_action`，由状态机、风险预算和 worker 统一推进。
 
-<details>
-<summary><b>Q：报错获取不到历史数据？</b></summary>
+支持的动作类型：
 
-请检查steam是否完成登录，历史数据获取需要登录信息用于获取。
+- 买入侧：`direct_buy`、`purchase_order`、`steam_buy_order`、`poll_order`。
+- 卖出侧：`steam_listing`、`platform_listing`、`reprice_listing`、`cancel_order`。
+- 交割侧：`deliver_order`、`accept_trade_offer`。
 
-</details>
+核心状态：
 
-
-<details>
-<summary><b>Q：我只想倒箱子怎么设置？</b></summary>
-
-将销售量过滤参数设置为2000后适当调整参数即可。
-
-</details>
-
-<details>
-<summary><b>Q：启动后控制台窗口打不开？</b></summary>
-
-请确认依赖安装无报错。若为端口占用，可修改 `app/main.py` 中 `28472` 为其他空闲端口，再重新启动。
-
-</details>
-
-<details>
-<summary><b>Q：账号登录失败 / Cookie 提取不到？</b></summary>
-
-请确保当前网络（加速器）能够访问 Steam 社区。若自动登录持续失败，可在【账号管理】中手动填入从浏览器获取的 Cookie 作为备用方案。
-
-</details>
-
-<details>
-<summary><b>Q：系统频繁提示"因波动率/斜率放弃购买"？</b></summary>
-
-这是正常的保守行为。若希望增加买入频率，请在设置中将 `cv_threshold` 调至 `0.08`，并降低 `r2_threshold` 至 `0.6` 左右。调整前请充分理解风险。
-
-</details>
-
-<details>
-<summary><b>Q：如何部署到 Linux 服务器？</b></summary>
-
-AetherSwap 的 FastAPI 架构完整支持无头 Linux 环境。直接运行：
-
-```bash
-python -m uvicorn app.main:app --host 0.0.0.0 --port 28472
+```text
+queued -> processing -> submitted / waiting_platform / waiting_trade_offer
+       -> waiting_steam_confirm / waiting_settlement / retry_wait
+       -> succeeded / failed / cancelled / expired / risk_blocked
 ```
 
-再通过外部浏览器访问服务器 IP 即可。**强烈建议配置 Nginx 反向代理与访问鉴权，不要将管理面板直接暴露在公网。**
+关键行为：
 
-</details>
+- `idempotency_key` 防止同一机会重复创建动作。
+- `filled_quantity`、`remaining_quantity`、`filled_amount_cny` 和 `released_budget_cny` 记录求购部分成交，worker 会释放未成交部分的活跃占用。
+- `risk_category` 用规范化饰品品类聚合风险，降低同一类饰品多磨损、多外观分散穿透限额的概率。
+- `TradeOfferService` 会先校验收货报价，不接受需要本账号额外给出物品的报价；不安全报价会被标记为 `unsafe_offer`。
 
-<details>
-<summary><b>Q：Buff Cookie 过期了怎么办？</b></summary>
+常用 API：
 
-在 Web 控制台的【账号管理】中点击「重新登录」，系统将自动拉起内嵌浏览器完成重新授权，Cookie 刷新后自动保存，无需手动操作。
+```text
+GET  /api/trade/platform_capabilities
+GET  /api/trade/platform_actions
+GET  /api/trade/platform_action_summary
+GET  /api/trade/automation_overview
+GET  /api/trade/live_canary/status
+POST /api/trade/platform_actions
+POST /api/trade/platform_actions/run_once
+POST /api/trade/platform_actions/smoke
+POST /api/trade/platform_actions/worker_start
+POST /api/trade/platform_actions/worker_stop
+POST /api/trade/platform_actions/worker_wake
+POST /api/trade/live_canary/precheck
+POST /api/trade/seller_actions/plan
+POST /api/trade/seller_actions/scan
+POST /api/trade/seller_actions/scanner_run_once
+```
 
-</details>
+### 安全默认值
 
----
+自动化执行默认关闭，并且 SAFE_MODE 默认开启：
 
-## 🤝 参与贡献
+```json
+{
+  "trading_worker": {
+    "enabled": false,
+    "safe_mode": true,
+    "poll_interval_seconds": 10,
+    "batch_size": 10,
+    "lease_seconds": 60
+  },
+  "seller_snapshot_scanner": {
+    "enabled": false,
+    "commit": false,
+    "interval_seconds": 3600
+  },
+  "trading_live_canary": {
+    "enabled": false,
+    "kill_switch": true,
+    "require_channel": "live_canary",
+    "require_manual_run_once": true,
+    "allow_background_worker": false
+  }
+}
+```
 
-欢迎任何形式的贡献！请遵循以下流程：
+`POST /api/trade/platform_actions/run_once` 默认按 SAFE_MODE 执行。`POST /api/trade/platform_actions/smoke` 可检查平台能力矩阵；当 `safe_mode=true` 时，即使传入 `live_preflight=true` 也不会实例化真实平台客户端。第一次真实小额验证必须走 `live_canary`、`limit=1` 和 [minimum-capital runbook](analysis/live_canary_minimum_capital_runbook_20260510.md)。
 
-1. **Fork** 本仓库
-2. 基于 `main` 创建你的特性分支：`git checkout -b feature/my-awesome-feature`
-3. 提交你的更改：`git commit -m 'feat: add some awesome feature'`
-4. 推送到远端：`git push origin feature/my-awesome-feature`
-5. 发起一个 **Pull Request**
+### 登录态与风控
 
-提交 Bug 报告或功能建议，请尽量附上完整日志。
+平台请求不再散落在业务代码中拼 Header，而是由 Provider 统一完成：
 
----
+- `BuffSessionProvider`：Cookie、CSRF、CNY Cookie、业务冷却。
+- `UuypAppSessionProvider`：App Token、设备头、`uk`、直连策略、登录/风控错误识别。
+- `EcoSessionProvider`：ECO Cookie / ID 映射预检。
+- `C5OpenApiProvider`：预留 C5Game OpenAPI 接入位。
 
-## 💬 社区 & 联系
+健康状态和冷却信息保存在：
 
-如果你在**余额倒卖方面有丰富经验**，欢迎加入测试、反馈选品策略或参数调优建议——你的实战经验将直接帮助改进算法。
+```text
+config/platform_session_state.json
+```
 
-> 📱 **微信**：`13738064065`  
-> 加好友时请备注 **AetherSwap** 以及**来访目的**，
+前端或脚本可通过接口查看平台状态：
 
----
+```text
+GET /api/platform/session_state
+```
 
-## 🗺 Roadmap
+## Smart JIT 与降级交易
 
-> 以下为计划中的功能，欢迎通过 Issue 或 PR 参与建设！
+配置项：
 
-- [ ] **更多交易平台接入**
-  - [ ] C5Game 平台对接
-  - [ ] IGXE 平台对接
-  - [ ] 悠悠有品平台对接
-- [ ] **更多支付方式**
-  - [x] 微信支付
-  - [ ] 支付宝支付
-- [ ] **移动端 / 响应式 UI 适配**
-- [ ] **Docker 一键部署支持**
-- [ ] **多账号并发任务调度**
+```text
+JIT_BYPASS_MINUTES=5
+```
 
----
+行为规则：
 
-## 📄 开发者说明
+- `direct_buy` / `buy_listing` / `instant_buy`：如果数据库行情在绕过窗口内，直接使用现有数据下单。
+- `purchase_order` / `platform_order`：挂求购单默认跳过 JIT，使用最新大盘数据。
+- 免检下单失败后不立刻触发重爬或连续重试，避免接口压力和风控放大。
+- 登录态缺失、平台鉴权熔断或平台 ID 缺失时，机会会进入 `verifying` / `mapping_missing` 等可观察状态。
 
-- **后端栈**：`Python 3.10+` · `FastAPI` · `SQLModel (SQLite)` · `Playwright`
-- **前端栈**：原生 `HTML / JS / CSS`（无框架依赖）
-- **并发机制**：异步 + 多线程融合的后台 Task Queue（`app/services/workers`）
-- **扩展性**：高内聚、低耦合的模块化设计，接入 C5、IGXE 等其他平台仅需添加对应 API 封装层
+## 代理池与负载均衡
 
----
+代理池配置位于 `config/app_config.json` 的 `proxy_pool`：
 
-## ⚠️ 免责声明
+```json
+{
+  "proxy_pool": {
+    "enabled": true,
+    "strategy": 1,
+    "test_url": "https://ipv4.webshare.io/",
+    "timeout_seconds": 10,
+    "proxies": [
+      {
+        "host": "127.0.0.1",
+        "port": 7890,
+        "username": "",
+        "password": ""
+      }
+    ]
+  }
+}
+```
 
-> **在使用、克隆或下载本项目前，请务必仔细阅读本免责声明。您的任何使用行为（包括但不限于下载、安装、运行、修改及分发本项目代码）均被视为对本声明全部条款的无条件知晓、认可及接受。若您不同意本声明的任何内容，请立即停止使用本项目并删除所有相关文件。**
+说明：
 
-1. **学习与研究目的**：本项目完全开源且免费，仅作为 Python 自动化操作、数据爬取、全栈架构及数学模型应用的**学习、交流与技术验证**之用。项目本身并未集成任何用于破解、攻击或恶意破坏第三方平台的基础设施。**严禁**将本项目或其任何衍生版本用于任何非法、违规或违反第三方平台（如 Steam、网易 Buff 等）《用户协议》及《服务条款》的商业或黑产行为。因违规使用导致的任何法律红线触碰，均由使用者自行承担全部法律及连带责任。
-2. **账号风控与封禁风险**：Steam 及相关饰品交易平台针对“使用自动化脚本、API 滥用、机器批量操作”等行为持有严格的零容忍政策及风控机制。使用本项目进行实盘交易，存在**账号被红信、API 封禁及资产被永久冻结的风险**。使用者应当充分了解此风险，做好风控隔离处理（如使用独立代理、限制请求频率等）。**因使用本项目导致的任何账号限制、封禁或资产清零，本项目及开发者（含代码贡献者）概不负责，不承担任何形式的赔偿或连带责任。**
-3. **市场波动与资金损失风险**：虚拟饰品市场受多方因素影响（包括但不限于平台政策变更、游戏更新、外汇波动等），存在极大的市场不确定性与暴雷风险。本项目内置的任何算法、趋势拟合（如 CV、R²）及数据分析功能，仅基于历史数据进行学术性质的模型推演与展示，**不构成任何形式的投资、购买或理财建议**。实际运行中的任何异常（如：网络延迟、接口报错、算法偏差或不可预见的黑天鹅事件）均可能导致高挂低售或财产损失。**由此引发的一切直接或间接的经济损失，开发者免责。**
-4. **数据隐私与安全**：本项目在本地运行，涉及敏感信息（如账号 Cookie、移动令牌身份密钥 `identity_secret` 及支付相关参数）均储存于使用者本地设备。使用者需自行妥善保管上述敏感数据。因个人保管不当、设备中毒、代理泄露或服务器被入侵导致的隐私泄露或财产损失，开发者不承担任何责任。
-5. **严禁商业滥用与倒卖**：本项目遵循开源协议免费发布，**严禁任何人、工作室或利益团体在未获原作者明确书面授权的情况下，将本项目（包括源代码、衍生修改版本、二次编译封装的二进制程序等）用于商业兜售、代挂收费、知识付费打包或任何变相盈利行为**。对于任何侵权、倒卖或损害开源社区利益的行为，开发者保留依法追究其侵权与不正当竞争责任的权利。
-6. **请求频率限制与 DDoS 风险**：因防范恶意滥用与平台风控等安全考量，本项目故意设置并限制了默认的请求频率。如果您擅自更改代码逻辑取消延时保护，或是使用大量代理池进行高并发、无限制的请求，导致被官方服务器认定为恶意爬虫甚至 DDoS 攻击，本项目及开发者概不负责，均由使用者自行承担全部法律责任及封禁后果。
+- 多个代理会按权重/随机策略选择，请求日志会输出脱敏代理标签。
+- 如果只配置 `127.0.0.1`，AetherSwap 会提示这是本地单出口。建议在 Clash / v2ray 侧启用负载均衡组，让本地端口背后真正分流。
+- UUYP 下单链路默认倾向直连或专门的 bypass 策略，减少代理 IP 触发云盾拦截。
 
-**【最终声明】本项目按“原样”提供，不带有任何明示或暗示的担保。开发者不对代码的准确性、可靠性或适用性做任何承诺。一切使用后果由操作者本人全权负责。**
+## SteamDT 补充源
 
----
+SteamDT 默认关闭，需要显式配置：
 
-<div align="center">
+```json
+{
+  "steamdt": {
+    "enabled": false,
+    "api_url": "",
+    "interval_seconds": 600,
+    "timeout": 15,
+    "limit": 300
+  }
+}
+```
 
-如果 AetherSwap 对你有帮助，欢迎点个 **⭐ Star** 支持一下！
+也可使用环境变量覆盖：
 
-Made with ❤️ for the Steam community
+```powershell
+$env:STEAMDT_ENABLED="true"
+$env:STEAMDT_API_URL="https://example.com/api"
+$env:STEAMDT_INTERVAL_SECONDS="600"
+python DataEngine\master_loop.py
+```
 
-</div>
+SteamDT 写入时会标记 `data_source='steamdt'`，并通过 `upsert_market_price_if_fresh()` 执行时间戳覆盖防御。
+
+### SteamDT OpenAPI
+
+本期同时加入 SteamDT OpenAPI 基础映射同步和中频价格同步：
+
+- `DataEngine\steamdt_openapi.py` 同步 SteamDT 基础映射，写入 `platform_mapping`，并回填 `item_base` 中常用热字段。
+- `DataEngine\steamdt_openapi_price.py` 按 P2/P3 优先级同步 Steam / Buff / UUYP / ECO 行情，写入 `market_price`，`data_source='steamdt_openapi'`。
+- OpenAPI 价格写入使用真实 `updateTime`，仍走 `upsert_market_price_if_fresh()`，不会用旧数据覆盖新行情。
+- 行情同步带有 batch/single 配额状态、代理池失败冷却、条件型异常求购价过滤，以及对优先级调度和雷达快照的增量刷新。
+
+手动运行：
+
+```powershell
+$env:STEAMDT_OPENAPI_API_KEY="..."
+python DataEngine\steamdt_openapi.py --force
+
+$env:STEAMDT_OPENAPI_PRICE_ENABLED="true"
+python DataEngine\steamdt_openapi_price.py --once
+```
+
+Web 设置页可配置 OpenAPI key、中频行情同步配额、P2/P3 目标周期和 SteamDT 会话胶囊池。平台连通性自检会展示 SteamDT OpenAPI / OpenAPI Price 最近状态。
+
+## 配置文件
+
+常见配置文件：
+
+```text
+config/app_config.json              系统运行参数、代理池、SteamDT、风控阈值
+config/credentials.json             平台 Cookie、Token、账号相关敏感配置
+config/platform_session_state.json  Provider 健康状态、冷却和最近错误
+config/config.json                  轻量通知等通用配置
+config/session_capsules.json        SteamDT 等浏览器会话胶囊池
+config/platform_runtime_state.json  平台运行态健康摘要
+```
+
+敏感信息包括 Cookie、Token、`shared_secret`、`identity_secret`、代理账号密码等。不要提交到公开仓库，也不要贴到日志或 issue 中。
+
+## 平台要点
+
+### Buff
+
+- 请求层强制 `locale=zh-Hans` 与 `currency=CNY`。
+- 购买/求购请求必须携带 Cookie 中解析出的 CSRF，并设置请求头。
+- 平台 ID 优先来自数据库和本地 mapper，不在执行链路中做低价值在线搜索。
+
+### UUYP
+
+- 请求头固定 `Accept-Language: zh-CN,zh;q=0.9`，Cookie 中保留 CNY 语义。
+- POST 下单依赖 App Token、设备头、`uk` 等业务鉴权字段。
+- 登录异常、风控拦截、业务鉴权失败会触发冷却，避免同一批次继续请求。
+- 价格为 `0` 且成交量为 `0` 的报价视为无效行情，不参与套利计算。
+
+### Steam
+
+- Market 请求强制 `currency=23` 或 Cookie `steamCurrencyId=23`。
+- 通过代理访问时使用更宽松的超时和指数退避。
+- 熔断开启后批次会快速失败，避免每个机会都等待外层超时。
+
+### ECO / C5Game
+
+- ECO 缺少平台 ID 时直接跳过并记录原因，不做阻塞式在线搜索。
+- C5Game 目前保留 Provider 扩展位，适合后续接入 OpenAPI / 签名式调用。
+
+## 平台能力矩阵
+
+能力注册表位于 `app/services/trading/capabilities.py`，状态分为 `ready`、`partial`、`planned` 和 `missing`。当前能力概览：
+
+| 平台 | 已可用能力 | 部分可用 / 规划中 |
+| --- | --- | --- |
+| BUFF | 行情、卖单簿、直接买入、报价轮询、接受 Steam 报价 | 求购、改价、撤单、第三方上架 |
+| UUYP | 行情、卖单簿、直接买入、求购 | 改价、下架/撤单；第三方上架和报价接收仍规划中 |
+| ECO | 行情、卖单簿、直接买入、求购、订单状态 | 上架、改价、下架为 sale-only 底座 |
+| C5Game | 订单状态、发货、报价 ID 查询 | 行情、买入、求购和报价接收仍按 OpenAPI 继续补齐 |
+| Steam | 行情、卖单簿、Steam 上架、Steam 求购、接受报价、移动确认 | Steam listing 下架仍走既有 delist 路径 |
+
+这些状态会被 SAFE_MODE 烟测和自动化面板读取，便于后续按平台逐项补齐，而不是把接口散落到业务流程里。
+
+## 数据库策略
+
+- SQLite engine 初始化启用 WAL：
+  - `PRAGMA journal_mode=WAL`
+  - `PRAGMA synchronous=NORMAL`
+- 正式迁移使用 Alembic，当前修订会创建 `platform_action` 并补齐部分成交与风险品类字段：
+  - `20260510_0001_platform_action`
+  - `20260510_0002_platform_action_partial_fill`
+  - `20260510_0003_platform_action_risk_category`
+- 所有价格写入应携带真实数据时间：
+  - JIT 实时爬取：当前时间。
+  - CSGOTrader：HTTP `Last-Modified`。
+  - SteamDT：页面或接口返回的真实行情时间。
+- 只有 `new_timestamp >= current.updated_at` 时才覆盖价格。
+
+## 通知
+
+下单成功后可通过 Webhook 推送通知，配置示例：
+
+```json
+{
+  "notify": {
+    "enabled": true,
+    "webhook_url": "https://example.com/webhook"
+  }
+}
+```
+
+通知内容包含饰品名、平台、动作类型、价格和执行结果。可用于 Server 酱、PushPlus、Telegram Bot 或自建 Webhook 网关。
+
+## 故障排查
+
+### 启动后页面 500 或模板找不到
+
+确认 `app/api.py` 中前端目录指向项目根目录下的 `web/`。当前推荐路径逻辑：
+
+```python
+Path(__file__).parent.parent / "web"
+```
+
+### 行情价格币种不一致
+
+不要在后端做汇率换算。应检查请求层是否锁死 CNY：
+
+- Buff：Cookie `locale=zh-Hans; currency=CNY`
+- UUYP：`Accept-Language: zh-CN,zh;q=0.9`
+- Steam：`currency=23` 或 `steamCurrencyId=23`
+
+### UUYP 连通性正常但下单提示登录异常
+
+GET 通过只说明网络可达。POST 下单还需要完整业务鉴权，包括 App Token、设备头、Cookie、`uk` 和直连/代理策略。检查 `config/platform_session_state.json` 和日志中的 auth/risk cooldown。
+
+### JIT 批量复验很慢
+
+检查是否触发 Steam / Buff / UUYP 熔断。熔断开启后应看到批次级跳过日志，而不是每个饰品都等待超时。
+
+### 日志乱码
+
+项目文件和日志均按 UTF-8 处理。PowerShell 里可先执行：
+
+```powershell
+chcp 65001
+```
+
+然后重新启动进程。
+
+## 开发规范
+
+- 优先复用现有 Provider、Fetcher、数据库 upsert 封装。
+- 平台 ID 解析应优先使用数据库和本地 mapper，避免在交易执行链路临时在线搜索。
+- 新数据源写入价格必须使用时间戳覆盖防御。
+- 新平台下单必须先实现 Provider preflight，再接入 `app/services/trading/platform_adapters.py` 和能力注册表。
+- 自动化交易入口应优先创建 `PlatformAction`，不要绕过状态机直接长链路执行。
+- 涉及真实下单、上架、接受报价的验证先走 `safe_mode=true` 和 `/api/trade/platform_actions/smoke`。
+- 修改后至少运行：
+
+```powershell
+python -m compileall DataEngine app utils
+```
+
+## 发布文档
+
+- 本期完成度记录：[analysis/multi_platform_automation_completion_20260510.md](analysis/multi_platform_automation_completion_20260510.md)
+- 最小资金 live canary 手册：[analysis/live_canary_minimum_capital_runbook_20260510.md](analysis/live_canary_minimum_capital_runbook_20260510.md)
+- 剩余工程跟进项：[TODOS.md](TODOS.md)
+- 本地 agent/gstack 技能说明：[AGENTS.md](AGENTS.md)
+- 平台 ID 映射数据来源：[DataEngine/SteamTradingSite-ID-Mapper-main/README.md](DataEngine/SteamTradingSite-ID-Mapper-main/README.md)
+
+## 免责声明
+
+AetherSwap 不保证任何收益，不构成投资、交易或理财建议。虚拟饰品价格可能剧烈波动，第三方平台也可能调整接口、规则和风控策略。使用本项目进行任何自动化访问、下单、求购、出售或数据抓取前，请确认你理解并接受账号限制、资产冻结、接口封禁、资金损失和法律合规风险。
+

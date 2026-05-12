@@ -1,39 +1,178 @@
 
 let inventoryRefreshSeconds = 60;
 let inventoryTimer = null;
-let currentPriceRefreshMinutes = 10;
-let currentPriceTimer = null;
+let credentialsVisible = false;
+let credentialLoginPlatform = null;
+let cachedCashPlatformConfig = {};
+const DEFAULT_ACTION_RISK_SEGMENTS = [
+  { min_price: 0, max_price: 10, max_capital_per_item: 80, max_inventory_per_item: 8 },
+  { min_price: 10, max_price: 100, max_capital_per_item: 300, max_inventory_per_item: 3 },
+  { min_price: 100, max_price: "", max_capital_per_item: 800, max_inventory_per_item: 1 },
+];
+const CASH_PLATFORM_LABELS = {
+  buff: "BUFF",
+  uuyp: "UUYP",
+  eco: "ECO",
+  c5game: "C5Game",
+};
+
+function renderCashPlatformRows(platforms) {
+  const tbody = el("cfg-cash-platforms-body");
+  if (!tbody) return;
+  const merged = deepMerge({
+    buff: { enabled: true, allow_direct_buy: true, allow_purchase_order: true, order_poll_interval_seconds: 60, purchase_order_weight: 1 },
+    uuyp: { enabled: true, allow_direct_buy: false, allow_purchase_order: true, order_poll_interval_seconds: 90, purchase_order_weight: 2 },
+    eco: { enabled: true, allow_direct_buy: true, allow_purchase_order: true, order_poll_interval_seconds: 45, purchase_order_weight: 3 },
+    c5game: { enabled: false, allow_direct_buy: false, allow_purchase_order: false, order_poll_interval_seconds: 120, purchase_order_weight: 1 },
+  }, platforms || {});
+  tbody.innerHTML = Object.keys(CASH_PLATFORM_LABELS).map((platform) => {
+    const cfg = merged[platform] || {};
+    return `
+      <tr class="cash-platform-row" data-platform="${platform}">
+        <td>${CASH_PLATFORM_LABELS[platform]}</td>
+        <td><input type="checkbox" class="cfg-cash-platform-enabled" ${cfg.enabled !== false ? "checked" : ""} /></td>
+        <td><input type="checkbox" class="cfg-cash-platform-direct" ${cfg.allow_direct_buy !== false ? "checked" : ""} /></td>
+        <td><input type="checkbox" class="cfg-cash-platform-order" ${cfg.allow_purchase_order !== false ? "checked" : ""} /></td>
+        <td><input type="number" class="cfg-cash-platform-row-poll" min="15" max="600" step="1" value="${cfg.order_poll_interval_seconds ?? 60}" /></td>
+        <td><input type="number" class="cfg-cash-platform-weight" min="0" max="20" step="0.1" value="${cfg.purchase_order_weight ?? 1}" /></td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function readCashPlatformRows() {
+  const out = deepMerge(cachedCashPlatformConfig || {}, {});
+  document.querySelectorAll(".cash-platform-row").forEach((row) => {
+    const platform = row.dataset.platform;
+    if (!platform) return;
+    const current = out[platform] || {};
+    out[platform] = {
+      ...current,
+      enabled: !!row.querySelector(".cfg-cash-platform-enabled")?.checked,
+      allow_direct_buy: !!row.querySelector(".cfg-cash-platform-direct")?.checked,
+      allow_purchase_order: !!row.querySelector(".cfg-cash-platform-order")?.checked,
+      order_poll_interval_seconds: parseInt(row.querySelector(".cfg-cash-platform-row-poll")?.value || "60", 10) || 60,
+      purchase_order_weight: parseFloat(row.querySelector(".cfg-cash-platform-weight")?.value || "1") || 1,
+    };
+  });
+  return out;
+}
+
+function renderActionRiskSegments(segments, count) {
+  const box = el("action-risk-segments");
+  if (!box) return;
+  const total = Math.max(1, Math.min(parseInt(count, 10) || 3, 5));
+  const normalized = Array.from({ length: total }, (_, idx) => {
+    return { ...(DEFAULT_ACTION_RISK_SEGMENTS[idx] || DEFAULT_ACTION_RISK_SEGMENTS[DEFAULT_ACTION_RISK_SEGMENTS.length - 1]), ...((segments || [])[idx] || {}) };
+  });
+  box.innerHTML = normalized.map((seg, idx) => `
+    <div class="field-row field-row--4 action-risk-segment" data-index="${idx}">
+      <div class="field">
+        <label>第 ${idx + 1} 段最低价</label>
+        <input type="number" class="cfg-action-seg-min" min="0" step="0.01" value="${seg.min_price ?? 0}" />
+      </div>
+      <div class="field">
+        <label>第 ${idx + 1} 段最高价</label>
+        <input type="number" class="cfg-action-seg-max" min="0" step="0.01" value="${seg.max_price ?? ""}" placeholder="不限" />
+      </div>
+      <div class="field">
+        <label>单品资金上限</label>
+        <input type="number" class="cfg-action-seg-capital" min="0" step="1" value="${seg.max_capital_per_item ?? 0}" />
+      </div>
+      <div class="field">
+        <label>单品库存上限</label>
+        <input type="number" class="cfg-action-seg-inventory" min="0" step="1" value="${seg.max_inventory_per_item ?? 0}" />
+      </div>
+    </div>
+  `).join("");
+}
+
+function readActionRiskSegments() {
+  return Array.from(document.querySelectorAll(".action-risk-segment")).map((row) => {
+    const maxRaw = row.querySelector(".cfg-action-seg-max")?.value;
+    return {
+      min_price: parseFloat(row.querySelector(".cfg-action-seg-min")?.value || "0") || 0,
+      max_price: maxRaw === "" ? null : parseFloat(maxRaw || "0"),
+      max_capital_per_item: parseFloat(row.querySelector(".cfg-action-seg-capital")?.value || "0") || 0,
+      max_inventory_per_item: parseInt(row.querySelector(".cfg-action-seg-inventory")?.value || "0", 10) || 0,
+    };
+  });
+}
+
+function setCredentialsVisible(visible) {
+  credentialsVisible = !!visible;
+  ["cfg-buff-cookie", "cfg-uuyp-cookie", "cfg-eco-cookie", "cfg-steamdt-openapi-key"].forEach((id) => {
+    const elNode = el(id);
+    if (elNode) {
+      if (elNode.tagName === "TEXTAREA") {
+        elNode.style.webkitTextSecurity = credentialsVisible ? "none" : "disc";
+        elNode.style.textSecurity = credentialsVisible ? "none" : "disc";
+      } else {
+        elNode.type = credentialsVisible ? "text" : "password";
+      }
+    }
+  });
+  const btn = el("btn-toggle-credentials");
+  if (btn) btn.textContent = credentialsVisible ? "隐藏 Cookie" : "显示 Cookie";
+}
 async function loadConfig() {
   const d = await fetchJson(API + "/config");
   const c = d.config || {};
-  const i = c.iflow || {};
   const b = c.buff || {};
   const p = c.pipeline || {};
+  const cash = c.cash_platform_trading || {};
+  const cashPlatforms = cash.platforms || {};
+  cachedCashPlatformConfig = JSON.parse(JSON.stringify(cashPlatforms || {}));
+  renderCashPlatformRows(cashPlatforms);
+  const exposureGuard = c.low_price_exposure_guard || {};
+  const ps = c.priority_scheduler || {};
+  const cl = c.crawl_layers || {};
+  const sd = c.steamdt || {};
+  const sdOpenapiPrice = sd.openapi_price || {};
+  const ap = c.action_policy || {};
   const s = c.stability || {};
   const inv = c.inventory || {};
   const sys = c.system || {};
-  const gGames = el("cfg-games");
-  if (gGames) gGames.value = i.type || i.games || "";
-  const gPlatforms = el("cfg-platforms");
-  if (gPlatforms) gPlatforms.value = i.platforms || "";
-  const gSort = el("cfg-sort_by");
-  if (gSort) gSort.value = i.sort_by || "";
-  const gMinPrice = el("cfg-min_price");
-  if (gMinPrice) gMinPrice.value = i.min_price ?? "";
-  const gMaxPrice = el("cfg-max_price");
-  if (gMaxPrice) gMaxPrice.value = i.max_price ?? "";
-  const gMinVolume = el("cfg-min_volume");
-  if (gMinVolume) gMinVolume.value = i.min_volume ?? "";
   const gPay = el("cfg-pay_method");
   if (gPay) gPay.value = (b.pay_method || "wechat").toLowerCase();
+  const cashPrimary = el("cfg-cash-platform-primary");
+  if (cashPrimary) {
+    const firstEnabled = Object.keys(cashPlatforms).find((key) => cashPlatforms[key] && cashPlatforms[key].enabled !== false);
+    cashPrimary.value = cash.primary_platform || firstEnabled || "buff";
+  }
+  const cashPoll = el("cfg-cash-platform-poll-seconds");
+  if (cashPoll) {
+    const primaryCfg = cashPlatforms[cashPrimary?.value || cash.primary_platform || "buff"] || {};
+    cashPoll.value = primaryCfg.order_poll_interval_seconds ?? cash.order_poll_interval_seconds ?? 60;
+  }
+  const cashDirectFirst = el("cfg-cash-platform-direct-first");
+  if (cashDirectFirst) cashDirectFirst.checked = cash.direct_buy_first !== false;
+  const cashCancelExcess = el("cfg-cash-platform-cancel-excess");
+  if (cashCancelExcess) cashCancelExcess.checked = cash.cancel_excess_orders_on_fill !== false;
+  const exposureEnabled = el("cfg-low-price-exposure-enabled");
+  if (exposureEnabled) exposureEnabled.checked = exposureGuard.enabled !== false;
+  const exposureRule = el("cfg-low-price-exposure-rule");
+  if (exposureRule) exposureRule.value = exposureGuard.rule || "0-0-0.02-2-0.05-4-0.10-8-0.30";
+  const exposureHideSignals = el("cfg-low-price-exposure-hide-signals");
+  if (exposureHideSignals) exposureHideSignals.checked = exposureGuard.hide_signals !== false;
+  const exposureBlockExecution = el("cfg-low-price-exposure-block-execution");
+  if (exposureBlockExecution) exposureBlockExecution.checked = exposureGuard.block_execution !== false;
+  const exposureTtl = el("cfg-low-price-exposure-cache-ttl");
+  if (exposureTtl) exposureTtl.value = exposureGuard.cache_ttl_seconds ?? 30;
+  const exposureIncludeInventory = el("cfg-low-price-exposure-include-inventory");
+  if (exposureIncludeInventory) exposureIncludeInventory.checked = exposureGuard.include_inventory !== false;
+  const exposureIncludePurchases = el("cfg-low-price-exposure-include-purchases");
+  if (exposureIncludePurchases) exposureIncludePurchases.checked = exposureGuard.include_purchases !== false;
+  const exposureIncludeOrders = el("cfg-low-price-exposure-include-active-orders");
+  if (exposureIncludeOrders) exposureIncludeOrders.checked = exposureGuard.include_active_orders !== false;
+  const exposureIncludePending = el("cfg-low-price-exposure-include-pending");
+  if (exposureIncludePending) exposureIncludePending.checked = exposureGuard.include_pending_receipt !== false;
   const gTarget = el("cfg-target_balance");
   if (gTarget) gTarget.value = p.target_balance ?? "";
   const gMaxDisc = el("cfg-max_discount");
   if (gMaxDisc) gMaxDisc.value = p.max_discount ?? 0.8;
   const gHugeProfitOffset = el("cfg-huge_profit_offset");
   if (gHugeProfitOffset) gHugeProfitOffset.value = p.huge_profit_offset ?? "";
-  const gIflowTopN = el("cfg-iflow_top_n");
-  if (gIflowTopN) gIflowTopN.value = p.iflow_top_n ?? "";
   const gExclude = el("cfg-exclude_keywords");
   if (gExclude) gExclude.value = (p.exclude_keywords && p.exclude_keywords.length > 0 ? p.exclude_keywords : ["印花"]).join("\n");
   const gCv = el("cfg-cv_threshold");
@@ -78,6 +217,8 @@ async function loadConfig() {
   if (listingDelayEl) listingDelayEl.value = p.listing_delay_seconds ?? "";
   const resellRatioEl = el("cfg-resell_ratio");
   if (resellRatioEl) resellRatioEl.value = p.resell_ratio ?? "";
+  const steamBalanceCostRatioEl = el("cfg-steam_balance_cost_ratio");
+  if (steamBalanceCostRatioEl) steamBalanceCostRatioEl.value = p.steam_balance_cost_ratio ?? p.resell_ratio ?? "";
   const safeHardCap = el("cfg-safe_purchase_hard_qty_cap");
   if (safeHardCap) safeHardCap.value = p.safe_purchase_hard_qty_cap ?? "";
   const safeLiqRatio = el("cfg-safe_purchase_liquidity_ratio");
@@ -94,7 +235,74 @@ async function loadConfig() {
   if (sellPressureThresh) sellPressureThresh.value = p.sell_pressure_threshold ?? "";
   const currentPriceRefreshEl = el("cfg-current-price-refresh-minutes");
   if (currentPriceRefreshEl) currentPriceRefreshEl.value = p.current_price_refresh_minutes ?? "";
-  currentPriceRefreshMinutes = parseInt(p.current_price_refresh_minutes, 10) || currentPriceRefreshMinutes || 10;
+  const maxStalenessEl = el("cfg-max-staleness-minutes");
+  if (maxStalenessEl) maxStalenessEl.value = p.max_staleness_minutes ?? "";
+  const poJitBypassEl = el("cfg-purchase-order-jit-bypass-minutes");
+  if (poJitBypassEl) poJitBypassEl.value = p.purchase_order_jit_bypass_minutes ?? "";
+  const priorityEnabled = el("cfg-priority-enabled");
+  if (priorityEnabled) priorityEnabled.checked = ps.enabled !== false;
+  const priorityInterval = el("cfg-priority-global-interval");
+  if (priorityInterval) priorityInterval.value = ps.global_interval_seconds ?? "";
+  const priorityMinVolume = el("cfg-priority-min-volume");
+  if (priorityMinVolume) priorityMinVolume.value = ps.min_volume_24h ?? "";
+  const priorityMinProfit = el("cfg-priority-min-profit");
+  if (priorityMinProfit) priorityMinProfit.value = ps.min_net_profit_rate ?? "";
+  const p1p2 = el("cfg-priority-p1-p2-score");
+  if (p1p2) p1p2.value = ps.p1_to_p2_score ?? "";
+  const p2p3 = el("cfg-priority-p2-p3-score");
+  if (p2p3) p2p3.value = ps.p2_to_p3_score ?? "";
+  const p2p1 = el("cfg-priority-p2-p1-score");
+  if (p2p1) p2p1.value = ps.p2_to_p1_score ?? "";
+  const p3p2 = el("cfg-priority-p3-p2-score");
+  if (p3p2) p3p2.value = ps.p3_to_p2_score ?? "";
+  const p3NoProfit = el("cfg-priority-p3-no-profit-rounds");
+  if (p3NoProfit) p3NoProfit.value = ps.p3_to_p2_no_profit_rounds ?? "";
+  const p2NoHit = el("cfg-priority-p2-no-hit-rounds");
+  if (p2NoHit) p2NoHit.value = ps.p2_to_p1_no_hit_rounds ?? "";
+  const p2Hit = el("cfg-priority-p2-hit-rounds");
+  if (p2Hit) p2Hit.value = ps.p2_to_p3_hit_rounds ?? "";
+  const steamdtFresh = el("cfg-priority-steamdt-fresh");
+  if (steamdtFresh) steamdtFresh.value = ps.steamdt_fresh_minutes ?? "";
+  const jitTtl = el("cfg-priority-jit-ttl");
+  if (jitTtl) jitTtl.value = ps.jit_ttl_minutes ?? "";
+  const lowInterval = el("cfg-crawl-low-interval");
+  if (lowInterval) lowInterval.value = cl.low_interval_seconds ?? "";
+  const midInterval = el("cfg-crawl-mid-interval");
+  if (midInterval) midInterval.value = cl.mid_interval_seconds ?? "";
+  const lowLimit = el("cfg-crawl-low-limit");
+  if (lowLimit) lowLimit.value = cl.low_limit ?? "";
+  const midLimit = el("cfg-crawl-mid-limit");
+  if (midLimit) midLimit.value = cl.mid_limit ?? "";
+  const highLimit = el("cfg-crawl-high-limit");
+  if (highLimit) highLimit.value = cl.high_limit ?? "";
+  const apEnabled = el("cfg-action-policy-enabled");
+  if (apEnabled) apEnabled.checked = ap.enabled !== false;
+  const allowDirect = el("cfg-action-allow-direct-buy");
+  if (allowDirect) allowDirect.checked = ap.allow_direct_buy !== false;
+  const allowOrder = el("cfg-action-allow-buy-order");
+  if (allowOrder) allowOrder.checked = ap.allow_buy_order !== false;
+  const allowSell = el("cfg-action-allow-auto-sell");
+  if (allowSell) allowSell.checked = !!ap.allow_auto_sell;
+  const actionTtl = el("cfg-action-decision-ttl");
+  if (actionTtl) actionTtl.value = ap.decision_ttl_minutes ?? "";
+  const directRate = el("cfg-action-direct-buy-rate");
+  if (directRate) directRate.value = ap.direct_buy_min_profit_rate ?? "";
+  const orderRate = el("cfg-action-buy-order-rate");
+  if (orderRate) orderRate.value = ap.buy_order_min_profit_rate ?? "";
+  const sellRate = el("cfg-action-sell-rate");
+  if (sellRate) sellRate.value = ap.sell_min_profit_rate ?? "";
+  const actionMinVol = el("cfg-action-min-volume");
+  if (actionMinVol) actionMinVol.value = ap.min_24h_volume ?? "";
+  const segCount = el("cfg-action-risk-segment-count");
+  const segmentCount = ap.risk_segment_count || (Array.isArray(ap.risk_segments) ? ap.risk_segments.length : 3) || 3;
+  if (segCount) {
+    segCount.value = String(Math.max(1, Math.min(segmentCount, 5)));
+    if (!segCount._bound) {
+      segCount._bound = true;
+      segCount.addEventListener("change", () => renderActionRiskSegments(readActionRiskSegments(), segCount.value));
+    }
+  }
+  renderActionRiskSegments(Array.isArray(ap.risk_segments) ? ap.risk_segments : DEFAULT_ACTION_RISK_SEGMENTS, segmentCount);
   const gStartTimeLimitEnabled = el("cfg-start-time-limit-enabled");
   if (gStartTimeLimitEnabled) gStartTimeLimitEnabled.checked = !!p.start_time_limit_enabled;
   const gStartTimeHour = el("cfg-start-time-hour");
@@ -149,39 +357,118 @@ async function loadConfig() {
       document.documentElement.style.zoom = e.target.value;
     });
   }
-  const sd = c.steam_deals || {};
+  const gThemeMode = el("cfg-theme-mode");
+  if (gThemeMode) {
+    const currentTheme = (typeof Theme !== "undefined" && typeof Theme.get === "function") ? Theme.get() : "dark";
+    gThemeMode.value = currentTheme;
+    if (!gThemeMode._bound) {
+      gThemeMode._bound = true;
+      gThemeMode.addEventListener("change", (e) => {
+        const mode = e.target.value || "dark";
+        if (typeof Theme !== "undefined" && typeof Theme.set === "function") Theme.set(mode);
+        toast("主题已切换", mode === "system" ? "跟随系统" : mode === "dark" ? "深色" : "浅色");
+      });
+    }
+  }
+  const creds = d.credentials || {};
+  const gBuffCookie = el("cfg-buff-cookie");
+  if (gBuffCookie) {
+    if (gBuffCookie.tagName === "INPUT") gBuffCookie.type = "password";
+    gBuffCookie.value = (creds.buff && creds.buff.cookies) || "";
+  }
+  const gUuypCookie = el("cfg-uuyp-cookie");
+  if (gUuypCookie) {
+    if (gUuypCookie.tagName === "INPUT") gUuypCookie.type = "password";
+    gUuypCookie.value = (creds.uuyp && creds.uuyp.cookies) || "";
+  }
+  const gEcoCookie = el("cfg-eco-cookie");
+  if (gEcoCookie) {
+    if (gEcoCookie.tagName === "INPUT") gEcoCookie.type = "password";
+    gEcoCookie.value = (creds.eco && creds.eco.cookies) || "";
+  }
+  const gSteamdtOpenapiPriceEnabled = el("cfg-steamdt-openapi-price-enabled");
+  if (gSteamdtOpenapiPriceEnabled) gSteamdtOpenapiPriceEnabled.checked = sdOpenapiPrice.enabled !== false;
+  const gSteamdtOpenapiPriceBaseUrl = el("cfg-steamdt-openapi-price-base-url");
+  if (gSteamdtOpenapiPriceBaseUrl) gSteamdtOpenapiPriceBaseUrl.value = sdOpenapiPrice.base_url ?? "https://open.steamdt.com";
+  const gSteamdtOpenapiPriceTimeout = el("cfg-steamdt-openapi-price-timeout");
+  if (gSteamdtOpenapiPriceTimeout) gSteamdtOpenapiPriceTimeout.value = sdOpenapiPrice.timeout_seconds ?? 20;
+  const gSteamdtOpenapiPriceUseProxy = el("cfg-steamdt-openapi-price-use-proxy");
+  if (gSteamdtOpenapiPriceUseProxy) gSteamdtOpenapiPriceUseProxy.checked = sdOpenapiPrice.use_proxy !== false;
+  const gSteamdtOpenapiPriceBatchRpm = el("cfg-steamdt-openapi-price-batch-rpm");
+  if (gSteamdtOpenapiPriceBatchRpm) gSteamdtOpenapiPriceBatchRpm.value = sdOpenapiPrice.batch_requests_per_minute ?? 1;
+  const gSteamdtOpenapiPriceSingleRpm = el("cfg-steamdt-openapi-price-single-rpm");
+  if (gSteamdtOpenapiPriceSingleRpm) gSteamdtOpenapiPriceSingleRpm.value = sdOpenapiPrice.single_requests_per_minute ?? 60;
+  const gSteamdtOpenapiPriceSingleReserved = el("cfg-steamdt-openapi-price-single-reserved");
+  if (gSteamdtOpenapiPriceSingleReserved) gSteamdtOpenapiPriceSingleReserved.value = sdOpenapiPrice.single_reserved_for_jit ?? 15;
+  const gSteamdtOpenapiPriceBatchSize = el("cfg-steamdt-openapi-price-batch-size");
+  if (gSteamdtOpenapiPriceBatchSize) gSteamdtOpenapiPriceBatchSize.value = sdOpenapiPrice.batch_size ?? 100;
+  const gSteamdtOpenapiPriceP2Target = el("cfg-steamdt-openapi-price-p2-target");
+  if (gSteamdtOpenapiPriceP2Target) gSteamdtOpenapiPriceP2Target.value = sdOpenapiPrice.p2_target_minutes ?? 60;
+  const gSteamdtOpenapiPriceP3Target = el("cfg-steamdt-openapi-price-p3-target");
+  if (gSteamdtOpenapiPriceP3Target) gSteamdtOpenapiPriceP3Target.value = sdOpenapiPrice.p3_target_minutes ?? 30;
+  const gSteamdtOpenapiPriceTracked = el("cfg-steamdt-openapi-price-tracked");
+  if (gSteamdtOpenapiPriceTracked) gSteamdtOpenapiPriceTracked.value = Array.isArray(sdOpenapiPrice.tracked_platforms) ? sdOpenapiPrice.tracked_platforms.join(",") : "steam,buff,uuyp,eco";
+  const gSteamdtOpenapiPriceMode = el("cfg-steamdt-openapi-price-mode");
+  if (gSteamdtOpenapiPriceMode) gSteamdtOpenapiPriceMode.value = sdOpenapiPrice.mode || "stable";
+  const gSteamdtOpenapiPriceStableCycle = el("cfg-steamdt-openapi-price-stable-cycle");
+  if (gSteamdtOpenapiPriceStableCycle) gSteamdtOpenapiPriceStableCycle.value = sdOpenapiPrice.stable_pool_cycle_minutes ?? 60;
+  const gSteamdtOpenapiPriceDiscoveryTarget = el("cfg-steamdt-openapi-price-discovery-target");
+  if (gSteamdtOpenapiPriceDiscoveryTarget) gSteamdtOpenapiPriceDiscoveryTarget.value = sdOpenapiPrice.discovery_target_minutes ?? 720;
+  const gSteamdtOpenapiPriceCustomPoolShare = el("cfg-steamdt-openapi-price-custom-pool-share");
+  if (gSteamdtOpenapiPriceCustomPoolShare) gSteamdtOpenapiPriceCustomPoolShare.value = sdOpenapiPrice.custom_pool_share_pct ?? 70;
+  const gSteamdtOpenapiPriceAutoSwitchStable = el("cfg-steamdt-openapi-price-auto-switch-stable");
+  if (gSteamdtOpenapiPriceAutoSwitchStable) gSteamdtOpenapiPriceAutoSwitchStable.checked = sdOpenapiPrice.auto_switch_to_stable_on_idle_complete !== false;
+
+  const steamDeals = c.steam_deals || {};
   const gSdEnabled = el("cfg-steam-deals-enabled");
-  if (gSdEnabled) gSdEnabled.checked = !!sd.enabled;
+  if (gSdEnabled) gSdEnabled.checked = !!steamDeals.enabled;
   const gSdRefresh = el("cfg-steam-deals-auto-refresh-days");
-  if (gSdRefresh) gSdRefresh.value = sd.auto_refresh_days ?? "";
+  if (gSdRefresh) gSdRefresh.value = steamDeals.auto_refresh_days ?? "";
   const gSdGameThreads = el("cfg-steam-deals-game-threads");
-  if (gSdGameThreads) gSdGameThreads.value = sd.max_game_threads ?? "";
+  if (gSdGameThreads) gSdGameThreads.value = steamDeals.max_game_threads ?? "";
   const gSdRegionThreads = el("cfg-steam-deals-region-threads");
-  if (gSdRegionThreads) gSdRegionThreads.value = sd.max_region_threads ?? "";
+  if (gSdRegionThreads) gSdRegionThreads.value = steamDeals.max_region_threads ?? "";
   // 加载完成后刷新 UX 状态组件
   updateUXStatus(c);
+  await loadCredentials();
 }
 
 function formToConfig() {
+  const primaryCashPlatform = el("cfg-cash-platform-primary") ? el("cfg-cash-platform-primary").value : "buff";
+  const cashPollSeconds = el("cfg-cash-platform-poll-seconds") ? parseInt(el("cfg-cash-platform-poll-seconds").value, 10) || 60 : 60;
+  const cashPlatforms = deepMerge(readCashPlatformRows(), {
+    [primaryCashPlatform]: { order_poll_interval_seconds: cashPollSeconds },
+  });
   return {
-    iflow: {
-      type: el("cfg-games") ? el("cfg-games").value.trim() : undefined,
-      platforms: el("cfg-platforms") ? el("cfg-platforms").value.trim() : undefined,
-      sort_by: el("cfg-sort_by") ? el("cfg-sort_by").value.trim() : undefined,
-      min_price: el("cfg-min_price") ? parseFloat(el("cfg-min_price").value) || undefined : undefined,
-      max_price: el("cfg-max_price") ? parseFloat(el("cfg-max_price").value) || undefined : undefined,
-      min_volume: el("cfg-min_volume") ? parseInt(el("cfg-min_volume").value, 10) || undefined : undefined,
-    },
     buff: {
       pay_method: el("cfg-pay_method") ? el("cfg-pay_method").value : undefined,
       game: el("cfg-buff-game") ? el("cfg-buff-game").value.trim() : undefined,
       price_tolerance: el("cfg-price_tolerance") ? parseFloat(el("cfg-price_tolerance").value) || undefined : undefined,
     },
+    cash_platform_trading: {
+      enabled: true,
+      primary_platform: primaryCashPlatform,
+      direct_buy_first: el("cfg-cash-platform-direct-first") ? !!el("cfg-cash-platform-direct-first").checked : true,
+      cancel_excess_orders_on_fill: el("cfg-cash-platform-cancel-excess") ? !!el("cfg-cash-platform-cancel-excess").checked : true,
+      order_poll_interval_seconds: cashPollSeconds,
+      platforms: cashPlatforms,
+    },
+    low_price_exposure_guard: {
+      enabled: el("cfg-low-price-exposure-enabled") ? !!el("cfg-low-price-exposure-enabled").checked : true,
+      rule: el("cfg-low-price-exposure-rule") ? el("cfg-low-price-exposure-rule").value.trim() : undefined,
+      price_basis: "buy_price",
+      hide_signals: el("cfg-low-price-exposure-hide-signals") ? !!el("cfg-low-price-exposure-hide-signals").checked : true,
+      block_execution: el("cfg-low-price-exposure-block-execution") ? !!el("cfg-low-price-exposure-block-execution").checked : true,
+      cache_ttl_seconds: el("cfg-low-price-exposure-cache-ttl") ? parseInt(el("cfg-low-price-exposure-cache-ttl").value, 10) || 30 : 30,
+      include_inventory: el("cfg-low-price-exposure-include-inventory") ? !!el("cfg-low-price-exposure-include-inventory").checked : true,
+      include_purchases: el("cfg-low-price-exposure-include-purchases") ? !!el("cfg-low-price-exposure-include-purchases").checked : true,
+      include_active_orders: el("cfg-low-price-exposure-include-active-orders") ? !!el("cfg-low-price-exposure-include-active-orders").checked : true,
+      include_pending_receipt: el("cfg-low-price-exposure-include-pending") ? !!el("cfg-low-price-exposure-include-pending").checked : true,
+    },
     pipeline: {
       target_balance: el("cfg-target_balance") ? parseFloat(el("cfg-target_balance").value) || undefined : undefined,
       max_discount: el("cfg-max_discount") ? parseFloat(el("cfg-max_discount").value) || undefined : undefined,
       huge_profit_offset: el("cfg-huge_profit_offset") ? parseFloat(el("cfg-huge_profit_offset").value) : undefined,
-      iflow_top_n: el("cfg-iflow_top_n") ? parseInt(el("cfg-iflow_top_n").value, 10) || undefined : undefined,
       sell_price_ratio: el("cfg-sell_ratio") ? parseFloat(el("cfg-sell_ratio").value) || undefined : undefined,
       retry_interval_seconds: el("cfg-retry_interval_seconds") ? parseInt(el("cfg-retry_interval_seconds").value, 10) || undefined : undefined,
       exclude_keywords: Array.from(
@@ -202,6 +489,7 @@ function formToConfig() {
       max_listings_per_item: el("cfg-max_listings_per_item") ? parseInt(el("cfg-max_listings_per_item").value, 10) || undefined : undefined,
       listing_delay_seconds: el("cfg-listing_delay_seconds") ? parseInt(el("cfg-listing_delay_seconds").value, 10) || undefined : undefined,
       resell_ratio: el("cfg-resell_ratio") ? parseFloat(el("cfg-resell_ratio").value) || undefined : undefined,
+      steam_balance_cost_ratio: el("cfg-steam_balance_cost_ratio") ? parseFloat(el("cfg-steam_balance_cost_ratio").value) || undefined : undefined,
       safe_purchase_hard_qty_cap: el("cfg-safe_purchase_hard_qty_cap") ? parseInt(el("cfg-safe_purchase_hard_qty_cap").value, 10) : undefined,
       safe_purchase_liquidity_ratio: el("cfg-safe_purchase_liquidity_ratio") ? parseFloat(el("cfg-safe_purchase_liquidity_ratio").value) : undefined,
       safe_purchase_low_price_threshold: el("cfg-safe_purchase_low_price_threshold") ? parseFloat(el("cfg-safe_purchase_low_price_threshold").value) : undefined,
@@ -210,6 +498,8 @@ function formToConfig() {
       sell_pressure_orders_n: el("cfg-sell_pressure_orders_n") ? parseInt(el("cfg-sell_pressure_orders_n").value, 10) : undefined,
       sell_pressure_threshold: el("cfg-sell_pressure_threshold") ? parseFloat(el("cfg-sell_pressure_threshold").value) : undefined,
       current_price_refresh_minutes: el("cfg-current-price-refresh-minutes") ? parseInt(el("cfg-current-price-refresh-minutes").value, 10) || undefined : undefined,
+      max_staleness_minutes: el("cfg-max-staleness-minutes") ? parseInt(el("cfg-max-staleness-minutes").value, 10) || undefined : undefined,
+      purchase_order_jit_bypass_minutes: el("cfg-purchase-order-jit-bypass-minutes") ? parseInt(el("cfg-purchase-order-jit-bypass-minutes").value, 10) || undefined : undefined,
       start_time_limit_enabled: !!el("cfg-start-time-limit-enabled")?.checked,
       start_time_hour: el("cfg-start-time-hour") ? (parseInt(el("cfg-start-time-hour").value, 10) >= 0 && parseInt(el("cfg-start-time-hour").value, 10) <= 23 ? parseInt(el("cfg-start-time-hour").value, 10) : undefined) : undefined,
       end_time_hour: el("cfg-end-time-hour") ? (parseInt(el("cfg-end-time-hour").value, 10) >= 0 && parseInt(el("cfg-end-time-hour").value, 10) <= 23 ? parseInt(el("cfg-end-time-hour").value, 10) : undefined) : undefined,
@@ -262,14 +552,360 @@ function formToConfig() {
       max_game_threads: el("cfg-steam-deals-game-threads") ? parseInt(el("cfg-steam-deals-game-threads").value, 10) || undefined : undefined,
       max_region_threads: el("cfg-steam-deals-region-threads") ? parseInt(el("cfg-steam-deals-region-threads").value, 10) || undefined : undefined,
     },
+    priority_scheduler: {
+      enabled: el("cfg-priority-enabled") ? !!el("cfg-priority-enabled").checked : undefined,
+      global_interval_seconds: el("cfg-priority-global-interval") ? parseInt(el("cfg-priority-global-interval").value, 10) || undefined : undefined,
+      min_volume_24h: el("cfg-priority-min-volume") ? parseInt(el("cfg-priority-min-volume").value, 10) || undefined : undefined,
+      min_net_profit_rate: el("cfg-priority-min-profit") ? parseFloat(el("cfg-priority-min-profit").value) : undefined,
+      p1_to_p2_score: el("cfg-priority-p1-p2-score") ? parseFloat(el("cfg-priority-p1-p2-score").value) : undefined,
+      p2_to_p3_score: el("cfg-priority-p2-p3-score") ? parseFloat(el("cfg-priority-p2-p3-score").value) : undefined,
+      p2_to_p1_score: el("cfg-priority-p2-p1-score") ? parseFloat(el("cfg-priority-p2-p1-score").value) : undefined,
+      p3_to_p2_score: el("cfg-priority-p3-p2-score") ? parseFloat(el("cfg-priority-p3-p2-score").value) : undefined,
+      p3_to_p2_no_profit_rounds: el("cfg-priority-p3-no-profit-rounds") ? parseInt(el("cfg-priority-p3-no-profit-rounds").value, 10) || undefined : undefined,
+      p2_to_p1_no_hit_rounds: el("cfg-priority-p2-no-hit-rounds") ? parseInt(el("cfg-priority-p2-no-hit-rounds").value, 10) || undefined : undefined,
+      p2_to_p3_hit_rounds: el("cfg-priority-p2-hit-rounds") ? parseInt(el("cfg-priority-p2-hit-rounds").value, 10) || undefined : undefined,
+      steamdt_fresh_minutes: el("cfg-priority-steamdt-fresh") ? parseInt(el("cfg-priority-steamdt-fresh").value, 10) || undefined : undefined,
+      jit_ttl_minutes: el("cfg-priority-jit-ttl") ? parseInt(el("cfg-priority-jit-ttl").value, 10) || undefined : undefined,
+    },
+    crawl_layers: {
+      low_interval_seconds: el("cfg-crawl-low-interval") ? parseInt(el("cfg-crawl-low-interval").value, 10) || undefined : undefined,
+      mid_interval_seconds: el("cfg-crawl-mid-interval") ? parseInt(el("cfg-crawl-mid-interval").value, 10) || undefined : undefined,
+      low_limit: el("cfg-crawl-low-limit") ? parseInt(el("cfg-crawl-low-limit").value, 10) || undefined : undefined,
+      mid_limit: el("cfg-crawl-mid-limit") ? parseInt(el("cfg-crawl-mid-limit").value, 10) || undefined : undefined,
+      high_limit: el("cfg-crawl-high-limit") ? parseInt(el("cfg-crawl-high-limit").value, 10) || undefined : undefined,
+    },
+    steamdt: {
+      openapi_price: {
+        enabled: el("cfg-steamdt-openapi-price-enabled") ? !!el("cfg-steamdt-openapi-price-enabled").checked : undefined,
+        base_url: el("cfg-steamdt-openapi-price-base-url") ? el("cfg-steamdt-openapi-price-base-url").value.trim() : undefined,
+        timeout_seconds: el("cfg-steamdt-openapi-price-timeout") ? parseInt(el("cfg-steamdt-openapi-price-timeout").value, 10) || undefined : undefined,
+        use_proxy: el("cfg-steamdt-openapi-price-use-proxy") ? !!el("cfg-steamdt-openapi-price-use-proxy").checked : undefined,
+        batch_requests_per_minute: el("cfg-steamdt-openapi-price-batch-rpm") ? parseInt(el("cfg-steamdt-openapi-price-batch-rpm").value, 10) || undefined : undefined,
+        single_requests_per_minute: el("cfg-steamdt-openapi-price-single-rpm") ? parseInt(el("cfg-steamdt-openapi-price-single-rpm").value, 10) || undefined : undefined,
+        single_reserved_for_jit: el("cfg-steamdt-openapi-price-single-reserved") ? parseInt(el("cfg-steamdt-openapi-price-single-reserved").value, 10) || undefined : undefined,
+        batch_size: el("cfg-steamdt-openapi-price-batch-size") ? parseInt(el("cfg-steamdt-openapi-price-batch-size").value, 10) || undefined : undefined,
+        p2_target_minutes: el("cfg-steamdt-openapi-price-p2-target") ? parseInt(el("cfg-steamdt-openapi-price-p2-target").value, 10) || undefined : undefined,
+        p3_target_minutes: el("cfg-steamdt-openapi-price-p3-target") ? parseInt(el("cfg-steamdt-openapi-price-p3-target").value, 10) || undefined : undefined,
+        mode: el("cfg-steamdt-openapi-price-mode") ? (el("cfg-steamdt-openapi-price-mode").value || "stable") : undefined,
+        stable_pool_cycle_minutes: el("cfg-steamdt-openapi-price-stable-cycle") ? parseInt(el("cfg-steamdt-openapi-price-stable-cycle").value, 10) || undefined : undefined,
+        discovery_target_minutes: el("cfg-steamdt-openapi-price-discovery-target") ? parseInt(el("cfg-steamdt-openapi-price-discovery-target").value, 10) || undefined : undefined,
+        custom_pool_share_pct: el("cfg-steamdt-openapi-price-custom-pool-share") ? parseInt(el("cfg-steamdt-openapi-price-custom-pool-share").value, 10) || undefined : undefined,
+        auto_switch_to_stable_on_idle_complete: el("cfg-steamdt-openapi-price-auto-switch-stable") ? !!el("cfg-steamdt-openapi-price-auto-switch-stable").checked : undefined,
+        tracked_platforms: el("cfg-steamdt-openapi-price-tracked")
+          ? Array.from(new Set((el("cfg-steamdt-openapi-price-tracked").value || "").split(",").map((v) => v.trim().toLowerCase()).filter(Boolean)))
+          : undefined,
+      },
+    },
+    action_policy: {
+      enabled: el("cfg-action-policy-enabled") ? !!el("cfg-action-policy-enabled").checked : undefined,
+      allow_direct_buy: el("cfg-action-allow-direct-buy") ? !!el("cfg-action-allow-direct-buy").checked : undefined,
+      allow_buy_order: el("cfg-action-allow-buy-order") ? !!el("cfg-action-allow-buy-order").checked : undefined,
+      allow_auto_sell: el("cfg-action-allow-auto-sell") ? !!el("cfg-action-allow-auto-sell").checked : undefined,
+      decision_ttl_minutes: el("cfg-action-decision-ttl") ? parseInt(el("cfg-action-decision-ttl").value, 10) || undefined : undefined,
+      direct_buy_min_profit_rate: el("cfg-action-direct-buy-rate") ? parseFloat(el("cfg-action-direct-buy-rate").value) : undefined,
+      buy_order_min_profit_rate: el("cfg-action-buy-order-rate") ? parseFloat(el("cfg-action-buy-order-rate").value) : undefined,
+      sell_min_profit_rate: el("cfg-action-sell-rate") ? parseFloat(el("cfg-action-sell-rate").value) : undefined,
+      min_24h_volume: el("cfg-action-min-volume") ? parseInt(el("cfg-action-min-volume").value, 10) || undefined : undefined,
+      risk_segment_count: el("cfg-action-risk-segment-count") ? parseInt(el("cfg-action-risk-segment-count").value, 10) || undefined : undefined,
+      risk_segments: readActionRiskSegments(),
+    },
   };
 }
+async function saveCredentials() {
+  const payload = {
+    buff: { cookies: el("cfg-buff-cookie") ? el("cfg-buff-cookie").value.trim() : "" },
+    uuyp: { cookies: el("cfg-uuyp-cookie") ? el("cfg-uuyp-cookie").value.trim() : "" },
+    eco: { cookies: el("cfg-eco-cookie") ? el("cfg-eco-cookie").value.trim() : "" },
+    steamdt_openapi: { api_key: el("cfg-steamdt-openapi-key") ? el("cfg-steamdt-openapi-key").value.trim() : "" },
+  };
+  const res = await fetchJson(API + "/credentials", { method: "POST", body: JSON.stringify(payload) });
+  const savedAt = el("credentials-saved-at");
+  if (savedAt) savedAt.textContent = `最近保存时间：${new Date().toLocaleString()}`;
+  toast("保存成功", res.msg || "第三方平台凭证已更新");
+}
+
+async function loadCredentials() {
+  try {
+    const d = await fetchJson(API + "/credentials");
+    const buff = d.buff || {};
+    const uuyp = d.uuyp || {};
+    const eco = d.eco || {};
+    const steamdtOpenapi = d.steamdt_openapi || {};
+    const gBuffCookie = el("cfg-buff-cookie");
+    if (gBuffCookie) gBuffCookie.value = buff.cookies || "";
+    const gUuypCookie = el("cfg-uuyp-cookie");
+    if (gUuypCookie) gUuypCookie.value = uuyp.cookies || "";
+    const gEcoCookie = el("cfg-eco-cookie");
+    if (gEcoCookie) gEcoCookie.value = eco.cookies || "";
+    const gSteamdtOpenapiKey = el("cfg-steamdt-openapi-key");
+    if (gSteamdtOpenapiKey) gSteamdtOpenapiKey.value = steamdtOpenapi.api_key || "";
+    const savedAt = el("credentials-saved-at");
+    if (savedAt) savedAt.textContent = `最近保存时间：${new Date().toLocaleString()}`;
+    await loadSteamdtCapsuleSummary();
+    await loadPlatformConnectivity();
+  } catch (e) {
+    toast("加载失败", e.message || "后端暂不可用");
+  }
+}
+
+function platformStatusLabel(status) {
+  const s = String(status || "").toLowerCase();
+  if (s === "ok") return "正常";
+  if (s === "timeout") return "超时";
+  if (s === "error") return "失败";
+  if (s === "degraded") return "退化";
+  if (s === "no_data") return "无数据";
+  if (s === "missing_key") return "缺少Key";
+  if (s === "disabled") return "未启用";
+  if (s === "running") return "进行中";
+  return s || "--";
+}
+
+async function loadPlatformConnectivity() {
+  const tbody = el("platform-connectivity-body");
+  if (!tbody) return;
+  try {
+    const res = await fetchJson(API + "/platform/connectivity");
+    const items = Array.isArray(res.platforms) ? res.platforms : [];
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="muted">暂无数据</td></tr>';
+    } else {
+      tbody.innerHTML = items.map((item) => `
+        <tr>
+          <td>${escapeHtml(item.platform || "--")}</td>
+          <td>${escapeHtml(platformStatusLabel(item.status))}</td>
+          <td>${escapeHtml(item.rows ?? 0)}</td>
+          <td>${escapeHtml(item.saved ?? 0)}</td>
+          <td>${escapeHtml(item.cost_seconds != null ? Number(item.cost_seconds).toFixed(2) : "--")}</td>
+          <td title="${escapeHtml(item.reason || "")}">${escapeHtml(item.reason || "--")}</td>
+        </tr>
+      `).join("");
+    }
+    const tsNode = el("platform-connectivity-updated-at");
+    if (tsNode) tsNode.textContent = `最近刷新：${new Date().toLocaleString()}`;
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-bad">${escapeHtml(e.message || "加载失败")}</td></tr>`;
+  }
+}
+
+async function loadSteamdtCapsuleSummary() {
+  const node = el("steamdt-capsule-summary");
+  const statsNode = el("steamdt-capsule-stats");
+  const listNode = el("steamdt-capsule-list");
+  if (!node) return;
+  try {
+    const res = await fetchJson(API + "/session_capsules/steamdt");
+    const summary = res.summary || {};
+    const items = Array.isArray(res.items) ? res.items : [];
+    const total = parseInt(summary.total || 0, 10) || 0;
+    const ready = parseInt(summary.ready || 0, 10) || 0;
+    const cooldown = parseInt(summary.cooldown || 0, 10) || 0;
+    const leased = parseInt(summary.leased || 0, 10) || 0;
+    const retired = parseInt(summary.retired || 0, 10) || 0;
+    node.textContent = retired
+      ? `可用 ${ready}，冷却 ${cooldown}，占用 ${leased}；已淘汰 ${retired} 个，敏感 Cookie 已清理并隐藏`
+      : `可用 ${ready}，冷却 ${cooldown}，占用 ${leased}`;
+    if (statsNode) {
+      statsNode.innerHTML = [
+        steamdtCapsuleStat("可用", ready, "ready"),
+        steamdtCapsuleStat("冷却", cooldown, "cooldown"),
+        steamdtCapsuleStat("占用", leased, "leased"),
+        steamdtCapsuleStat("已淘汰", retired, "retired"),
+        steamdtCapsuleStat("总计", total, "total"),
+      ].join("");
+    }
+    if (listNode) {
+      if (!items.length) {
+        listNode.innerHTML = '<div class="steamdt-capsule-empty">暂无可用 SteamDT 会话。点击“打开浏览器采集”导入新的会话。</div>';
+      } else {
+        listNode.innerHTML = items.map((item) => {
+          const cooldownText = formatCapsuleCooldown(item.cooldown_until);
+          const statusText = item.status || "unknown";
+          const failCount = Number(item.fail_count || 0);
+          const authFails = Number(item.consecutive_auth_failures || 0);
+          const streakCount = Number(item.failure_streak_count || 0);
+          const streakReason = item.failure_streak_reason || "--";
+          const statusClass = statusText === "ready" && cooldownText === "--" ? "ready" : (cooldownText !== "--" ? "cooldown" : statusText);
+          const issueText = streakCount ? `${streakReason} x${streakCount}` : (item.last_failure_reason || "运行正常");
+          return `
+            <div class="steamdt-capsule-card">
+              <div class="steamdt-capsule-card-main">
+                <div class="steamdt-capsule-title">
+                  <span class="steamdt-capsule-id">${escapeHtml(item.capsule_id || "--")}</span>
+                  <span class="steamdt-status steamdt-status--${escapeHtml(statusClass)}">${escapeHtml(statusLabel(statusText, cooldownText))}</span>
+                </div>
+                <div class="steamdt-capsule-meta">
+                  <span>设备 ${escapeHtml(shortId(item.device_id || "--"))}</span>
+                  <span>${escapeHtml(item.proxy_binding || "direct")}</span>
+                  <span>成功 ${escapeHtml(formatCapsuleTime(item.last_ok_at))}</span>
+                  <span>失败 ${escapeHtml(`${failCount}${authFails ? ` / 鉴权${authFails}` : ""}`)}</span>
+                </div>
+                <div class="steamdt-capsule-note">${escapeHtml(issueText)}</div>
+              </div>
+              <div class="steamdt-capsule-actions">
+                ${cooldownText !== "--" ? `<button type="button" class="btn btn-sm btn-secondary steamdt-capsule-clear-btn" data-capsule-id="${escapeHtml(item.capsule_id || "")}">清冷却</button>` : ""}
+                <button type="button" class="btn btn-sm btn-danger-outline steamdt-capsule-retire-btn" data-capsule-id="${escapeHtml(item.capsule_id || "")}">淘汰</button>
+              </div>
+            </div>
+          `;
+        }).join("");
+        bindSteamdtCapsuleActions(listNode);
+      }
+    }
+  } catch (e) {
+    node.textContent = "SteamDT 会话池不可用";
+    if (statsNode) statsNode.innerHTML = "";
+    if (listNode) {
+      listNode.innerHTML = '<div class="steamdt-capsule-empty steamdt-capsule-empty--error">加载 SteamDT 会话失败</div>';
+    }
+  }
+}
+
+function steamdtCapsuleStat(label, value, kind) {
+  return `<div class="steamdt-capsule-stat steamdt-capsule-stat--${escapeHtml(kind)}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+}
+
+function statusLabel(status, cooldownText) {
+  if (cooldownText && cooldownText !== "--") return `冷却 ${cooldownText}`;
+  if (status === "ready") return "可用";
+  if (status === "leased") return "占用";
+  return status || "未知";
+}
+
+function shortId(value) {
+  const text = String(value || "");
+  if (text.length <= 14) return text || "--";
+  return `${text.slice(0, 6)}...${text.slice(-4)}`;
+}
+
+function bindSteamdtCapsuleActions(scope) {
+  scope.querySelectorAll(".steamdt-capsule-clear-btn").forEach((btn) => {
+    if (btn._bound) return;
+    btn._bound = true;
+    btn.addEventListener("click", () => mutateSteamdtCapsule(btn.dataset.capsuleId, "clear_cooldown"));
+  });
+  scope.querySelectorAll(".steamdt-capsule-retire-btn").forEach((btn) => {
+    if (btn._bound) return;
+    btn._bound = true;
+    btn.addEventListener("click", () => mutateSteamdtCapsule(btn.dataset.capsuleId, "retire"));
+  });
+}
+
+async function mutateSteamdtCapsule(capsuleId, action) {
+  if (!capsuleId) return;
+  const encoded = encodeURIComponent(capsuleId);
+  const url = API + `/session_capsules/steamdt/${encoded}/${action}`;
+  const opts = action === "retire"
+    ? { method: "POST", body: JSON.stringify({ reason: "manual_retire" }) }
+    : { method: "POST" };
+  try {
+    const res = await fetchJson(url, opts);
+    toast(action === "retire" ? "Capsule retired" : "Cooldown cleared", res.msg || "");
+    await loadSteamdtCapsuleSummary();
+  } catch (e) {
+    toast("Action failed", e.message || "Please try again later");
+  }
+}
+
+function formatCapsuleTime(value) {
+  if (!value) return "--";
+  try {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return String(value);
+    return d.toLocaleString();
+  } catch {
+    return String(value);
+  }
+}
+
+function formatCapsuleCooldown(unixTs) {
+  const raw = Number(unixTs || 0);
+  if (!raw) return "--";
+  const remain = Math.max(0, Math.round(raw - Date.now() / 1000));
+  if (remain <= 0) return "--";
+  if (remain < 60) return `${remain}s`;
+  if (remain < 3600) return `${Math.ceil(remain / 60)}m`;
+  return `${Math.ceil(remain / 3600)}h`;
+}
+
+function _formatUuypTestResult(node) {
+  const msg = String(node?.msg || "");
+  const hint = String(node?.hint || "");
+  const text = `${msg} ${hint}`.toLowerCase();
+  if (node?.ok) return "UUYP:登录成功";
+  if (text.includes("bearer") || text.includes("authorization")) return "UUYP:Bearer 缺失";
+  if (text.includes("deviceid") || text.includes("device id")) return "UUYP:deviceId 不匹配";
+  return `UUYP:FAIL${msg ? `(${msg})` : ""}`;
+}
+
+async function testCredentials() {
+  try {
+    const payload = {
+      buff: { cookies: el("cfg-buff-cookie") ? el("cfg-buff-cookie").value.trim() : "" },
+      uuyp: { cookies: el("cfg-uuyp-cookie") ? el("cfg-uuyp-cookie").value.trim() : "" },
+      eco: { cookies: el("cfg-eco-cookie") ? el("cfg-eco-cookie").value.trim() : "" },
+    };
+    const res = await fetchJson(API + "/credentials/test", { method: "POST", body: JSON.stringify(payload) });
+    const result = res.result || {};
+    const summary = [
+      `BUFF:${result.buff?.ok ? "OK" : "FAIL"}`,
+      _formatUuypTestResult(result.uuyp),
+      `ECO:${result.eco?.ok ? "OK" : "FAIL"}`,
+    ].join(" | ");
+    const anyFail = !result.buff?.ok || !result.uuyp?.ok || !result.eco?.ok;
+    toast(anyFail ? "测试完成（存在失败项）" : "测试成功", summary);
+  } catch (e) {
+    toast("测试失败", e.message || "请检查 Cookie 值");
+  }
+}
+
+async function startCredentialLogin(platform) {
+  try {
+    credentialLoginPlatform = platform;
+    const title = el("credential-login-title");
+    const message = el("credential-login-message");
+    const modal = el("credential-login-modal");
+    if (title) title.textContent = platform === "steamdt" ? "SteamDT 会话采集" : `${platform.toUpperCase()} 浏览器登录`;
+    if (message) {
+      message.textContent = platform === "steamdt"
+        ? "浏览器已打开，请在 SteamDT 页面完成自然访问或登录，然后点击下方按钮采集并写入会话池。"
+        : "浏览器已打开，请在弹出的窗口中完成登录，登录成功后点击下方按钮提取凭证。";
+    }
+    if (modal) modal.classList.remove("hidden");
+    await fetchJson(API + `/auth/relogin_start/${encodeURIComponent(platform)}`, { method: "POST" });
+    toast("浏览器已打开", platform === "steamdt" ? "完成 SteamDT 页面访问后返回采集" : `请在 ${platform.toUpperCase()} 窗口完成登录`);
+  } catch (e) {
+    toast("打开失败", e.message || "浏览器环境不可用");
+  }
+}
+
+async function finishCredentialLogin() {
+  if (!credentialLoginPlatform) return;
+  try {
+    const res = await fetchJson(API + `/auth/relogin_finish/${encodeURIComponent(credentialLoginPlatform)}`, { method: "POST" });
+    toast("提取成功", res.msg || "会话已保存");
+    await loadCredentials();
+    if (credentialLoginPlatform === "steamdt") {
+      await loadSteamdtCapsuleSummary();
+    }
+    const modal = el("credential-login-modal");
+    if (modal) modal.classList.add("hidden");
+    credentialLoginPlatform = null;
+  } catch (e) {
+    toast("提取失败", e.message || "请先完成登录再提取");
+  }
+}
+
+async function cancelCredentialLogin() {
+  const modal = el("credential-login-modal");
+  if (modal) modal.classList.add("hidden");
+  credentialLoginPlatform = null;
+}
+
 async function saveConfigFromForm() {
   const d = await fetchJson(API + "/config");
   const merged = deepMerge(d.config || {}, formToConfig());
   await fetchJson(API + "/config", { method: "POST", body: JSON.stringify({ config: merged }) });
-  await loadConfig();
-  setupInventoryAutoRefresh();
 }
 async function startPipeline() {
   try {
@@ -315,6 +951,22 @@ async function exportConfig() {
     toast("导出失败", e.message || "请稍后再试");
   }
 }
+
+async function syncItems() {
+  const btn = el("btn-sync-items");
+  if (!btn || btn.disabled) return;
+  btn.disabled = true;
+  toast("正在同步饰品数据...", "这可能需要十几秒，请勿刷新页面");
+  try {
+    const res = await fetchJson(API + "/system/sync_items", { method: "POST" });
+    if (!res.success) throw new Error(res.msg || "同步失败");
+    toast("同步成功", "饰品字典已更新至最新版");
+  } catch (e) {
+    toast("同步失败", e.message || "请稍后再试");
+  } finally {
+    btn.disabled = false;
+  }
+}
 function isFullBackup(json) {
   return json && (typeof json.version === "number" || json.app_config != null || json.credentials != null || json.transactions != null || json.accounts != null);
 }
@@ -346,26 +998,16 @@ async function importConfigFromFile(file) {
     if (input) input.value = "";
   }
 }
-function setupInventoryAutoRefresh() {
+function setupInventoryAutoRefresh(runImmediately = true) {
   if (inventoryTimer) {
     clearInterval(inventoryTimer);
     inventoryTimer = null;
   }
-  if (currentPriceTimer) {
-    clearInterval(currentPriceTimer);
-    currentPriceTimer = null;
-  }
-  if (inventoryRefreshSeconds && inventoryRefreshSeconds > 0) {
-    inventoryTimer = setInterval(() => {
-      refreshInventory(true);
-    }, inventoryRefreshSeconds * 1000);
-  }
-  if (currentPriceRefreshMinutes && currentPriceRefreshMinutes > 0) {
+  if (!inventoryRefreshSeconds || inventoryRefreshSeconds <= 0) return;
+  if (runImmediately) refreshMarketPrices();
+  inventoryTimer = setInterval(() => {
     refreshMarketPrices();
-    currentPriceTimer = setInterval(() => {
-      refreshMarketPrices();
-    }, currentPriceRefreshMinutes * 60 * 1000);
-  }
+  }, inventoryRefreshSeconds * 1000);
 }
 
 // ---- 配置完整性检查 & 新手引导向导 ----
@@ -738,5 +1380,53 @@ function bindUXEvents() {
       const callout = el("accounts-guide-callout");
       if (callout) callout.classList.add("hidden");
     });
+  }
+
+  const saveCredBtn = el("btn-save-credentials");
+  if (saveCredBtn && !saveCredBtn._bound) {
+    saveCredBtn._bound = true;
+    saveCredBtn.addEventListener("click", saveCredentials);
+  }
+
+  const syncItemsBtn = el("btn-sync-items");
+  if (syncItemsBtn && !syncItemsBtn._bound) {
+    syncItemsBtn._bound = true;
+    syncItemsBtn.addEventListener("click", syncItems);
+  }
+
+  const toggleCredBtn = el("btn-toggle-credentials");
+  if (toggleCredBtn && !toggleCredBtn._bound) {
+    toggleCredBtn._bound = true;
+    toggleCredBtn.addEventListener("click", () => setCredentialsVisible(!credentialsVisible));
+  }
+
+  const testCredBtn = el("btn-test-credentials");
+  if (testCredBtn && !testCredBtn._bound) {
+    testCredBtn._bound = true;
+    testCredBtn.addEventListener("click", testCredentials);
+  }
+
+  const refreshConnectivityBtn = el("btn-refresh-platform-connectivity");
+  if (refreshConnectivityBtn && !refreshConnectivityBtn._bound) {
+    refreshConnectivityBtn._bound = true;
+    refreshConnectivityBtn.addEventListener("click", loadPlatformConnectivity);
+  }
+
+  document.querySelectorAll("[data-login-platform]").forEach((btn) => {
+    if (btn._bound) return;
+    btn._bound = true;
+    btn.addEventListener("click", () => startCredentialLogin(btn.dataset.loginPlatform));
+  });
+
+  const finishBtn = el("btn-credential-login-finish");
+  if (finishBtn && !finishBtn._bound) {
+    finishBtn._bound = true;
+    finishBtn.addEventListener("click", finishCredentialLogin);
+  }
+
+  const cancelBtn = el("btn-credential-login-cancel");
+  if (cancelBtn && !cancelBtn._bound) {
+    cancelBtn._bound = true;
+    cancelBtn.addEventListener("click", cancelCredentialLogin);
   }
 }

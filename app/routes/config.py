@@ -10,6 +10,7 @@ from app.state import (
     replace_transactions,
 )
 from app.config_loader import load_app_config_validated, save_app_config_validated
+from app.config_schema import merge as deep_merge_config
 from config import load_app_config, save_app_config, save_credentials, get_all_credentials
 from app.accounts import list_accounts, replace_all as accounts_replace_all
 router = APIRouter()
@@ -27,10 +28,7 @@ def api_get_config():
 @router.post("/api/config")
 def api_save_config(body: ConfigBody):
     current = load_app_config_validated()
-    merged = {**current, **body.config}
-    for k, v in body.config.items():
-        if isinstance(v, dict) and k in current and isinstance(current[k], dict):
-            merged[k] = {**current[k], **v}
+    merged = deep_merge_config(current, body.config or {})
     save_app_config_validated(merged)
     return {"ok": True}
 @router.post("/api/data/init")
@@ -61,6 +59,10 @@ def api_data_init():
         "proxy_pool": {
             "enabled": False,
             "strategy": 1,
+            "global_proxies": [],
+            "steam_proxies": [],
+            "buff_proxies": [],
+            "uuyp_proxies": [],
             "proxies": [],
             "webshare_api_key": "",
         },

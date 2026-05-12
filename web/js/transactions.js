@@ -3,6 +3,13 @@ let holdingsMultiSelectMode = false;
 let historyMultiSelectMode = false;
 let lastEnrichTime = 0;
 let lastEnrichData = null;
+function steamSaleNetPrice(price) {
+  const gross = Number(price) || 0;
+  if (gross <= 0) return null;
+  const steamFee = Math.max(gross * 0.05, 0.01);
+  const publisherFee = Math.max(gross * 0.10, 0.01);
+  return Math.max(0, gross - steamFee - publisherFee);
+}
 function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, multiSelectMode = false) {
   const ratio = Math.max(0.01, Math.min(1, Number(resellRatio) || 0.85));
   const rowHtmls = [];
@@ -10,6 +17,14 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
     const at = t.at ? new Date(t.at * 1000) : null;
     const timeStr = at ? `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, "0")}-${String(at.getDate()).padStart(2, "0")} ${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}:${String(at.getSeconds()).padStart(2, "0")}` : "—";
     const nameText = (t.name || "—").toString();
+    const sourceParts = [];
+    if (t.source_platform) sourceParts.push(String(t.source_platform).toUpperCase());
+    if (t.source_action_id) sourceParts.push(`#${t.source_action_id}`);
+    if (t.source_order_id) sourceParts.push(`单 ${t.source_order_id}`);
+    if (t.source_trade_offer_id) sourceParts.push(`报价 ${t.source_trade_offer_id}`);
+    const nameCell = sourceParts.length
+      ? `<div style="display:flex;flex-direction:column;gap:2px;"><span>${escapeHtml(nameText)}</span><span style="font-size:12px;color:var(--text-muted,#888);">${escapeHtml(sourceParts.join(" · "))}</span></div>`
+      : escapeHtml(nameText);
     const idx = t.idx;
     const type = t.type;
     const actHtml = isPurchase
@@ -32,7 +47,7 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
         plCell = `<td class="mono ${cls}">${diff >= 0 ? "+" : ""}${diff.toFixed(2)} (${diff >= 0 ? "+" : ""}${pct})</td>`;
       }
       const cost = Number(t.price) || 0;
-      const afterTaxVal = cur != null && cur > 0 ? cur / 1.15 : null;
+      const afterTaxVal = cur != null && cur > 0 ? steamSaleNetPrice(cur) : null;
       const afterTax = afterTaxVal != null ? afterTaxVal.toFixed(2) : "";
       const discountRatio = afterTaxVal != null && afterTaxVal > 0 && cost > 0 ? (cost / afterTaxVal).toFixed(4) : "";
       const discountRatioClass = discountRatio ? (parseFloat(discountRatio) > ratio ? "text-bad" : "text-ok") : "";
@@ -45,10 +60,10 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
       const profitCell = cashProfit ? `<td class="mono ${profitClass}">${escapeHtml(parseFloat(cashProfit) >= 0 ? "+" + cashProfit : cashProfit)}</td>` : "<td></td>";
       const selfUseCell = selfUseProfit ? `<td class="mono ${selfUseClass}">${escapeHtml(parseFloat(selfUseProfit) >= 0 ? "+" + selfUseProfit : selfUseProfit)}</td>` : "<td></td>";
       const assetidCell = `<td class="mono">${escapeHtml(t.assetid ?? "—")}</td>`;
-      rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${escapeHtml(nameText)}</td>${assetidCell}${priceCell}<td class="mono">${escapeHtml(mp)}</td><td class="mono">${escapeHtml(cmp)}</td>${afterTaxCell}${discountRatioCell}${profitCell}${selfUseCell}${plCell}<td class="tx-actions">${actHtml}</td></tr>`);
+      rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${nameCell}</td>${assetidCell}${priceCell}<td class="mono">${escapeHtml(mp)}</td><td class="mono">${escapeHtml(cmp)}</td>${afterTaxCell}${discountRatioCell}${profitCell}${selfUseCell}${plCell}<td class="tx-actions">${actHtml}</td></tr>`);
     } else {
       const assetidCell = `<td class="mono">${escapeHtml(t.assetid ?? "—")}</td>`;
-      rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${escapeHtml(nameText)}</td>${assetidCell}${priceCell}<td class="tx-actions">${actHtml}</td></tr>`);
+      rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${nameCell}</td>${assetidCell}${priceCell}<td class="tx-actions">${actHtml}</td></tr>`);
     }
   }
   tbody.innerHTML = rowHtmls.join("");
@@ -124,6 +139,14 @@ function renderPurchaseHistoryTable(tbody, list, resellRatio = 0.85, multiSelect
     const at = t.at ? new Date(t.at * 1000) : null;
     const timeStr = at ? `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, "0")}-${String(at.getDate()).padStart(2, "0")} ${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}:${String(at.getSeconds()).padStart(2, "0")}` : "—";
     const nameText = (t.name || "—").toString();
+    const sourceParts = [];
+    if (t.source_platform) sourceParts.push(String(t.source_platform).toUpperCase());
+    if (t.source_action_id) sourceParts.push(`#${t.source_action_id}`);
+    if (t.source_order_id) sourceParts.push(`单 ${t.source_order_id}`);
+    if (t.source_trade_offer_id) sourceParts.push(`报价 ${t.source_trade_offer_id}`);
+    const nameCell = sourceParts.length
+      ? `<div style="display:flex;flex-direction:column;gap:2px;"><span>${escapeHtml(nameText)}</span><span style="font-size:12px;color:var(--text-muted,#888);">${escapeHtml(sourceParts.join(" · "))}</span></div>`
+      : escapeHtml(nameText);
     const idx = t.idx;
     const checkCell = multiSelectMode ? `<td class="holding-select-cell"><input type="checkbox" class="history-checkbox" data-idx="${idx}" /></td>` : "";
     const cost = Number(t.price) || 0;
@@ -135,7 +158,7 @@ function renderPurchaseHistoryTable(tbody, list, resellRatio = 0.85, multiSelect
     const salePriceStr = sold ? Number(t.sale_price).toFixed(2) : "—";
     let discountRatioStr = "—", cashProfitStr = "—", selfUseStr = "—", discountRatioClass = "";
     if (sold) {
-      const afterTax = Number(t.sale_price) / 1.15;
+      const afterTax = steamSaleNetPrice(Number(t.sale_price)) || 0;
       discountRatioStr = afterTax > 0 && cost > 0 ? (cost / afterTax).toFixed(4) : "—";
       discountRatioClass = discountRatioStr !== "—" ? (parseFloat(discountRatioStr) > ratio ? "text-bad" : "text-ok") : "";
       const cashProfit = afterTax > 0 && cost >= 0 ? afterTax * ratio - cost : 0;
@@ -163,7 +186,7 @@ function renderPurchaseHistoryTable(tbody, list, resellRatio = 0.85, multiSelect
     const delistBtn = !multiSelectMode && t.listing ? `<button type="button" class="btn btn-sm btn-warning-outline ph-btn-delist" data-type="purchase" data-idx="${idx}">下架</button> ` : "";
     const actHtml = !multiSelectMode ? (delistBtn + `<button type="button" class="btn btn-sm btn-danger-outline ph-btn-del" data-type="purchase" data-idx="${idx}">删除</button>`) : "";
     const assetidStr = t.assetid ?? "—";
-    rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${escapeHtml(nameText)}</td><td class="mono">${escapeHtml(assetidStr)}</td><td class="mono">${escapeHtml(Number(t.price).toFixed(2))}</td><td class="mono">${escapeHtml(mp)}</td><td class="status-cell ${statusCellClass}">${escapeHtml(statusStr)}</td><td class="mono">${escapeHtml(salePriceStr)}</td><td class="mono ${discountRatioClass}">${escapeHtml(discountRatioStr)}</td><td class="mono ${cashClass}">${escapeHtml(cashProfitStr)}</td><td class="mono ${selfUseClass}">${escapeHtml(selfUseStr)}</td>${deviationCell}<td class="tx-actions">${actHtml}</td></tr>`);
+    rowHtmls.push(`<tr>${checkCell}<td class="mono">${escapeHtml(timeStr)}</td><td>${nameCell}</td><td class="mono">${escapeHtml(assetidStr)}</td><td class="mono">${escapeHtml(Number(t.price).toFixed(2))}</td><td class="mono">${escapeHtml(mp)}</td><td class="status-cell ${statusCellClass}">${escapeHtml(statusStr)}</td><td class="mono">${escapeHtml(salePriceStr)}</td><td class="mono ${discountRatioClass}">${escapeHtml(discountRatioStr)}</td><td class="mono ${cashClass}">${escapeHtml(cashProfitStr)}</td><td class="mono ${selfUseClass}">${escapeHtml(selfUseStr)}</td>${deviationCell}<td class="tx-actions">${actHtml}</td></tr>`);
   }
   tbody.innerHTML = rowHtmls.join("");
   tbody.querySelectorAll(".ph-btn-delist").forEach(btn => {
@@ -220,11 +243,11 @@ function applyTransactionsToUI(all, summaryEl, tbodyP, tbodyS, tbodyHistory, res
     const totalPrice = purchases.reduce((s, t) => s + (Number(t.price) || 0), 0);
     const totalMp = purchases.reduce((s, t) => s + (t.market_price != null ? Number(t.market_price) : 0), 0);
     const totalSalePrice = purchases.reduce((s, t) => s + (t.sale_price != null && Number(t.sale_price) > 0 ? Number(t.sale_price) : 0), 0);
-    const totalAfterTax = totalSalePrice > 0 ? totalSalePrice / 1.15 : null;
+    const totalAfterTax = totalSalePrice > 0 ? steamSaleNetPrice(totalSalePrice) : null;
     const soldItems = purchases.filter((t) => t.sale_price != null && Number(t.sale_price) > 0);
     let ratioSum = 0, ratioCount = 0, totalCashProfit = 0, totalSelfUseProfit = 0;
     soldItems.forEach((t) => {
-      const afterTax = Number(t.sale_price) / 1.15;
+      const afterTax = steamSaleNetPrice(Number(t.sale_price)) || 0;
       const cost = Number(t.price) || 0;
       if (afterTax > 0 && cost > 0) { ratioSum += cost / afterTax; ratioCount += 1; }
       totalCashProfit += afterTax * ratio - cost;
@@ -270,13 +293,13 @@ function applyTransactionsToUI(all, summaryEl, tbodyP, tbodyS, tbodyHistory, res
     const plClass = totalPl != null && totalPl > 0 ? "text-ok" : totalPl != null && totalPl < 0 ? "text-bad" : "";
     const cmpStr = totalCmp != null ? totalCmp.toFixed(2) : "—";
     const plStr = totalPl != null ? `${totalPl >= 0 ? "+" : ""}${totalPl.toFixed(2)} (${totalPl >= 0 ? "+" : ""}${totalPlPct})` : "—";
-    const totalAfterTax = totalCmp != null && totalCmp > 0 ? totalCmp / 1.15 : null;
+    const totalAfterTax = totalCmp != null && totalCmp > 0 ? steamSaleNetPrice(totalCmp) : null;
     const afterTaxStr = totalAfterTax != null ? totalAfterTax.toFixed(2) : "—";
     let ratioSum = 0, ratioCount = 0, totalCashProfit = 0, totalSelfUseProfit = 0;
     holdings.forEach((t) => {
       const cmp = t.current_market_price != null ? Number(t.current_market_price) : null;
       if (cmp == null || cmp <= 0) return;
-      const afterTax = cmp / 1.15;
+      const afterTax = steamSaleNetPrice(cmp) || 0;
       const cost = Number(t.price) || 0;
       if (afterTax > 0 && cost > 0) { ratioSum += cost / afterTax; ratioCount += 1; }
       totalCashProfit += afterTax * ratio - cost;

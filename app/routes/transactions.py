@@ -22,6 +22,7 @@ from app.config_loader import (
     load_app_config_validated,
 )
 from app.shared_market import get_steam_smart_price_cny, batch_fetch_prices
+from DataEngine.profit_model import steam_sale_net_price
 router = APIRouter()
 class AddPurchaseBody(BaseModel):
     name: str = ""
@@ -131,6 +132,9 @@ def api_transactions(enrich_current_price: bool = False):
             row["listing"] = bool(p.get("listing"))
         if p.get("listing_status") is not None:
             row["listing_status"] = p.get("listing_status")
+        for key in ("source_platform", "source_action_id", "source_order_id", "source_trade_offer_id", "source_fill_index"):
+            if p.get(key) is not None:
+                row[key] = p.get(key)
         out.append(row)
     for i, s in enumerate(sales):
         row = {"type": "sale", "idx": i, "name": s.get("name", ""), "goods_id": s.get("goods_id", ""), "price": float(s.get("price", 0)), "at": s.get("at", 0), "assetid": s.get("assetid") or ""}
@@ -211,7 +215,7 @@ def api_stats():
         sp = p.get("sale_price")
         if sp is None or float(sp or 0) <= 0:
             continue
-        after_tax = float(sp) / 1.15
+        after_tax = steam_sale_net_price(float(sp))
         cost = float(p.get("price", 0))
         total_profit += after_tax - cost
         if after_tax > 0 and cost > 0:

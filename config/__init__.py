@@ -58,7 +58,7 @@ def _steam_id_from_cookies(cookies: str) -> Optional[str]:
             if val.isdigit():
                 return val
     return None
-def update_steam_credentials(cookies: str, session_id: str, steam_id: str = None) -> None:
+def update_steam_credentials(cookies: str, session_id: str, steam_id: str = None, trade_link: str = None) -> None:
     global _cache
     data = _load().copy()
     steam = dict(data.get("steam", {}))
@@ -67,6 +67,8 @@ def update_steam_credentials(cookies: str, session_id: str, steam_id: str = None
     sid = steam_id or _steam_id_from_cookies(cookies)
     if sid:
         steam["steam_id"] = sid
+    if trade_link:
+        steam["trade_link"] = str(trade_link).strip()
     data["steam"] = steam
     with open(_CREDENTIALS_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)

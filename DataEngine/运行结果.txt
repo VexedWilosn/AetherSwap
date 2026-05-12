@@ -1,0 +1,232 @@
+(.venv) I:\cs>python DataEngine\main_engine.py      
+2026-05-04 19:47:33,310 - INFO - 主引擎启动
+2026-05-04 19:47:33,312 - INFO - 数据库检查完成 | path=I:\cs\DataEngine\market_data.db
+2026-05-04 19:47:33,334 - INFO - 加载目标饰品完成 | total=3 buff=3 uuyp=3 eco=3 | 耗时 0.02s
+2026-05-04 19:47:33,334 - WARNING - ⚠️ 找不到本地 Token 文件，触发首次采蜜...
+2026-05-04 19:47:33,334 - INFO - 🔧 采蜜机启动：正在打开浏览器获取最新 UUYP Token...
+2026-05-04 19:47:34,265 - INFO - ⏳ 正在等待网页执行 JS，筛选包含签名 (uk) 的请求...
+2026-05-04 19:47:34,388 - INFO - ✅ 采蜜成功！最新的 uk 令牌已保存。值: 5HtWTcHVyN...
+2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0
+, 'volume': 0}
+2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2,2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0volume': 91}
+2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0volume': 91}
+, 'volume': 0}
+2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0026-05-04 19:47:36,563 - INFO - ✅ [eco] SSG 08 | Halftone Whorl (Minimal Wear) | {'item_id': 6329, 'platform_name': 'eco', 'sell_min': 2.31, 'sell_top5_avg': 2.31, 'buy_max': 0, 'buy_top5_, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2,2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2,2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0volume': 91}
+, 'volume': 0}
+2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0026-05-04 19:47:36,563 - INFO - ✅ [eco] SSG 08 | Halftone Whorl (Minimal Wear) | {'item_id': 6329, 'platform_name': 'eco', 'sell_min': 2.31, 'sell_top5_avg': 2.31, 'buy_max': 0, 'buy_top5_, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2,2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0'buy_top5_avg': 1.6, 'volume': 91}
+, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2,2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0026-05-04 19:47:36,587 - INFO - ✅ [eco] Prisma 2 Case | {'item_id': 5762, 'platform_name': 'eco', 'sell_min': 11.5, 'sell_top5_avg': 11.5, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 0}    
+, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2, 026-05-04 19:47:36,568 - INFO - ✅ [buff] SSG 08 | Halftone Whorl (Minimal Wear)(968235) | {'item_id': 6329, 'platform_name': 'buff', 'sell_min': 2.15, 'sell_top5_avg': 2.18, 'buy_max': 2.02026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0g': 0, 'volume': 0}
+, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2, p5_avg': 0.94, 'volume': 91}
+'volume': 91}
+2026-05-04 19:47:36,563 - INFO - ✅ [eco] SSG 08 | Halftone Whorl (Minimal Wear) | {'item_id': 6329, 'platform_name': 'eco', 'sell_min': 2.31, 'sell_top5_avg': 2.31, 'buy_max': 0, 'buy_top5_a
+vg': 0, 'volume': 0}
+2026-05-04 19:47:36,567 - INFO - ✅ [uuyp] 109840 | {'item_id': 6329, 'platform_name': 'uuyp', 'sell_min': 2.39, 'sell_top5_avg': 2.56, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,568 - INFO - ✅ [buff] SSG 08 | Halftone Whorl (Minimal Wear)(968235) | {'item_id': 6329, 'platform_name': 'buff', 'sell_min': 2.15, 'sell_top5_avg': 2.18, 'buy_max': 2.0,026-05-04 19:47:36,660 - INFO - 抓取完成 | buff=3 uuyp=3 eco=3 | 总耗时 3.33s
+ 'buy_top5_avg': 1.6, 'volume': 91}
+2026-05-04 19:47:36,587 - INFO - ✅ [eco] Prisma 2 Case | {'item_id': 5762, 'platform_name': 'eco', 'sell_min': 11.5, 'sell_top5_avg': 11.5, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 0}     .venv) I:\cs>
+2026-05-04 19:47:36,660 - INFO - ✅ [buff] MP9 | Orange Peel (Minimal Wear)(35674) | {'item_id': 4256, 'platform_name': 'buff', 'sell_min': 1.43, 'sell_top5_avg': 1.45, 'buy_max': 1.3, 'buy_t
+op5_avg': 0.94, 'volume': 91}
+2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0.venv) I:\cs>
+, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2, 
+'volume': 91}
+2026-05-04 19:47:36,563 - INFO - ✅ [eco] SSG 08 | Halftone Whorl (Minimal Wear) | {'item_id': 6329, 'platform_name': 'eco', 'sell_min': 2.31, 'sell_top5_avg': 2.31, 'buy_max': 0, 'buy_top5_a
+vg': 0, 'volume': 0}
+2026-05-04 19:47:36,567 - INFO - ✅ [uuyp] 109840 | {'item_id': 6329, 'platform_name': 'uuyp', 'sell_min': 2.39, 'sell_top5_avg': 2.56, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,568 - INFO - ✅ [buff] SSG 08 | Halftone Whorl (Minimal Wear)(968235) | {'item_id': 6329, 'platform_name': 'buff', 'sell_min': 2.15, 'sell_top5_avg': 2.18, 'buy_max': 2.0,
+ 'buy_top5_avg': 1.6, 'volume': 91}
+2026-05-04 19:47:36,587 - INFO - ✅ [eco] Prisma 2 Case | {'item_id': 5762, 'platform_name': 'eco', 'sell_min': 11.5, 'sell_top5_avg': 11.5, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 0}    2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0p5_avg': 0.94, 'volume': 91}
+, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2, 
+'volume': 91}
+2026-05-04 19:47:36,563 - INFO - ✅ [eco] SSG 08 | Halftone Whorl (Minimal Wear) | {'item_id': 6329, 'platform_name': 'eco', 'sell_min': 2.31, 'sell_top5_avg': 2.31, 'buy_max': 0, 'buy_top5_a
+vg': 0, 'volume': 0}
+2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0'buy_top5_avg': 1.6, 'volume': 91}
+, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2, 026-05-04 19:47:36,660 - INFO - ✅ [buff] MP9 | Orange Peel (Minimal Wear)(35674) | {'item_id': 4256, 'platform_name': 'buff', 'sell_min': 1.43, 'sell_top5_avg': 1.45, 'buy_max': 1.3, 'buy_'volume': 91}
+2026-05-04 19:47:36,563 - INFO - ✅ [eco] SSG 08 | Halftone Whorl (Minimal Wear) | {'item_id': 6329, 'platform_name': 'eco', 'sell_min': 2.31, 'sell_top5_avg': 2.31, 'buy_max': 0, 'buy_top5_a026-05-04 19:47:36,660 - INFO - 抓取完成 | buff=3 uuyp=3 eco=3 | 总耗时 3.33s
+vg': 0, 'volume': 0}
+2026-05-04 19:47:36,567 - INFO - ✅ [uuyp] 109840 | {'item_id': 6329, 'platform_name': 'uuyp', 'sell_min': 2.39, 'sell_top5_avg': 2.56, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,568 - INFO - ✅ [buff] SSG 08 | Halftone Whorl (Minimal Wear)(968235) | {'item_id': 6329, 'platform_name': 'buff', 'sell_min': 2.15, 'sell_top5_avg': 2.18, 'buy_max': 2.0,
+ 'buy_top5_avg': 1.6, 'volume': 91}
+2026-05-04 19:47:36,587 - INFO - ✅ [eco] Prisma 2 Case | {'item_id': 5762, 'platform_name': 'eco', 'sell_min': 11.5, 'sell_top5_avg': 11.5, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 0}     
+2026-05-04 19:47:36,660 - INFO - ✅ [buff] MP9 | Orange Peel (Minimal Wear)(35674) | {'item_id': 4256, 'platform_name': 'buff', 'sell_min': 1.43, 'sell_top5_avg': 1.45, 'buy_max': 1.3, 'buy_2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0026-05-04 19:47:36,674 - INFO - 入库完成 | count=9 | 耗时 0.01s
+, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2, 
+'volume': 91}
+2026-05-04 19:47:36,563 - INFO - ✅ [eco] SSG 08 | Halftone Whorl (Minimal Wear) | {'item_id': 6329, 'platform_name': 'eco', 'sell_min': 2.31, 'sell_top5_avg': 2.31, 'buy_max': 0, 'buy_top5_a
+vg': 0, 'volume': 0}
+2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0'buy_top5_avg': 1.6, 'volume': 91}
+, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2, 026-05-04 19:47:36,660 - INFO - ✅ [buff] MP9 | Orange Peel (Minimal Wear)(35674) | {'item_id': 4256, 'platform_name': 'buff', 'sell_min': 1.43, 'sell_top5_avg': 1.45, 'buy_max': 1.3, 'buy_'volume': 91}
+2026-05-04 19:47:36,563 - INFO - ✅ [eco] SSG 08 | Halftone Whorl (Minimal Wear) | {'item_id': 6329, 'platform_name': 'eco', 'sell_min': 2.31, 'sell_top5_avg': 2.31, 'buy_max': 0, 'buy_top5_a026-05-04 19:47:36,660 - INFO - 抓取完成 | buff=3 uuyp=3 eco=3 | 总耗时 3.33s
+2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0
+, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2, 
+'volume': 91}
+2026-05-04 19:47:36,563 - INFO - ✅ [eco] SSG 08 | Halftone Whorl (Minimal Wear) | {'item_id': 6329, 'platform_name': 'eco', 'sell_min': 2.31, 'sell_top5_avg': 2.31, 'buy_max': 0, 'buy_top5_2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0026-05-04 19:47:36,568 - INFO - ✅ [buff] SSG 08 | Halftone Whorl (Minimal Wear)(968235) | {'item_id': 6329, 'platform_name': 'buff', 'sell_min': 2.15, 'sell_top5_avg': 2.18, 'buy_max': 2.0, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2, 026-05-04 19:47:36,587 - INFO - ✅ [eco] Prisma 2 Case | {'item_id': 5762, 'platform_name': 'eco', 'sell_min': 11.5, 'sell_top5_avg': 11.5, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 0}    
+'volume': 91}
+2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0026-05-04 19:47:36,567 - INFO - ✅ [uuyp] 109840 | {'item_id': 6329, 'platform_name': 'uuyp', 'sell_min': 2.39, 'sell_top5_avg': 2.56, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2, 'buy_top5_avg': 1.6, 'volume': 91}
+'volume': 91}
+2026-05-04 19:47:36,563 - INFO - ✅ [eco] SSG 08 | Halftone Whorl (Minimal Wear) | {'item_id': 6329, 'platform_name': 'eco', 'sell_min': 2.31, 'sell_top5_avg': 2.31, 'buy_max': 0, 'buy_top5_2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0026-05-04 19:47:36,568 - INFO - ✅ [buff] SSG 08 | Halftone Whorl (Minimal Wear)(968235) | {'item_id': 6329, 'platform_name': 'buff', 'sell_min': 2.15, 'sell_top5_avg': 2.18, 'buy_max': 2.0, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2, 026-05-04 19:47:36,587 - INFO - ✅ [eco] Prisma 2 Case | {'item_id': 5762, 'platform_name': 'eco', 'sell_min': 11.5, 'sell_top5_avg': 11.5, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 0}    
+'volume': 91}
+2026-05-04 19:47:36,563 - INFO - ✅ [eco] SSG 08 | Halftone Whorl (Minimal Wear) | {'item_id': 6329, 'platform_name': 'eco', 'sell_min': 2.31, 'sell_top5_avg': 2.31, 'buy_max': 0, 'buy_top5_2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0026-05-04 19:47:36,568 - INFO - ✅ [buff] SSG 08 | Halftone Whorl (Minimal Wear)(968235) | {'item_id': 6329, 'platform_name': 'buff', 'sell_min': 2.15, 'sell_top5_avg': 2.18, 'buy_max': 2.0, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2, 026-05-04 19:47:36,587 - INFO - ✅ [eco] Prisma 2 Case | {'item_id': 5762, 'platform_name': 'eco', 'sell_min': 11.5, 'sell_top5_avg': 11.5, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 0}    
+'volume': 91}
+2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0026-05-04 19:47:36,567 - INFO - ✅ [uuyp] 109840 | {'item_id': 6329, 'platform_name': 'uuyp', 'sell_min': 2.39, 'sell_top5_avg': 2.56, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2, 'buy_top5_avg': 1.6, 'volume': 91}
+2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0g': 0, 'volume': 0}
+, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2,2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0
+, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2,2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0026-05-04 19:47:36,587 - INFO - ✅ [eco] Prisma 2 Case | {'item_id': 5762, 'platform_name': 'eco', 'sell_min': 11.5, 'sell_top5_avg': 11.5, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 0}    
+, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2,2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0026-05-04 19:47:36,587 - INFO - ✅ [eco] Prisma 2 Case | {'item_id': 5762, 'platform_name': 'eco', 'sell_min': 11.5, 'sell_top5_avg': 11.5, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 0}    
+, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2,2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0026-05-04 19:47:36,587 - INFO - ✅ [eco] Prisma 2 Case | {'item_id': 5762, 'platform_name': 'eco', 'sell_min': 11.5, 'sell_top5_avg': 11.5, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 0}    
+, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2, 026-05-04 19:47:36,568 - INFO - ✅ [buff] SSG 08 | Halftone Whorl (Minimal Wear)(968235) | {'item_id': 6329, 'platform_name': 'buff', 'sell_min': 2.15, 'sell_top5_avg': 2.18, 'buy_max': 2.0'volume': 91}
+2026-05-04 19:47:36,563 - INFO - ✅ [eco] SSG 08 | Halftone Whorl (Minimal Wear) | {'item_id': 6329, 'platform_name': 'eco', 'sell_min': 2.31, 'sell_top5_avg': 2.31, 'buy_max': 0, 'buy_top5_2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0026-05-04 19:47:36,568 - INFO - ✅ [buff] SSG 08 | Halftone Whorl (Minimal Wear)(968235) | {'item_id': 6329, 'platform_name': 'buff', 'sell_min': 2.15, 'sell_top5_avg': 2.18, 'buy_max': 2.0, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2, 026-05-04 19:47:36,587 - INFO - ✅ [eco] Prisma 2 Case | {'item_id': 5762, 'platform_name': 'eco', 'sell_min': 11.5, 'sell_top5_avg': 11.5, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 0}    
+'volume': 91}
+2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0026-05-04 19:47:36,567 - INFO - ✅ [uuyp] 109840 | {'item_id': 6329, 'platform_name': 'uuyp', 'sell_min': 2.39, 'sell_top5_avg': 2.56, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2,2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0026-05-04 19:47:36,660 - INFO - ✅ [buff] MP9 | Orange Peel (Minimal Wear)(35674) | {'item_id': 4256, 'platform_name': 'buff', 'sell_min': 1.43, 'sell_top5_avg': 1.45, 'buy_max': 1.3, 'buy_, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2, 026-05-04 19:47:36,568 - INFO - ✅ [buff] SSG 08 | Halftone Whorl (Minimal Wear)(968235) | {'item_id': 6329, 'platform_name': 'buff', 'sell_min': 2.15, 'sell_top5_avg': 2.18, 'buy_max': 2.0'volume': 91}
+2026-05-04 19:47:36,563 - INFO - ✅ [eco] SSG 08 | Halftone Whorl (Minimal Wear) | {'item_id': 6329, 'platform_name': 'eco', 'sell_min': 2.31, 'sell_top5_avg': 2.31, 'buy_max': 0, 'buy_top5_a026-05-04 19:47:36,587 - INFO - ✅ [eco] Prisma 2 Case | {'item_id': 5762, 'platform_name': 'eco', 'sell_min': 11.5, 'sell_top5_avg': 11.5, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 0}    
+2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0p5_avg': 0.94, 'volume': 91}
+, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2, 
+'volume': 91}
+2026-05-04 19:47:36,563 - INFO - ✅ [eco] SSG 08 | Halftone Whorl (Minimal Wear) | {'item_id': 6329, 'platform_name': 'eco', 'sell_min': 2.31, 'sell_top5_avg': 2.31, 'buy_max': 0, 'buy_top5_2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0026-05-04 19:47:36,568 - INFO - ✅ [buff] SSG 08 | Halftone Whorl (Minimal Wear)(968235) | {'item_id': 6329, 'platform_name': 'buff', 'sell_min': 2.15, 'sell_top5_avg': 2.18, 'buy_max': 2.0, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2, 026-05-04 19:47:36,587 - INFO - ✅ [eco] Prisma 2 Case | {'item_id': 5762, 'platform_name': 'eco', 'sell_min': 11.5, 'sell_top5_avg': 11.5, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 0}    
+'volume': 91}
+2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0026-05-04 19:47:36,567 - INFO - ✅ [uuyp] 109840 | {'item_id': 6329, 'platform_name': 'uuyp', 'sell_min': 2.39, 'sell_top5_avg': 2.56, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2, 'buy_top5_avg': 1.6, 'volume': 91}
+2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0g': 0, 'volume': 0}
+, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2,2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0
+, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2,2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0026-05-04 19:47:36,587 - INFO - ✅ [eco] Prisma 2 Case | {'item_id': 5762, 'platform_name': 'eco', 'sell_min': 11.5, 'sell_top5_avg': 11.5, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 0}    
+, 'volume': 0}
+2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0026-05-04 19:47:36,563 - INFO - ✅ [eco] SSG 08 | Halftone Whorl (Minimal Wear) | {'item_id': 6329, 'platform_name': 'eco', 'sell_min': 2.31, 'sell_top5_avg': 2.31, 'buy_max': 0, 'buy_top5_2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0volume': 91}
+2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2,, 'volume': 0}
+2026-05-04 19:47:36,491 - INFO - ✅ [uuyp] 5472 | {'item_id': 4256, 'platform_name': 'uuyp', 'sell_min': 1.45, 'sell_top5_avg': 1.47, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,506 - INFO - ✅ [uuyp] 8 | {'item_id': 5762, 'platform_name': 'uuyp', 'sell_min': 11.15, 'sell_top5_avg': 11.15, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 100}
+2026-05-04 19:47:36,519 - INFO - ✅ [eco] MP9 | Orange Peel (Minimal Wear) | {'item_id': 4256, 'platform_name': 'eco', 'sell_min': 1.22, 'sell_top5_avg': 1.22, 'buy_max': 0, 'buy_top5_avg': 0026-05-04 19:47:36,563 - INFO - ✅ [eco] SSG 08 | Halftone Whorl (Minimal Wear) | {'item_id': 6329, 'platform_name': 'eco', 'sell_min': 2.31, 'sell_top5_avg': 2.31, 'buy_max': 0, 'buy_top5_, 'volume': 0}
+2026-05-04 19:47:36,560 - INFO - ✅ [buff] Prisma 2 Case(779175) | {'item_id': 5762, 'platform_name': 'buff', 'sell_min': 11.4, 'sell_top5_avg': 11.46, 'buy_max': 11.4, 'buy_top5_avg': 11.2, 026-05-04 19:47:36,567 - INFO - ✅ [uuyp] 109840 | {'item_id': 6329, 'platform_name': 'uuyp', 'sell_min': 2.39, 'sell_top5_avg': 2.56, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+'volume': 91}
+2026-05-04 19:47:36,563 - INFO - ✅ [eco] SSG 08 | Halftone Whorl (Minimal Wear) | {'item_id': 6329, 'platform_name': 'eco', 'sell_min': 2.31, 'sell_top5_avg': 2.31, 'buy_max': 0, 'buy_top5_a'buy_top5_avg': 1.6, 'volume': 91}
+vg': 0, 'volume': 0}
+2026-05-04 19:47:36,567 - INFO - ✅ [uuyp] 109840 | {'item_id': 6329, 'platform_name': 'uuyp', 'sell_min': 2.39, 'sell_top5_avg': 2.56, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 10}
+2026-05-04 19:47:36,568 - INFO - ✅ [buff] SSG 08 | Halftone Whorl (Minimal Wear)(968235) | {'item_id': 6329, 'platform_name': 'buff', 'sell_min': 2.15, 'sell_top5_avg': 2.18, 'buy_max': 2.0,026-05-04 19:47:36,660 - INFO - 抓取完成 | buff=3 uuyp=3 eco=3 | 总耗时 3.33s
+ 'buy_top5_avg': 1.6, 'volume': 91}
+2026-05-04 19:47:36,587 - INFO - ✅ [eco] Prisma 2 Case | {'item_id': 5762, 'platform_name': 'eco', 'sell_min': 11.5, 'sell_top5_avg': 11.5, 'buy_max': 0, 'buy_top5_avg': 0, 'volume': 0}     026-05-04 19:47:36,674 - INFO - 入库完成 | count=9 | 耗时 0.01s
+2026-05-04 19:47:36,660 - INFO - ✅ [buff] MP9 | Orange Peel (Minimal Wear)(35674) | {'item_id': 4256, 'platform_name': 'buff', 'sell_min': 1.43, 'sell_top5_avg': 1.45, 'buy_max': 1.3, 'buy_t.venv) I:\cs>
+op5_avg': 0.94, 'volume': 91}
+2026-05-04 19:47:36,660 - INFO - 抓取完成 | buff=3 uuyp=3 eco=3 | 总耗时 3.33s
+2026-05-04 19:47:36,674 - INFO - 入库完成 | count=9 | 耗时 0.01s

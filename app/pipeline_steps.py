@@ -6,16 +6,23 @@ from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from app.purchase_limit import calculate_safe_purchase_limit
-from app.services.iflow_client import fetch_iflow_rows as _fetch_iflow_rows
 from app.state import get_purchases, set_status
 from app.services.steam_client import SteamClient
 from app.services.analysis_client import StabilityAnalyzer
 from app.services.buff_client import count_lowest_price_orders, first_order_at_price
 from app.notify import send_pushplus, build_payment_notify_content, wait_email_command
+from DataEngine.profit_model import steam_sale_net_price
 from utils.delay import jittered_sleep
 from buff.buyer import BuffAuthExpired
 
-STEAM_FEE_FACTOR = 1.15  # Steam take rate for calculating net proceeds
+STEAM_FEE_FACTOR = 1.15  # Historical high-price Steam fee approximation.
+
+
+def _steam_balance_discount_ratio(cash_price: float, steam_gross_price: float) -> Optional[float]:
+    after_tax = steam_sale_net_price(steam_gross_price)
+    if cash_price <= 0 or after_tax <= 0:
+        return None
+    return cash_price / after_tax
 
 def _fetch_steam_sell_data(market_hash_name: str, config: dict, app_id: int = 730) -> Optional[Dict[str, Any]]:
     from app.config_loader import get_steam_credentials
@@ -57,7 +64,7 @@ def _check_buff_price(
     config: dict,
     log_fn,
 ):
-    # 拉取 Buff 实时最低价，和 iflow 价格对比确认没有跳动
+    # 拉取 Buff 实时最低价，和参考价格对比确认没有跳动
     # 成功返回 (True, 最新价格)，失败返回 (False, None)
     # 注意：BuffAuthExpired 要直接往上抛，不能在这里吃掉
     buff_cfg = config.get("buff", {})
@@ -75,7 +82,7 @@ def _check_buff_price(
         return False, None
     if plan_price is not None and lowest_price - plan_price > tolerance:
         if log_fn:
-            log_fn(f"[Buff]   → 预检未通过: Buff 最低价 {lowest_price:.2f} 较 iflow 参考价 {plan_price:.2f} 超出容忍 (差{lowest_price - plan_price:.2f})", "warn")
+            log_fn(f"[Buff]   → 预检未通过: Buff 最低价 {lowest_price:.2f} 较参考价 {plan_price:.2f} 超出容忍 (差{lowest_price - plan_price:.2f})", "warn")
         return False, None
     item["_buff_lowest_price"] = lowest_price
     item["_buff_sell_orders"] = orders
@@ -210,7 +217,7 @@ def _goods_id_from_buff_url(url: str) -> int:
     return int(m.group(1)) if m else 0
 
 
-_RATIO_ATTR = {"sell": "sell_ratio", "buy": "buy_ratio"}
+_RATIO_ATTR = {"sell": "sell_ratio", "buy": "buy_ratio", "safe_buy": "safe_buy_ratio", "median_sale": "recent_ratio"}
 
 
 def _log_stability_rejection(
@@ -237,18 +244,17 @@ def _log_stability_rejection(
     log_fn(f"[稳定性]   → 拒绝: {msg} status={st} cv={cv:.3f} R2={r2:.3f} 均价={avg:.2f} slope={slope:.4f}{ma_str}{bb_str}{smart_str}{pp_str}", "warn")
 
 
-def filter_iflow_rows(
+def filter_market_rows(
     rows: List[Any],
     config: dict,
     log_fn: Optional[Callable[[str, str], None]] = None,
 ) -> List[Dict[str, Any]]:
     pipeline_cfg = config.get("pipeline", {})
-    iflow_cfg = config.get("steamdt") or config.get("iflow", {})
     exclude = pipeline_cfg.get("exclude_keywords", [])
-    top_n = int(pipeline_cfg.get("iflow_top_n", 0) or 0)
+    top_n = int(pipeline_cfg.get("market_top_n", 0) or 0)
     if top_n > 0:
         rows = rows[:top_n]
-    sort_by = (iflow_cfg.get("sort_by") or "sell").strip()
+    sort_by = (pipeline_cfg.get("sort_by") or "sell").strip()
     ratio_attr = _RATIO_ATTR.get(sort_by, "sell_ratio")
     steam_client = SteamClient()
     filtered = []
@@ -257,8 +263,7 @@ def filter_iflow_rows(
     skipped_no_buff = 0
     for r in rows:
         name = (getattr(r, "name", None) or "").lower()
-        name_cn = (getattr(r, "name_cn", None) or "").lower()
-        if any(kw in name or kw in name_cn for kw in exclude):
+        if any(kw in name for kw in exclude):
             skipped_keyword += 1
             continue
         try:
@@ -384,9 +389,6 @@ def pick_stable_item(
             jittered_sleep(request_interval)
         name = item.get("name", "")
         market_hash_name = item.get("steam_market_name") or name
-        # 带饰品名称前缀的日志包装，方便追踪每条日志对应哪个饰品
-        _short = (name[:30] + "…") if len(name) > 30 else name
-        item_log = (lambda msg, level, _n=_short: log_fn(f"[{_n}] {msg}", level)) if log_fn else None
         next_name = filtered[i + 1].get("name", "") if i + 1 < n else ""
         set_status("running", step="STABILITY_CHECK", progress_total=n, progress_done=i, progress_item=f"({i+1}/{n}) {name}", next_progress_item=f"({i+2}/{n}) {next_name}" if next_name else "")
         pipeline_cfg = config.get("pipeline", {})
@@ -407,7 +409,7 @@ def pick_stable_item(
             # 1. Buff 价格预检
             if buff_client:
                 buff_ok, plan_price = _check_buff_price(
-                    item, gid, plan_price, buff_client, config, item_log
+                    item, gid, plan_price, buff_client, config, log_fn
                 )
                 if not buff_ok:
                     if gid:
@@ -417,8 +419,8 @@ def pick_stable_item(
             # 2. 拉取 Steam 挂单数据
             steam_sell_data = _fetch_steam_sell_data(market_hash_name, config, app_id=730)
             if not steam_sell_data:
-                if item_log:
-                    item_log("[稳定性] 预检未通过: 无法获取 Steam 卖单信息（可能是网络问题或限流）", "warn")
+                if log_fn:
+                    log_fn("[稳定性]   → 预检未通过: 无法获取 Steam 卖单信息（可能是网络问题或限流）", "warn")
                 if gid:
                     stability_failed.add(gid)
                 if failure_delay > 0:
@@ -427,7 +429,7 @@ def pick_stable_item(
 
             # 3. 卖压检测
             if not _check_sell_pressure_precheck(
-                item, steam_sell_data, sell_pressure_threshold, pipeline_cfg, item_log
+                item, steam_sell_data, sell_pressure_threshold, pipeline_cfg, log_fn
             ):
                 if gid:
                     stability_failed.add(gid)
@@ -441,11 +443,11 @@ def pick_stable_item(
                 ref_price_est = _adjust_ref_price_for_daily_high(
                     market_hash_name, smart_price, config, log_fn, app_id=730
                 )
-                est_ratio = (plan_price / ref_price_est) * STEAM_FEE_FACTOR
+                est_ratio = _steam_balance_discount_ratio(plan_price, ref_price_est)
 
             # 5. 最高折扣检测
             if not _check_max_discount_precheck(
-                item, gid, smart_price, est_ratio, ref_price_est, plan_price, max_discount, item_log
+                item, gid, smart_price, est_ratio, ref_price_est, plan_price, max_discount, log_fn
             ):
                 if gid:
                     stability_failed.add(gid)
@@ -454,8 +456,8 @@ def pick_stable_item(
                 continue
 
         # 6. 拉历史K线 + 稳定性分析
-        if item_log:
-            item_log("[稳定性] 拉取历史价格…", "info")
+        if log_fn:
+            log_fn("[稳定性]   → 拉取历史价格…", "info")
         raw = steam_client.fetch_history(market_hash_name, return_currency=True)
         if raw and isinstance(raw, dict):
             history = raw.get("history")
@@ -466,8 +468,8 @@ def pick_stable_item(
         if not history:
             if gid:
                 stability_failed.add(gid)
-            if item_log:
-                item_log("[稳定性] 无历史数据或请求失败，试下一个", "warn")
+            if log_fn:
+                log_fn("[稳定性]   → 无历史数据或请求失败，试下一个", "warn")
             if failure_delay > 0:
                 jittered_sleep(failure_delay)
             continue
@@ -481,12 +483,12 @@ def pick_stable_item(
             high_ratio = max_discount_float - (huge_offset / 2.0)
             if est_ratio < huge_ratio:
                 dyn_price_percentile_ceil = 0.88
-                if item_log:
-                    item_log(f"[稳定性] 检测到巨额预期利润 (比例={est_ratio:.4f} < {huge_ratio:.4f})，放宽价格分位点限制至 {dyn_price_percentile_ceil}", "info")
+                if log_fn:
+                    log_fn(f"[稳定性]   → 检测到巨额预期利润 (比例={est_ratio:.4f} < {huge_ratio:.4f})，放宽价格分位点限制至 {dyn_price_percentile_ceil}", "info")
             elif est_ratio < high_ratio:
                 dyn_price_percentile_ceil = max(dyn_price_percentile_ceil, 0.85)
-                if item_log:
-                    item_log(f"[稳定性] 检测到极高预期利润 (比例={est_ratio:.4f} < {high_ratio:.4f})，放宽价格分位点限制至 {dyn_price_percentile_ceil}", "info")
+                if log_fn:
+                    log_fn(f"[稳定性]   → 检测到极高预期利润 (比例={est_ratio:.4f} < {high_ratio:.4f})，放宽价格分位点限制至 {dyn_price_percentile_ceil}", "info")
 
         report = analyzer.analyze(
             history,
@@ -508,14 +510,14 @@ def pick_stable_item(
         if smart_price is not None and not report.get("valid"):
             if gid:
                 stability_failed.add(gid)
-            if item_log:
-                item_log(f"[稳定性] 分析异常: {report.get('msg', '无效')}，试下一个", "warn")
+            if log_fn:
+                log_fn(f"[稳定性]   → 分析异常: {report.get('msg', '无效')}，试下一个", "warn")
             if failure_delay > 0:
                 jittered_sleep(failure_delay)
             continue
 
         if not report.get("is_stable"):
-            _log_stability_rejection(report, stability_cfg, smart_price, item_log)
+            _log_stability_rejection(report, stability_cfg, smart_price, log_fn)
             if gid:
                 stability_failed.add(gid)
             if failure_delay > 0:
@@ -525,7 +527,7 @@ def pick_stable_item(
             steam_sell_data = _fetch_steam_sell_data(market_hash_name, config, app_id=730)
             smart_price = steam_sell_data.get("smart_price") if steam_sell_data else None
         item["_steam_sell_data"] = steam_sell_data
-        if item_log:
+        if log_fn:
             st = report.get("status", "")
             sl = report.get("slope", 0)
             r2 = report.get("r_squared", 0)
@@ -535,7 +537,7 @@ def pick_stable_item(
             ma_str = f" EMA7={report.get('ma7',0):.2f} EMA30={report.get('ma30',0):.2f}"
             bb_upper = report.get("bb_upper")
             bb_str = f" BB+={bb_upper:.2f}" if bb_upper is not None else ""
-            item_log(f"[稳定性] ✓ 通过 status={st} cv={report.get('cv',0):.3f} R2={r2:.3f} 均价={report.get('avg',0):.2f} slope={sl:.4f}{ma_str}{bb_str}{smart_str}{pp_str}，选定本件", "info")
+            log_fn(f"[稳定性]   → 通过 status={st} cv={report.get('cv',0):.3f} R2={r2:.3f} 均价={report.get('avg',0):.2f} slope={sl:.4f}{ma_str}{bb_str}{smart_str}{pp_str}，选定本件", "info")
         return item, stability_failed
     return None, stability_failed
 def _do_payment_notify_and_wait(
@@ -665,7 +667,8 @@ def _do_batch_wait_finalize_and_append(
     bill_order_ids = [m.get("bill_order_id") for m in matched if m.get("bill_order_id")]
     if bill_order_ids:
         try:
-            if buff_client.ask_seller_to_send(bill_order_ids, game_buff) and log_fn:
+            ask_result = buff_client.ask_seller_to_send(bill_order_ids, game_buff)
+            if isinstance(ask_result, dict) and ask_result.get("success") and log_fn:
                 log_fn("[Buff]   → 已提醒卖家发货，请留意 Steam 报价", "info")
             elif log_fn:
                 log_fn("[Buff]   → 提醒卖家发货未成功（可稍后在订单页手动催发货）", "warn")
@@ -713,7 +716,8 @@ def _do_wait_payment_and_append(
     for _ in range(num):
         append_purchase(dict(base_rec))
     try:
-        if buff_client.ask_seller_to_send(order_id, game_buff) and log_fn:
+        ask_result = buff_client.ask_seller_to_send(order_id, game_buff)
+        if isinstance(ask_result, dict) and ask_result.get("success") and log_fn:
             log_fn("[Buff]   → 已提醒卖家发货，请留意 Steam 报价", "info")
         elif log_fn:
             log_fn("[Buff]   → 提醒卖家发货未成功（可稍后在订单页手动催发货）", "warn")
@@ -793,7 +797,9 @@ def lock_and_confirm_payment(
             market_hash_name, ref_price, config, log_fn, app_id=730
         )
         if lowest_price > 0:
-            value_ratio = (lowest_price / ref_price) * 1.15
+            value_ratio = _steam_balance_discount_ratio(lowest_price, ref_price)
+            if value_ratio is None:
+                return SKIP_VERIFICATION_FAILED
             if value_ratio >= max_discount:
                 if log_fn:
                     log_fn(f"[Buff]   → 二次验证未通过 (Buff最低价/参考价)×1.15={value_ratio:.4f} 需<{max_discount} (参考价={ref_price:.2f})", "warn")
@@ -801,7 +807,7 @@ def lock_and_confirm_payment(
             if log_fn:
                 log_fn(f"[Buff]   → 二次验证通过 (Buff最低价/参考价)×1.15={value_ratio:.4f} 参考价={ref_price:.2f}", "info")
     if ref_price and lowest_price > 0:
-        item["value_ratio"] = (lowest_price / ref_price) * 1.15
+        item["value_ratio"] = _steam_balance_discount_ratio(lowest_price, ref_price)
     n_sell_orders = int(scfg.get("sell_pressure_orders_n", 5) or 5)
     if sell_pressure_threshold is not None and sell_pressure_threshold > 0:
         daily_vol = int(item.get("daily_volume", 0) or 0)
