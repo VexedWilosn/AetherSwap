@@ -22,3 +22,23 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+
+# Local runtime data and tool artifacts
+config/*.db
+config/*.db-*
+config/http_cache/
+config/webview_profile/
+config/*_state.json
+config/*_session_state.json
+config/session_capsules.json
+config/*_waf_cooldown.json
+config/*_quota.json
+logs/
+.agreed_disclaimer
+.codex-tmp/
+.gstack/
+analysis/qa_*/
+flags/*.flag
+tmp/
+tmp_*.js
+tmp_*.json
