@@ -193,10 +193,10 @@ AetherSwap 由两条后台 Pipeline 协同驱动：
 ### 采买 Pipeline
 
 ```
-iflow 行情接口 → 折扣筛选 → 稳定性分析(CV/R²) → 防呆校验 → Buff 自动下单
+SteamDT 行情接口 → 折扣筛选 → 稳定性分析(CV/R²) → 防呆校验 → Buff 自动下单
 ```
 
-1. **实时选品**：对接 iflow 接口，拉取综合折扣最优的饰品列表
+1. **实时选品**：对接 SteamDT 接口，拉取综合折扣最优的饰品列表
 2. **稳定性过滤**：请求 Steam 历史价格数据，计算 `CV`（变异系数）与 `R²`（趋势拟合度），自动剔除高波动品
 3. **安全下单**：验证每日限购数量、最低折扣等防呆条件后，在 Buff 自动模拟创建订单
 
@@ -253,7 +253,7 @@ AetherSwap/
 │   └── services/          # 后台任务队列与调度
 ├── buff/                  # Buff 平台接口封装
 ├── steam/                 # Steam API & Playwright 自动化
-├── iflow/                 # iflow 行情数据接口
+├── steamdt/               # SteamDT 行情数据接口
 ├── utils/                 # 公共工具（代理、推送、配置等）
 ├── web/                   # 前端静态文件（HTML/JS/CSS）
 ├── tests/                 # 单元测试套件
@@ -276,6 +276,21 @@ pytest tests/test_pipeline_steps.py -v
 ---
 
 ## 💡 常见问题 FAQ
+
+<details>
+<summary><b>Q：报错获取不到历史数据？</b></summary>
+
+请检查steam是否完成登录，历史数据获取需要登录信息用于获取。
+
+</details>
+
+
+<details>
+<summary><b>Q：我只想倒箱子怎么设置？</b></summary>
+
+将销售量过滤参数设置为2000后适当调整参数即可。
+
+</details>
 
 <details>
 <summary><b>Q：启动后控制台窗口打不开？</b></summary>
@@ -343,7 +358,7 @@ nohup python -m uvicorn app.api:app --host 0.0.0.0 --port 28472 > output.log 2>&
 如果你在**余额倒卖方面有丰富经验**，欢迎加入测试、反馈选品策略或参数调优建议——你的实战经验将直接帮助改进算法。
 
 > 📱 **微信**：`13738064065`  
-> 加好友时请备注 **AetherSwap**，方便快速通过。
+> 加好友时请备注 **AetherSwap** 以及**来访目的**，
 
 ---
 

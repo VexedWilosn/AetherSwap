@@ -12,6 +12,7 @@ from app.state import (
     get_sales,
     is_steam_background_allowed,
     log,
+    set_inventory,
     update_purchase,
     update_purchase_by_id,
 )
@@ -282,6 +283,7 @@ def listing_check_worker() -> None:
                 continue
             ok2, sold_map, _ = fetch_my_history_sold(cookies, debug_fn=debug_fn)
             seen_aids = set()
+            sold_updates = 0
             for _i, p in not_in_active:
                 aid = str(p.get("assetid") or "")
                 if not aid or aid in seen_aids:
@@ -293,6 +295,7 @@ def listing_check_worker() -> None:
                     if sale_price_rounded is not None:
                         sold_at = time.time()
                         update_purchase_by_id(db_id, {"sale_price": sale_price_rounded, "sold_at": sold_at, "listing": False, "listing_status": None})
+                        sold_updates += 1
                     else:
                         update_purchase_by_id(db_id, {"listing": False, "listing_status": "error"})
                 else:
@@ -302,9 +305,20 @@ def listing_check_worker() -> None:
                         sold_at = time.time()
                         for idx in matched:
                             update_purchase(idx, {"sale_price": sale_price_rounded, "sold_at": sold_at, "listing": False, "listing_status": None})
+                        if matched:
+                            sold_updates += 1
                     else:
                         for idx in matched:
                             update_purchase(idx, {"listing": False, "listing_status": "error"})
+            if sold_updates > 0:
+                log(f"[listing_check] 确认售出 {sold_updates} 件，刷新库存并触发自动补挂", "info", category="steam")
+                ok_inv, inv_items, inv_err = scan_cs2_inventory()
+                if ok_inv:
+                    set_inventory(inv_items)
+                    from app.sell_pipeline import run_sell_phase_on_inventory_update
+                    run_sell_phase_on_inventory_update(inv_items)
+                else:
+                    log(f"[listing_check] 售出后刷新库存失败，暂不补挂: {inv_err}", "warn", category="steam")
         except Exception as e:
             log(f"listing_check_worker 异常 {type(e).__name__}: {e}", "error", category="steam")
             _worker_alert("listing_check_worker", e)

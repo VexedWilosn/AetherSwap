@@ -22,7 +22,7 @@ from app.services.buff_client import create_buff_client_from_config
 from app.services.steam_client import SteamClient
 from app.state import get_state, append_sale
 from buff.buyer import BuffAuthExpired
-from iflow.models import IflowQueryParams, build_iflow_url
+from steamdt.models import SteamDTQueryParams
 from utils.delay import jittered_sleep
 from utils.money import USD_TO_CNY_DEFAULT, list_price_display_to_cents
 from utils.network_check import get_network_checker
@@ -47,31 +47,27 @@ def _is_in_time_window(start_hour: int, end_hour: int) -> bool:
 
 def _fetch_and_filter_deals(ctx: PipelineContext, cfg: dict, retry_interval: int):
     ctx.set_status("running", "FETCHING_DEALS", progress_total=0, progress_done=0, progress_item="")
-    ctx.log("正在拉取 iflow 数据…", "info", category="iflow")
+    ctx.log("正在拉取 SteamDT 数据…", "info", category="steamdt")
     try:
         rows = fetch_iflow_rows(cfg)
     except Exception as e:
-        ctx.log(f"iflow 拉取失败: {type(e).__name__}: {e}，{retry_interval}秒后重试", "warn", category="iflow")
+        ctx.log(f"SteamDT 拉取失败: {type(e).__name__}: {e}，{retry_interval}秒后重试", "warn", category="steamdt")
         return None, True  # (rows, fetch_failed)
     if not rows:
-        ctx.log(f"iflow 未返回任何数据，{retry_interval}秒后重试", "warn", category="iflow")
+        ctx.log(f"SteamDT 未返回任何数据，{retry_interval}秒后重试", "warn", category="steamdt")
         return None, False
-    ctx.log(f"iflow 返回 {len(rows)} 条原始数据", "info", category="iflow")
+    ctx.log(f"SteamDT 返回 {len(rows)} 条原始数据", "info", category="steamdt")
     if ctx.verbose:
-        iflow_cfg = cfg.get("iflow", {})
-        q = IflowQueryParams(
-            page_num=int(iflow_cfg.get("page_num", 1)),
-            platforms=iflow_cfg.get("platforms", "buff-c5"),
-            games=iflow_cfg.get("games", "csgo-dota2"),
-            sort_by=iflow_cfg.get("sort_by", "sell"),
-            min_price=float(iflow_cfg.get("min_price", 2)),
-            max_price=float(iflow_cfg.get("max_price", 5000)),
-            min_volume=int(iflow_cfg.get("min_volume", 200)),
-            max_latency=int(iflow_cfg.get("max_latency", 0)),
-            price_mode=iflow_cfg.get("price_mode", "buy"),
+        iflow_cfg = cfg.get("steamdt") or cfg.get("iflow", {})
+        q = SteamDTQueryParams(
+            page=int(iflow_cfg.get("page_num", 1)),
+            page_size=int(iflow_cfg.get("page_size", 200)),
+            min_sell_price=str(iflow_cfg.get("min_price", 2)),
+            max_sell_price=int(iflow_cfg.get("max_price", 5000)),
+            min_transaction_count=str(iflow_cfg.get("min_volume", 200)),
         )
-        ctx.debug(f"[详细流程] iflow 请求 URL: {build_iflow_url(q)}")
-        ctx.debug(f"[详细流程] 原始数据共 {len(rows)} 条，iflow 返回顺序（前20条）:")
+        ctx.debug(f"[详细流程] SteamDT 请求参数: page={q.page} pageSize={q.page_size} minPrice={q.min_sell_price} maxPrice={q.max_sell_price} minTx={q.min_transaction_count}")
+        ctx.debug(f"[详细流程] 原始数据共 {len(rows)} 条，SteamDT 返回顺序（前20条）:")
         for i, r in enumerate(rows[:20]):
             nm = (getattr(r, "name", None) or "")[:42]
             ctx.debug(f"  {i+1:2}. {nm} | sell={getattr(r, 'sell_ratio', '')} buy={getattr(r, 'buy_ratio', '')}")
@@ -179,7 +175,7 @@ def _process_deals_for_target(
         ctx.log(f"已确认付款 本笔={paid:.2f} 累计={acc:.2f}/{target}", "info", category="buff")
         if acc >= target:
             break
-        ctx.debug("下一件将重新按 iflow 顺序试稳定性")
+        ctx.debug("下一件将重新按 SteamDT 顺序试稳定性")
         jittered_sleep(1.0, 0.0)
 
     return acc, bought, False
@@ -204,8 +200,8 @@ def _run_pipeline(config: dict) -> None:
 
     ctx.log("买入阶段启动", "info")
     max_discount = pipeline_cfg.get("max_discount")
-    sort_by = (cfg.get("iflow") or {}).get("sort_by", "sell")
-    sort_labels = {"sell": "最优寄售", "buy": "最优求购", "safe_buy": "稳定求购", "median_sale": "近期成交"}
+    sort_by = (cfg.get("steamdt") or cfg.get("iflow") or {}).get("sort_by", "sell")
+    sort_labels = {"sell": "最优寄售", "buy": "最优求购"}
     sort_desc = sort_labels.get(sort_by, sort_by)
     retry_interval = int(pipeline_cfg.get("retry_interval_seconds", DEFAULT_RETRY_INTERVAL_SECONDS))
     ctx.log(

@@ -195,6 +195,7 @@ async function refreshStatus() {
   }
 }
 let reloginType = "steam";
+let inventoryRefreshInFlight = false;
 function showReloginModal(type, opts = {}) {
   reloginType = type || "steam";
   const overlay = el("relogin-overlay");
@@ -222,6 +223,8 @@ function hideReloginModal() {
   if (overlay) overlay.classList.add("hidden");
 }
 async function refreshInventory(forceRefresh = true) {
+  if (inventoryRefreshInFlight) return;
+  inventoryRefreshInFlight = true;
   try {
     const d = await fetchJson(API + "/inventory" + (forceRefresh ? "?refresh=1" : ""));
     if (d.auth_expired && _hasAnyAccount) {
@@ -281,6 +284,8 @@ async function refreshInventory(forceRefresh = true) {
     if (taxEl) taxEl.textContent = (totalValue / 1.15).toFixed(2);
   } catch (e) {
     toast("刷新库存失败", e.message || "请检查 Steam Cookie");
+  } finally {
+    inventoryRefreshInFlight = false;
   }
 }
 async function refreshMarketPrices() {

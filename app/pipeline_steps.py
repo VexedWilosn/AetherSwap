@@ -210,7 +210,7 @@ def _goods_id_from_buff_url(url: str) -> int:
     return int(m.group(1)) if m else 0
 
 
-_RATIO_ATTR = {"sell": "sell_ratio", "buy": "buy_ratio", "safe_buy": "safe_buy_ratio", "median_sale": "recent_ratio"}
+_RATIO_ATTR = {"sell": "sell_ratio", "buy": "buy_ratio"}
 
 
 def _log_stability_rejection(
@@ -243,7 +243,7 @@ def filter_iflow_rows(
     log_fn: Optional[Callable[[str, str], None]] = None,
 ) -> List[Dict[str, Any]]:
     pipeline_cfg = config.get("pipeline", {})
-    iflow_cfg = config.get("iflow", {})
+    iflow_cfg = config.get("steamdt") or config.get("iflow", {})
     exclude = pipeline_cfg.get("exclude_keywords", [])
     top_n = int(pipeline_cfg.get("iflow_top_n", 0) or 0)
     if top_n > 0:
@@ -257,7 +257,8 @@ def filter_iflow_rows(
     skipped_no_buff = 0
     for r in rows:
         name = (getattr(r, "name", None) or "").lower()
-        if any(kw in name for kw in exclude):
+        name_cn = (getattr(r, "name_cn", None) or "").lower()
+        if any(kw in name or kw in name_cn for kw in exclude):
             skipped_keyword += 1
             continue
         try:
@@ -383,6 +384,9 @@ def pick_stable_item(
             jittered_sleep(request_interval)
         name = item.get("name", "")
         market_hash_name = item.get("steam_market_name") or name
+        # 带饰品名称前缀的日志包装，方便追踪每条日志对应哪个饰品
+        _short = (name[:30] + "…") if len(name) > 30 else name
+        item_log = (lambda msg, level, _n=_short: log_fn(f"[{_n}] {msg}", level)) if log_fn else None
         next_name = filtered[i + 1].get("name", "") if i + 1 < n else ""
         set_status("running", step="STABILITY_CHECK", progress_total=n, progress_done=i, progress_item=f"({i+1}/{n}) {name}", next_progress_item=f"({i+2}/{n}) {next_name}" if next_name else "")
         pipeline_cfg = config.get("pipeline", {})
@@ -403,7 +407,7 @@ def pick_stable_item(
             # 1. Buff 价格预检
             if buff_client:
                 buff_ok, plan_price = _check_buff_price(
-                    item, gid, plan_price, buff_client, config, log_fn
+                    item, gid, plan_price, buff_client, config, item_log
                 )
                 if not buff_ok:
                     if gid:
@@ -413,8 +417,8 @@ def pick_stable_item(
             # 2. 拉取 Steam 挂单数据
             steam_sell_data = _fetch_steam_sell_data(market_hash_name, config, app_id=730)
             if not steam_sell_data:
-                if log_fn:
-                    log_fn("[稳定性]   → 预检未通过: 无法获取 Steam 卖单信息（可能是网络问题或限流）", "warn")
+                if item_log:
+                    item_log("[稳定性] 预检未通过: 无法获取 Steam 卖单信息（可能是网络问题或限流）", "warn")
                 if gid:
                     stability_failed.add(gid)
                 if failure_delay > 0:
@@ -423,7 +427,7 @@ def pick_stable_item(
 
             # 3. 卖压检测
             if not _check_sell_pressure_precheck(
-                item, steam_sell_data, sell_pressure_threshold, pipeline_cfg, log_fn
+                item, steam_sell_data, sell_pressure_threshold, pipeline_cfg, item_log
             ):
                 if gid:
                     stability_failed.add(gid)
@@ -441,7 +445,7 @@ def pick_stable_item(
 
             # 5. 最高折扣检测
             if not _check_max_discount_precheck(
-                item, gid, smart_price, est_ratio, ref_price_est, plan_price, max_discount, log_fn
+                item, gid, smart_price, est_ratio, ref_price_est, plan_price, max_discount, item_log
             ):
                 if gid:
                     stability_failed.add(gid)
@@ -450,8 +454,8 @@ def pick_stable_item(
                 continue
 
         # 6. 拉历史K线 + 稳定性分析
-        if log_fn:
-            log_fn("[稳定性]   → 拉取历史价格…", "info")
+        if item_log:
+            item_log("[稳定性] 拉取历史价格…", "info")
         raw = steam_client.fetch_history(market_hash_name, return_currency=True)
         if raw and isinstance(raw, dict):
             history = raw.get("history")
@@ -462,8 +466,8 @@ def pick_stable_item(
         if not history:
             if gid:
                 stability_failed.add(gid)
-            if log_fn:
-                log_fn("[稳定性]   → 无历史数据或请求失败，试下一个", "warn")
+            if item_log:
+                item_log("[稳定性] 无历史数据或请求失败，试下一个", "warn")
             if failure_delay > 0:
                 jittered_sleep(failure_delay)
             continue
@@ -477,12 +481,12 @@ def pick_stable_item(
             high_ratio = max_discount_float - (huge_offset / 2.0)
             if est_ratio < huge_ratio:
                 dyn_price_percentile_ceil = 0.88
-                if log_fn:
-                    log_fn(f"[稳定性]   → 检测到巨额预期利润 (比例={est_ratio:.4f} < {huge_ratio:.4f})，放宽价格分位点限制至 {dyn_price_percentile_ceil}", "info")
+                if item_log:
+                    item_log(f"[稳定性] 检测到巨额预期利润 (比例={est_ratio:.4f} < {huge_ratio:.4f})，放宽价格分位点限制至 {dyn_price_percentile_ceil}", "info")
             elif est_ratio < high_ratio:
                 dyn_price_percentile_ceil = max(dyn_price_percentile_ceil, 0.85)
-                if log_fn:
-                    log_fn(f"[稳定性]   → 检测到极高预期利润 (比例={est_ratio:.4f} < {high_ratio:.4f})，放宽价格分位点限制至 {dyn_price_percentile_ceil}", "info")
+                if item_log:
+                    item_log(f"[稳定性] 检测到极高预期利润 (比例={est_ratio:.4f} < {high_ratio:.4f})，放宽价格分位点限制至 {dyn_price_percentile_ceil}", "info")
 
         report = analyzer.analyze(
             history,
@@ -504,14 +508,14 @@ def pick_stable_item(
         if smart_price is not None and not report.get("valid"):
             if gid:
                 stability_failed.add(gid)
-            if log_fn:
-                log_fn(f"[稳定性]   → 分析异常: {report.get('msg', '无效')}，试下一个", "warn")
+            if item_log:
+                item_log(f"[稳定性] 分析异常: {report.get('msg', '无效')}，试下一个", "warn")
             if failure_delay > 0:
                 jittered_sleep(failure_delay)
             continue
 
         if not report.get("is_stable"):
-            _log_stability_rejection(report, stability_cfg, smart_price, log_fn)
+            _log_stability_rejection(report, stability_cfg, smart_price, item_log)
             if gid:
                 stability_failed.add(gid)
             if failure_delay > 0:
@@ -521,7 +525,7 @@ def pick_stable_item(
             steam_sell_data = _fetch_steam_sell_data(market_hash_name, config, app_id=730)
             smart_price = steam_sell_data.get("smart_price") if steam_sell_data else None
         item["_steam_sell_data"] = steam_sell_data
-        if log_fn:
+        if item_log:
             st = report.get("status", "")
             sl = report.get("slope", 0)
             r2 = report.get("r_squared", 0)
@@ -531,7 +535,7 @@ def pick_stable_item(
             ma_str = f" EMA7={report.get('ma7',0):.2f} EMA30={report.get('ma30',0):.2f}"
             bb_upper = report.get("bb_upper")
             bb_str = f" BB+={bb_upper:.2f}" if bb_upper is not None else ""
-            log_fn(f"[稳定性]   → 通过 status={st} cv={report.get('cv',0):.3f} R2={r2:.3f} 均价={report.get('avg',0):.2f} slope={sl:.4f}{ma_str}{bb_str}{smart_str}{pp_str}，选定本件", "info")
+            item_log(f"[稳定性] ✓ 通过 status={st} cv={report.get('cv',0):.3f} R2={r2:.3f} 均价={report.get('avg',0):.2f} slope={sl:.4f}{ma_str}{bb_str}{smart_str}{pp_str}，选定本件", "info")
         return item, stability_failed
     return None, stability_failed
 def _do_payment_notify_and_wait(

@@ -2,14 +2,16 @@ from typing import Any, Optional
 DEFAULTS = {
     "iflow": {
         "page_num": 1,
+        "page_size": 200,
         "platforms": "buff",
-        "games": "csgo",
         "sort_by": "sell",
         "min_price": 2,
         "max_price": 5000,
         "min_volume": 200,
-        "max_latency": 0,
-        "price_mode": "buy",
+        "type": "swap",
+        "want_to_get": "STEAM_BALANCE",
+        "sale_plan": "STEAM_SELL_PRICE",
+        "fetch_timeout": 15,
     },
     "buff": {
         "pay_method": "alipay",

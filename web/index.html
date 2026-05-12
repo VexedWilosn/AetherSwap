@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 
 <head>
@@ -690,23 +690,21 @@
       <section id="panel-settings" class="panel">
         <div class="settings-layout">
           <div class="settings-group">
-            <h2>iFlow 配置</h2>
+            <h2>SteamDT 配置</h2>
             <div class="form-grid">
               <div class="field">
-                <label for="cfg-games">游戏代码</label>
-                <input id="cfg-games" placeholder="e.g. csgo-dota2" />
+                <label for="cfg-games">SteamDT 类型</label>
+                <input id="cfg-games" placeholder="e.g. swap" />
               </div>
               <div class="field">
                 <label for="cfg-platforms">目标平台</label>
-                <input id="cfg-platforms" placeholder="e.g. buff-c5" />
+                <input id="cfg-platforms" placeholder="e.g. BUFF" />
               </div>
               <div class="field">
                 <label for="cfg-sort_by">排序策略</label>
                 <select id="cfg-sort_by">
                   <option value="sell">最优寄售</option>
                   <option value="buy">最优求购</option>
-                  <option value="safe_buy">稳定求购</option>
-                  <option value="median_sale">近期成交</option>
                 </select>
               </div>
               <div class="field-row">
@@ -746,7 +744,7 @@
                 <div class="field">
                   <label>最高折扣</label>
                   <input type="number" id="cfg-max_discount" placeholder="0-1，二次验证用"
-                    title="锁单时(Steam参考价/Buff)×1.15须<此值；不在此处筛iflow" />
+                    title="锁单时(Steam参考价/Buff)×1.15须<此值；不在此处筛SteamDT" />
                 </div>
               </div>
               <div class="field-row">
@@ -756,9 +754,9 @@
                     title="巨额利润阈值 = 最高折扣 - 此差值" />
                 </div>
                 <div class="field">
-                  <label>iflow 取前N条</label>
+                  <label>SteamDT 取前N条</label>
                   <input type="number" id="cfg-iflow_top_n" min="0" placeholder="50"
-                    title=">0时仅取iflow前N条排查；0=不限制；最高折扣在锁单二次验证生效" />
+                    title=">0时仅取SteamDT前N条排查；0=不限制；最高折扣在锁单二次验证生效" />
                 </div>
               </div>
               <div class="field">
