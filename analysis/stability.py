@@ -65,9 +65,8 @@ def _vwap_iqr(prices: List[float], volumes: List[int]) -> Optional[float]:
         return None
     return sum_pv / sum_v
 def _apply_currency(prices: list, currency: Optional[str], usd_to_cny: float) -> tuple:
-    if currency == "USD":
-        return [p * usd_to_cny for p in prices], "CNY"
-    return prices, (currency or "CNY")
+    from utils.money import apply_currency
+    return apply_currency(prices, currency, usd_to_cny)
 def _parse_item_date(date_str: str) -> Optional[datetime]:
     try:
         part = date_str.split(":")[0].strip()
@@ -211,9 +210,10 @@ def analyze_by_time(
     r_squared = _linear_regression_r_squared(daily_last)
     if r_squared is None:
         r_squared = 0.0
+    cv_filter_enabled = cv_threshold < 1
     actual_cv_threshold = cv_threshold
     ref_for_cv = current_price if current_price is not None else ref_price
-    if ref_for_cv is not None and ref_for_cv > 0:
+    if cv_filter_enabled and ref_for_cv is not None and ref_for_cv > 0:
         if ref_for_cv <= 15.0:
             actual_cv_threshold = max(cv_threshold, 0.08)
         elif ref_for_cv >= 100.0:
@@ -237,21 +237,21 @@ def analyze_by_time(
             reasons.append(f"总交易数{count}过低(要求>={int(days * min_daily_trades)})")
 
         if status == STATUS_STABLE:
-            is_stable = base_ok and slope >= slope_stable_floor and cv <= actual_cv_threshold
+            is_stable = base_ok and slope >= slope_stable_floor and (not cv_filter_enabled or cv <= actual_cv_threshold)
             if not is_stable:
                 if slope < slope_stable_floor:
                     reasons.append(f"趋势下跌(斜率{slope:.4f}<{slope_stable_floor})")
-                if cv > actual_cv_threshold:
+                if cv_filter_enabled and cv > actual_cv_threshold:
                     reasons.append(f"波动过大(CV={cv:.4f}>{actual_cv_threshold:.4f})")
         elif status == STATUS_RISING:
             slope_pct = (slope / ref_price) if ref_price > 0 else 1.0
-            is_stable = base_ok and r_squared > r2_rising_threshold and slope_pct <= slope_pct_ceil and cv <= actual_cv_threshold
+            is_stable = base_ok and r_squared > r2_rising_threshold and slope_pct <= slope_pct_ceil and (not cv_filter_enabled or cv <= actual_cv_threshold)
             if not is_stable:
                 if r_squared <= r2_rising_threshold:
                     reasons.append(f"上涨趋势分散(R²={r_squared:.4f}<={r2_rising_threshold})")
                 if slope_pct > slope_pct_ceil:
                     reasons.append(f"暴涨风险(斜率占比={slope_pct:.4f}>{slope_pct_ceil})")
-                if cv > actual_cv_threshold:
+                if cv_filter_enabled and cv > actual_cv_threshold:
                     reasons.append(f"波动过大(CV={cv:.4f}>{actual_cv_threshold:.4f})")
         else:
             is_stable = False
@@ -263,7 +263,7 @@ def analyze_by_time(
     price_percentile: Optional[float] = None
     if current_price is not None and price_max > price_min:
         price_percentile = (current_price - price_min) / (price_max - price_min)
-        if price_percentile > percentile_ceil:
+        if percentile_ceil < 1 and price_percentile > percentile_ceil:
             is_stable = False
             reasons.append(f"当前价处于历史高位(分位={price_percentile:.2f}>{percentile_ceil})")
     elif current_price is not None and price_max == price_min:
@@ -279,13 +279,13 @@ def analyze_by_time(
             recent_max = max(recent_clean)
             if current_price is not None and recent_max > recent_min:
                 recent_percentile = (current_price - recent_min) / (recent_max - recent_min)
-                if recent_percentile > percentile_ceil:
+                if percentile_ceil < 1 and recent_percentile > percentile_ceil:
                     is_stable = False
                     reasons.append(f"当前价处于近14天高位(分位={recent_percentile:.2f}>{percentile_ceil})")
             elif current_price is not None and recent_max == recent_min:
                 recent_percentile = 0.5
 
-    if ma30 > 0 and ma7 > bb_upper:
+    if ma_deviation_ceil < 999 and ma30 > 0 and ma7 > bb_upper:
         is_stable = False
         reasons.append(f"近期均线暴涨(EMA7={ma7:.2f}>BB+={bb_upper:.2f})")
 
@@ -293,7 +293,7 @@ def analyze_by_time(
     last_price_ma30_ceil_exceeded = False
     if ma30 > 0 and last_price is not None:
         last_price_ma30_ratio = last_price / ma30
-        if last_price > bb_upper or last_price < bb_lower:
+        if last_price_ma30_ceil < 999 and (last_price > bb_upper or last_price < bb_lower):
             is_stable = False
             if last_price > bb_upper:
                 last_price_ma30_ceil_exceeded = True

@@ -375,7 +375,7 @@
             }
         }
         const priceHint = selectedEdition.price ? `\n当前钱包余额：${walletInfo ? walletInfo.balance_display : '未知'}\n商品售价：${selectedEdition.price}` : '';
-        if (!confirm(`确认向「${selectedFriend.name}」赠送「${selectedEdition.name}」？${priceHint}\n\n此操作将直接从您的 Steam 钱包扣款，不可撤销！`)) return;
+        if (!(await appConfirm(`确认向「${selectedFriend.name}」赠送「${selectedEdition.name}」？${priceHint}\n\n此操作将直接从您的 Steam 钱包扣款，不可撤销！`, { title: "确认赠礼", danger: true, confirmText: "确认赠送" }))) return;
         setHidden(elProgressPanel, false);
         setHidden(elProgressSpinner, false);
         setHidden(elProgressResult, true);

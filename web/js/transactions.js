@@ -54,7 +54,7 @@ function renderTxTable(tbody, list, isPurchase = false, resellRatio = 0.85, mult
   tbody.innerHTML = rowHtmls.join("");
   tbody.querySelectorAll(".tx-btn-del").forEach(btn => {
     btn.addEventListener("click", async () => {
-      if (!confirm("确定删除这条记录？")) return;
+      if (!(await appConfirm("确定删除这条记录？", { title: "删除记录", danger: true, confirmText: "删除" }))) return;
       const type = btn.dataset.type;
       const idx = parseInt(btn.dataset.idx, 10);
       try {
@@ -168,7 +168,7 @@ function renderPurchaseHistoryTable(tbody, list, resellRatio = 0.85, multiSelect
   tbody.innerHTML = rowHtmls.join("");
   tbody.querySelectorAll(".ph-btn-delist").forEach(btn => {
     btn.addEventListener("click", async () => {
-      if (!confirm("确定下架该饰品？下架后 assetid 会变更。")) return;
+      if (!(await appConfirm("确定下架该饰品？下架后 assetid 会变更。", { title: "下架饰品", confirmText: "下架" }))) return;
       const idx = parseInt(btn.dataset.idx, 10);
       btn.disabled = true;
       toast("下架中", "请稍候…");
@@ -191,7 +191,7 @@ function renderPurchaseHistoryTable(tbody, list, resellRatio = 0.85, multiSelect
   });
   tbody.querySelectorAll(".ph-btn-del").forEach(btn => {
     btn.addEventListener("click", async () => {
-      if (!confirm("确定删除这条记录？删除后将从持有饰品与操作记录中同时移除。")) return;
+      if (!(await appConfirm("确定删除这条记录？删除后将从持有饰品与操作记录中同时移除。", { title: "删除持有记录", danger: true, confirmText: "删除" }))) return;
       const idx = parseInt(btn.dataset.idx, 10);
       try {
         const r = await fetchJson(API + "/transaction?" + new URLSearchParams({ type: "purchase", idx }), { method: "DELETE" });
@@ -265,8 +265,18 @@ function applyTransactionsToUI(all, summaryEl, tbodyP, tbodyS, tbodyHistory, res
     const totalMp = holdings.reduce((s, t) => s + (t.market_price != null ? Number(t.market_price) : 0), 0);
     const hasAnyCmp = holdings.some((t) => t.current_market_price != null);
     const totalCmp = hasAnyCmp ? holdings.reduce((s, t) => s + (t.current_market_price != null ? Number(t.current_market_price) : 0), 0) : null;
-    const totalPl = totalCmp != null ? totalCmp - totalMp : null;
-    const totalPlPct = totalPl != null && totalMp > 0 ? ((totalPl / totalMp) * 100).toFixed(2) + "%" : "—";
+    const marketChangeTotals = holdings.reduce((acc, t) => {
+      const cmp = t.current_market_price != null ? Number(t.current_market_price) : null;
+      const mp = t.market_price != null ? Number(t.market_price) : null;
+      if (cmp != null && Number.isFinite(cmp) && mp != null && Number.isFinite(mp) && mp > 0) {
+        acc.current += cmp;
+        acc.purchase += mp;
+        acc.count += 1;
+      }
+      return acc;
+    }, { current: 0, purchase: 0, count: 0 });
+    const totalPl = marketChangeTotals.count > 0 ? marketChangeTotals.current - marketChangeTotals.purchase : null;
+    const totalPlPct = totalPl != null && marketChangeTotals.purchase > 0 ? ((totalPl / marketChangeTotals.purchase) * 100).toFixed(2) + "%" : "—";
     const plClass = totalPl != null && totalPl > 0 ? "text-ok" : totalPl != null && totalPl < 0 ? "text-bad" : "";
     const cmpStr = totalCmp != null ? totalCmp.toFixed(2) : "—";
     const plStr = totalPl != null ? `${totalPl >= 0 ? "+" : ""}${totalPl.toFixed(2)} (${totalPl >= 0 ? "+" : ""}${totalPlPct})` : "—";

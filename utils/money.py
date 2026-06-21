@@ -1,8 +1,14 @@
+import json
 import math
-from typing import List, Optional, Tuple
+import time
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 USD_TO_CNY_DEFAULT = 7.2
 CURRENCY_CNY = "CNY"
 CURRENCY_USD = "USD"
+_EXCHANGE_RATE_FILE = Path(__file__).resolve().parent.parent / "config" / "exchange_rate.json"
+_EXCHANGE_RATE_TTL = 300
+_exchange_rate_cache: Tuple[float, Dict[str, float]] = (0.0, {})
 g_rgWalletInfo = {
     "rwgrsn": -2,
     "success": True,
@@ -74,14 +80,45 @@ def get_item_price_from_total(n_total: int, rg_wallet: dict) -> int:
 
 def usd_to_cny(amount: float, rate: float = USD_TO_CNY_DEFAULT) -> float:
     return amount * rate
+def _load_exchange_rates() -> Dict[str, float]:
+    global _exchange_rate_cache
+    now = time.time()
+    ts, cached = _exchange_rate_cache
+    if cached and now - ts < _EXCHANGE_RATE_TTL:
+        return cached
+    rates: Dict[str, float] = {}
+    try:
+        if _EXCHANGE_RATE_FILE.exists():
+            with open(_EXCHANGE_RATE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            raw_rates = data.get("rates") if isinstance(data, dict) else None
+            if isinstance(raw_rates, dict):
+                rates = {
+                    str(k).upper(): float(v)
+                    for k, v in raw_rates.items()
+                    if isinstance(v, (int, float)) and float(v) > 0
+                }
+    except Exception:
+        rates = {}
+    _exchange_rate_cache = (now, rates)
+    return rates
 def apply_currency(
     prices: List[float],
     currency: Optional[str],
     usd_to_cny_rate: float = USD_TO_CNY_DEFAULT,
+    rate_map: Optional[Dict[str, float]] = None,
 ) -> Tuple[List[float], str]:
-    if currency == CURRENCY_USD:
-        return [p * usd_to_cny_rate for p in prices], CURRENCY_CNY
-    return prices, (currency or CURRENCY_CNY)
+    code = (currency or CURRENCY_CNY).strip().upper()
+    if code == CURRENCY_CNY:
+        return prices, CURRENCY_CNY
+    rates = rate_map if rate_map is not None else _load_exchange_rates()
+    if code == CURRENCY_USD:
+        rate = rates.get(CURRENCY_USD) or usd_to_cny_rate
+        return [p * rate for p in prices], CURRENCY_CNY
+    rate = rates.get(code)
+    if rate:
+        return [p * rate for p in prices], CURRENCY_CNY
+    return prices, code
 def yuan_to_cents(yuan: float) -> int:
     return max(1, int(round(yuan * 100)))
 

@@ -15,6 +15,7 @@
 <p>
   <a href="#-核心功能">功能亮点</a> ·
   <a href="#-快速开始">快速开始</a> ·
+  <a href="#-策略中心使用教程">策略中心</a> ·
   <a href="#-工作原理">工作原理</a> ·
   <a href="#%EF%B8%8F-进阶配置">进阶配置</a> ·
   <a href="#-常见问题-faq">常见问题</a> ·
@@ -55,7 +56,7 @@
 ### 🤖 几乎全自动的倒余额流程
 
 从 **选品 → 下单 → 入库 → 上架 → Steam Guard 确认**，整条链路无需人工守候。  
-内嵌 Playwright 浏览器自动完成 Steam 登录与 Cookie 提取；绑定移动令牌密钥（`identity_secret`）后，商品上架的二次确认也由程序自动签署。你只需要启动一次，剩下的交给 AetherSwap。
+桌面环境可通过内嵌浏览器完成登录与 Cookie 提取；无桌面 Linux 服务器会自动降级为手动 Cookie 流程。绑定移动令牌密钥（`identity_secret`）后，商品上架的二次确认也由程序自动签署。
 
 ### 📐 基于数学模型的智能选品与定价
 
@@ -138,7 +139,7 @@
 ### 环境要求
 
 - **Python**: 3.10 或更高版本（[下载](https://www.python.org/downloads/)）
-- **操作系统**: Windows 10/11（推荐），或带有桌面环境的 Linux
+- **操作系统**: Windows 10/11（推荐）、带桌面环境的 Linux，或无桌面 Linux 服务器
 - **网络**: 需要能够正常访问 Steam 社区
 
 > [!IMPORTANT]
@@ -156,11 +157,16 @@ cd AetherSwap
 **第 2 步：安装依赖**
 
 ```bash
-# 安装 Python 依赖（国内用户推荐使用镜像加速）
+# 二选一：桌面/本地运行
 pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
-# 安装内嵌浏览器（用于自动化 Steam 登录）
+# 二选一：无桌面 Linux 服务器（避免安装 pywebview）
+pip install -r requirements-server.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+# 安装 Playwright 浏览器（Linux 服务器推荐 --with-deps）
 python -m playwright install chromium
+# Linux 服务器：
+python -m playwright install --with-deps chromium
 ```
 
 **第 3 步：启动程序**
@@ -170,6 +176,37 @@ python run.py
 ```
 
 程序启动后将自动弹出 Web 控制台，按照首页的**「快速开始」**卡片引导完成配置即可。
+
+#### 本地桌面与服务器模式
+
+`python run.py` 会自动判断运行环境：
+
+- 有桌面环境时进入 **desktop 模式**，绑定 `127.0.0.1:28472` 并尝试打开本地窗口/浏览器。
+- 无桌面 Linux 或服务进程中进入 **server 模式**，绑定 `0.0.0.0:28472`，需要用外部浏览器访问。
+- 首次非交互运行时需要先确认免责声明，可在确认已阅读后设置 `AETHERSWAP_AGREE_DISCLAIMER=1`。
+
+常用环境变量：
+
+```bash
+# 强制服务器模式
+set AETHERSWAP_MODE=server        # Windows PowerShell 可用 $env:AETHERSWAP_MODE="server"
+export AETHERSWAP_MODE=server     # Linux/macOS
+
+# 修改监听地址和端口
+set AETHERSWAP_HOST=0.0.0.0
+set AETHERSWAP_PORT=28472
+
+# 非交互服务启动时跳过免责声明输入
+set AETHERSWAP_AGREE_DISCLAIMER=1
+```
+
+如果启动时报 `cannot import name 'Sentinel' from 'typing_extensions'`，说明本机 `typing_extensions` 版本过旧，请执行：
+
+```bash
+python -m pip install --upgrade typing_extensions
+# 或重新安装项目依赖
+python -m pip install -r requirements.txt
+```
 
 
 
@@ -183,6 +220,98 @@ python run.py
 2. 在【系统设置】中填写 `shared_secret`、`identity_secret` 及通知 Token
 3. 在【账号管理】中添加 Steam 账号，点击「验证」自动完成模拟登录
 4. 返回首页，点击**「启动任务」**，坐等余额入账 🚀
+
+---
+
+## 🧭 策略中心使用教程
+
+策略中心用于管理自动购入和自动出售的交易决策。现在交易相关参数不再混在设置页里，设置页主要保留账号、通知、代理、刷新、系统等全局配置；具体买什么、怎么买、何时卖、如何定价，请进入左侧导航的【策略中心】。
+
+### 1. 三个工作区
+
+顶部可以切换：
+
+- **购入策略**：决定候选饰品如何过滤、如何校验 Buff/Steam 价格、如何做历史稳定性和采购上限保护，最后是否进入 Buff 锁单付款流程。
+- **出售策略**：决定库存饰品如何过滤、同名在售上限、Steam 定价、趋势等待、利润比例保护，最后是否自动上架。
+- **模块管理**：查看内置模块和用户导入模块；也能查看声明式模块可读取的数据字段、可用比较操作符和运行阶段。
+
+### 2. 系统策略和自定义策略
+
+- 系统预设策略的模块结构只读，保证默认流程始终可恢复；模块参数可以直接编辑并保存。
+- 系统预设策略支持“恢复默认”，会把所有模块参数重置为内置默认值并保存到配置。
+- 如果想调整系统策略的模块增删、启用状态或排序，请先点击复制，生成自定义策略后再编辑。
+- 自定义策略可以保存、删除、导入、导出和启用。
+- 启用策略前会显示与当前启用策略的差异摘要；启用自定义策略前请先使用“模拟运行”确认模块结果。
+
+### 3. 模块编辑规则
+
+策略由一串模块组成。每个模块都有类型、参数、依赖和互斥限制。
+
+- 固定模块不能删除，避免用户把流程删到无法运行。
+- 非固定模块支持添加、删除、启用/禁用和长按拖拽排序。
+- 出售策略的基础库存校验和上架动作会固定保留；定价核心可以在“价格墙定价”和“墙+断层一体定价”之间替换，添加新定价核心时会自动移除互斥模块。
+- 参数可以直接在右侧/下方参数面板编辑，保存时会校验类型、范围和枚举值。
+- 模块数量有限制；重复添加、依赖缺失、顺序错误、互斥冲突都会被阻止。
+- 模拟运行是 dry-run，不会触发 Buff 锁单、付款等待或 Steam 上架。
+
+### 4. 用户自定义模块
+
+当前版本开放的是**安全声明式模块**，而不是任意代码执行。
+
+声明式模块 manifest 示例：
+
+```json
+{
+  "id": "custom.sell.price_floor",
+  "name": "出售底价保护",
+  "module_kind": "declarative",
+  "strategy_types": ["sell"],
+  "uses_modules": ["pricing.steam_wall_price"],
+  "stage": "sell.listing_guard",
+  "conditions": [
+    {
+      "left": "outputs.pricing.steam_wall_price.list_price",
+      "op": "gte",
+      "value": 15
+    }
+  ],
+  "fail_status": "reject",
+  "message": "上架价低于自定义底价，跳过出售"
+}
+```
+
+常用字段说明：
+
+| 字段 | 说明 |
+|---|---|
+| `id` | 模块唯一 ID，不能覆盖内置模块 |
+| `module_kind` | 当前可启用值为 `declarative` |
+| `strategy_types` | `buy` 或 `sell`，也可以同时声明 |
+| `stage` | 运行阶段；购入为 `buy.candidate_guard`，出售为 `sell.listing_guard` |
+| `uses_modules` | 声明依赖哪些前置模块输出，系统会校验顺序 |
+| `conditions` | 条件列表，支持 `eq/ne/gt/gte/lt/lte/contains/in/exists/between` 等操作 |
+| `fail_status` | 条件不满足时返回 `reject`、`wait`、`pass` 或 `error` |
+| `message` | 模拟结果和日志中显示的原因 |
+
+声明式模块能读取 `item`、`buy_record`、`listing`、`config` 和前置模块 `outputs`。例如：
+
+- `item.daily_volume`
+- `item.min_price`
+- `listing.list_price`
+- `buy_record.price`
+- `outputs.buy.steam_sell_depth.estimated_ratio`
+- `outputs.pricing.steam_wall_price.list_price`
+
+带有 `code`、`source`、`entrypoint`、`command` 等字段的外部代码模块只会登记展示，不会执行，也不能加入启用链。这是为了避免用户代码直接影响锁单、付款、上架等高风险动作。
+
+### 5. 推荐使用流程
+
+1. 在【策略中心】选择购入或出售策略。
+2. 如果只改系统策略参数，可以直接编辑并保存；如果要调整模块顺序、启用状态或增删模块，请先复制为自定义策略。
+3. 调整模块参数，或在自定义策略中调整模块顺序和启用状态。
+4. 点击“模拟运行”，查看每个模块的通过、拒绝、等待、动作跳过原因。
+5. 确认没有未知模块、禁用模块或依赖错误后保存。
+6. 启用策略，并小范围观察真实日志。
 
 ---
 
@@ -216,7 +345,7 @@ SteamDT 行情接口 → 折扣筛选 → 稳定性分析(CV/R²) → 防呆校�
 
 ## 🔧 进阶配置
 
-所有参数均可在 Web 控制台的【系统设置】中实时调整，**修改立即生效，无需重启**。
+账号、通知、代理、刷新、系统等全局参数可在 Web 控制台的【系统设置】中实时调整，**修改立即生效，无需重启**。购入/出售决策相关参数请在【策略中心】中通过模块参数管理。
 
 ### 常用参数说明
 
@@ -226,10 +355,12 @@ SteamDT 行情接口 → 折扣筛选 → 稳定性分析(CV/R²) → 防呆校�
 | `stability.cv_threshold` | `0.05` | 波动率上限，调高可买入更多品类（风险同步上升） |
 | `stability.r2_threshold` | `0.7` | 趋势拟合度下限，调低可接受更多震荡走势品 |
 | `pipeline.max_daily_buy` | - | 每日最大购买金额上限，用于资金风控 |
-| `pipeline.sell_strategy` | `immediate` | 出售策略：`immediate`（立刻）/ `trend`（趋势延迟）/ `hold`（跌破成本不售）|
+| `strategies.active_buy_strategy_id` | `system.buy.default` | 当前启用的购入策略 ID |
+| `strategies.active_sell_strategy_id` | 自动兼容旧配置 | 当前启用的出售策略 ID |
+| `pipeline.sell_strategy` | `4` | 旧版出售策略兼容字段；新版本建议在【策略中心】切换出售策略 |
 | `proxy_pool` | - | 自定义代理列表，留空则使用内置 Webshare 自动轮换 |
 
-> **保守策略提示**：默认参数极度保守（宁少赚不亏本）。若想提高买入频率，可将 `cv_threshold` 放宽至 `0.08`，并适当降低 `r2_threshold`。
+> **保守策略提示**：默认策略极度保守（宁少赚不亏本）。若想提高买入频率，建议复制系统购入策略后，在【策略中心】调整历史稳定性、最高折扣、卖压保护等模块参数，并先模拟运行。
 
 ### 📩 自动化配置：关于“邮箱确认”
 
@@ -248,8 +379,11 @@ SteamDT 行情接口 → 折扣筛选 → 稳定性分析(CV/R²) → 防呆校�
 AetherSwap/
 ├── app/                   # FastAPI 后端核心
 │   ├── main.py            # 应用入口 & 路由注册
+│   ├── runtime_env.py     # 桌面/服务器模式自动判断
+│   ├── strategy_engine.py # 策略中心、模块校验、模拟运行与运行时接入
 │   ├── pipeline_steps.py  # 采买 / 出售 Pipeline 逻辑
 │   ├── database.py        # SQLModel ORM & 数据库操作
+│   ├── routes/            # FastAPI 路由，包含策略中心 API
 │   └── services/          # 后台任务队列与调度
 ├── buff/                  # Buff 平台接口封装
 ├── steam/                 # Steam API & Playwright 自动化
@@ -258,7 +392,8 @@ AetherSwap/
 ├── web/                   # 前端静态文件（HTML/JS/CSS）
 ├── tests/                 # 单元测试套件
 ├── run.py                 # 一键启动入口
-└── requirements.txt       # Python 依赖清单
+├── requirements.txt       # 桌面/本地运行依赖清单
+└── requirements-server.txt # 无桌面服务器依赖清单
 ```
 
 ---
@@ -267,10 +402,13 @@ AetherSwap/
 
 ```bash
 # 运行全部单元测试
-pytest tests/ -v
+pytest -q
 
-# 运行特定模块测试
-pytest tests/test_pipeline_steps.py -v
+# 运行策略中心专项测试
+pytest tests/test_strategies.py -q
+
+# 前端脚本语法检查
+node --check web/js/strategies.js web/js/main.js web/js/utils.js
 ```
 
 ---
@@ -295,7 +433,14 @@ pytest tests/test_pipeline_steps.py -v
 <details>
 <summary><b>Q：启动后控制台窗口打不开？</b></summary>
 
-请确认依赖安装无报错。若为端口占用，可修改 `app/main.py` 中 `28472` 为其他空闲端口，再重新启动。
+请确认依赖安装无报错。若为端口占用，可设置 `AETHERSWAP_PORT=其他端口`，或直接使用 `python -m uvicorn app.api:app --host 0.0.0.0 --port 其他端口`。
+
+如果报错类似 `cannot import name 'Sentinel' from 'typing_extensions'`，请升级依赖：
+
+```bash
+python -m pip install --upgrade typing_extensions
+python -m pip install -r requirements.txt
+```
 
 </details>
 
@@ -319,17 +464,34 @@ pytest tests/test_pipeline_steps.py -v
 AetherSwap 的 FastAPI 架构完整支持无头 Linux 环境。直接运行：
 
 ```bash
-python -m uvicorn app.main:app --host 0.0.0.0 --port 28472
+pip install -r requirements-server.txt
+python -m playwright install --with-deps chromium
+AETHERSWAP_MODE=server AETHERSWAP_AGREE_DISCLAIMER=1 python run.py
 ```
+
+也可以直接运行 Uvicorn：
+
+```bash
+python -m uvicorn app.api:app --host 0.0.0.0 --port 28472
+```
+
+`python run.py` 会自动判断当前环境：有桌面时打开本地窗口，无桌面 Linux/服务器环境则进入服务器模式并监听 `0.0.0.0:28472`。可通过 `AETHERSWAP_MODE=server|desktop`、`AETHERSWAP_HOST`、`AETHERSWAP_PORT` 覆盖默认行为；首次以非交互服务运行时，确认已阅读免责声明后可设置 `AETHERSWAP_AGREE_DISCLAIMER=1`。
 
 再通过外部浏览器访问服务器 IP 即可。**强烈建议配置 Nginx 反向代理与访问鉴权，不要将管理面板直接暴露在公网。**
 
 </details>
 
 <details>
+<summary><b>Q：策略中心里的用户模块可以直接执行代码吗？</b></summary>
+
+不可以。当前版本只允许启用 `module_kind: "declarative"` 的安全声明式模块；它只能读取上下文和前置模块输出，再用白名单操作符做判断。带 `code`、`source`、`entrypoint`、`command` 等字段的外部代码模块只会登记展示，不会执行，也不能加入启用链。
+
+</details>
+
+<details>
 <summary><b>Q：Buff Cookie 过期了怎么办？</b></summary>
 
-在 Web 控制台的【账号管理】中点击「重新登录」，系统将自动拉起内嵌浏览器完成重新授权，Cookie 刷新后自动保存，无需手动操作。
+在 Web 控制台的【账号管理】中点击「重新登录」。有桌面环境时系统会拉起内嵌浏览器完成重新授权；无桌面服务器会自动切换为手动 Cookie 输入流程。
 
 </details>
 

@@ -110,6 +110,10 @@ DEFAULTS = {
         "max_game_threads": 5,
         "max_region_threads": 16,
     },
+    "strategies": {
+        "active_buy_strategy_id": "system.buy.default",
+        "active_sell_strategy_id": "",
+    },
 }
 def merge(default: dict, overrides: dict) -> dict:
     out = dict(default)

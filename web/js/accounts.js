@@ -80,7 +80,7 @@ function renderAccountDetail(acc, currentId) {
   detail.querySelector("#btn-acc-del")?.addEventListener("click", async (e) => {
     const id = e.currentTarget?.dataset?.id;
     if (!id) return;
-    if (!confirm("确定删除此账号？")) return;
+    if (!(await appConfirm("确定删除此账号？", { title: "删除账号", danger: true, confirmText: "删除" }))) return;
     try {
       const r = await fetchJson(API + "/accounts/" + id, { method: "DELETE" });
       if (r.ok) {
@@ -134,7 +134,59 @@ function renderAccountDetail(acc, currentId) {
     }
   });
 }
+async function saveManualCookie(type, cookies) {
+  const r = await fetchJson(API + "/auth/" + type + "/manual_cookie", {
+    method: "POST",
+    body: JSON.stringify({ cookies }),
+  });
+  if (!r.ok) throw new Error(r.error || "Cookie 保存失败");
+  return r;
+}
+async function promptManualCookieLogin(type, reason = "", options = {}) {
+  const isSteam = type === "steam";
+  const message = options.message || ((reason ? `浏览器打开失败：${reason}\n\n` : "") + "请从已登录的浏览器复制 Cookie 后粘贴到下方。");
+  const cookie = await appPrompt(isSteam ? "手动输入 Steam Cookie" : "手动输入 Buff Cookie", "", {
+    message,
+    label: "Cookie",
+    placeholder: isSteam
+      ? "sessionid=...; steamLoginSecure=...; steamCountry=..."
+      : "session=...; csrf_token=...; ...",
+    type: "textarea",
+    rows: 8,
+    width: "620px",
+    confirmText: "保存 Cookie",
+  });
+  if (cookie === false) return false;
+  const raw = String(cookie || "").trim();
+  if (!raw) {
+    toast("未保存", "Cookie 不能为空");
+    return false;
+  }
+  try {
+    const r = await saveManualCookie(type, raw);
+    toast("Cookie 已保存", r.message || "");
+    if (options.refreshAfterSave !== false) {
+      if (isSteam) {
+        if (typeof refreshInventory === "function") await refreshInventory(true);
+        await refreshAccounts();
+      } else if (typeof refreshStatus === "function") {
+        await refreshStatus();
+      }
+    }
+    return true;
+  } catch (e) {
+    toast("Cookie 保存失败", e.message || "");
+    return false;
+  }
+}
 async function openBrowserAndLogin() {
+  if (typeof runtimeCanLaunchBrowser === "function" && !runtimeCanLaunchBrowser()) {
+    const saved = await promptManualCookieLogin(reloginType, "", {
+      message: typeof runtimeManualLoginMessage === "function" ? runtimeManualLoginMessage(reloginType) : "",
+    });
+    if (saved) hideReloginModal();
+    return;
+  }
   try {
     const d = await fetchJson(API + "/auth/" + reloginType + "/relogin_start", { method: "POST" });
     if (d.ok) {
@@ -143,9 +195,13 @@ async function openBrowserAndLogin() {
       if (btnOk) btnOk.disabled = false;
     } else {
       toast("打开失败", d.error || "");
+      const saved = await promptManualCookieLogin(reloginType, d.error || "");
+      if (saved) hideReloginModal();
     }
   } catch (e) {
     toast("请求失败", e.message || "");
+    const saved = await promptManualCookieLogin(reloginType, e.message || "");
+    if (saved) hideReloginModal();
   }
 }
 async function finishRelogin(success) {

@@ -183,8 +183,19 @@ def compute_holdings_stats(holdings: list, resell_ratio: float = 0.85) -> tuple:
     total_mp = sum(float(t.get("market_price", 0) or 0) for t in holdings if t.get("market_price") is not None)
     has_cmp = any(t.get("current_market_price") is not None for t in holdings)
     total_cmp = sum(float(t.get("current_market_price", 0) or 0) for t in holdings) if has_cmp else None
-    pl = (total_cmp - total_mp) if total_cmp is not None and total_mp and total_mp > 0 else None
-    pl_pct = (pl / total_mp * 100) if pl is not None and total_mp and total_mp > 0 else None
+    change_total_mp = 0.0
+    change_total_cmp = 0.0
+    for t in holdings:
+        if t.get("market_price") is None or t.get("current_market_price") is None:
+            continue
+        mp = float(t.get("market_price") or 0)
+        cmp = float(t.get("current_market_price") or 0)
+        if mp <= 0:
+            continue
+        change_total_mp += mp
+        change_total_cmp += cmp
+    pl = (change_total_cmp - change_total_mp) if change_total_mp > 0 else None
+    pl_pct = (pl / change_total_mp * 100) if pl is not None and change_total_mp > 0 else None
     return total_price, total_mp, total_cmp, pl, pl_pct, ratio
 def build_holdings_report_content(
     holdings: list,

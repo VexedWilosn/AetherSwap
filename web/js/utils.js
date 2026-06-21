@@ -1,6 +1,7 @@
 
 const API = '/api';
 const REFRESH_INTERVAL_DEFAULT = 60;
+window.RUNTIME_PROFILE = null;
 function el(id) {
   return document.getElementById(id);
 }
@@ -16,6 +17,111 @@ function toast(title, detail = "") {
     node.classList.add("toast-exit");
   }, ttl - 400);
   setTimeout(() => node.remove(), ttl);
+}
+function appModal(options = {}) {
+  const {
+    title = "确认操作",
+    message = "",
+    content = "",
+    actions = null,
+    variant = "default",
+    input = null,
+    defaultValue = "",
+    autofocus = true,
+    width = "460px",
+  } = options;
+  return new Promise((resolve) => {
+    const host = document.createElement("div");
+    host.className = "app-modal-host";
+    const actionList = actions || [
+      { label: "取消", value: false, kind: "secondary" },
+      { label: "确认", value: true, kind: "primary" },
+    ];
+    const inputTag = input && input.type === "textarea"
+      ? `<textarea class="app-modal-input" rows="${Number(input.rows || 6)}" placeholder="${escapeHtml(input.placeholder || "")}">${escapeHtml(defaultValue)}</textarea>`
+      : `<input class="app-modal-input" type="${escapeHtml(input?.type || "text")}" value="${escapeHtml(defaultValue)}" placeholder="${escapeHtml(input?.placeholder || "")}" />`;
+    const inputHtml = input ? `
+      <label class="app-modal-field">
+        ${input.label ? `<span>${escapeHtml(input.label)}</span>` : ""}
+        ${inputTag}
+      </label>
+    ` : "";
+    const hasCustomContent = !!content;
+    const contentHtml = content instanceof HTMLElement ? "" : String(content || "");
+    host.innerHTML = `
+      <div class="app-modal-backdrop"></div>
+      <section class="app-modal app-modal--${escapeHtml(variant)}" role="dialog" aria-modal="true" style="max-width:${escapeHtml(width)}">
+        <div class="app-modal-head">
+          <h3>${escapeHtml(title)}</h3>
+          <button type="button" class="app-modal-close" aria-label="关闭">×</button>
+        </div>
+        ${message ? `<div class="app-modal-message">${escapeHtml(message).replace(/\n/g, "<br>")}</div>` : ""}
+        ${inputHtml}
+        ${hasCustomContent ? `<div class="app-modal-content">${contentHtml}</div>` : ""}
+        <div class="app-modal-actions">
+          ${actionList.map((a, idx) => `<button type="button" class="btn btn-sm ${a.kind === "primary" ? "btn-primary" : a.kind === "danger" ? "btn-danger" : "btn-secondary"}" data-action="${idx}">${escapeHtml(a.label)}</button>`).join("")}
+        </div>
+      </section>
+    `;
+    document.body.appendChild(host);
+    const modal = host.querySelector(".app-modal");
+    const contentBox = host.querySelector(".app-modal-content");
+    if (content instanceof HTMLElement && contentBox) contentBox.appendChild(content);
+    const close = (value) => {
+      host.classList.add("closing");
+      setTimeout(() => host.remove(), 160);
+      resolve(value);
+    };
+    host.querySelector(".app-modal-close")?.addEventListener("click", () => close(false));
+    host.querySelector(".app-modal-backdrop")?.addEventListener("click", () => close(false));
+    host.querySelectorAll("[data-action]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const action = actionList[Number(btn.dataset.action)];
+        if (input && action.value !== false) {
+          close(host.querySelector(".app-modal-input")?.value ?? "");
+        } else {
+          close(action.value);
+        }
+      });
+    });
+    host.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") close(false);
+      if (e.key === "Enter" && input && !e.shiftKey && e.target?.tagName !== "TEXTAREA") {
+        e.preventDefault();
+        close(host.querySelector(".app-modal-input")?.value ?? "");
+      }
+    });
+    requestAnimationFrame(() => {
+      host.classList.add("shown");
+      if (autofocus) (host.querySelector(".app-modal-input") || host.querySelector(".app-modal-actions .btn-primary") || host.querySelector(".app-modal-actions button"))?.focus();
+    });
+    if (typeof options.onOpen === "function") options.onOpen(host, close);
+  });
+}
+function appConfirm(message, options = {}) {
+  return appModal({
+    title: options.title || "确认操作",
+    message,
+    variant: options.variant || "warning",
+    actions: [
+      { label: options.cancelText || "取消", value: false, kind: "secondary" },
+      { label: options.confirmText || "确认", value: true, kind: options.danger ? "danger" : "primary" },
+    ],
+    width: options.width || "460px",
+  });
+}
+function appPrompt(title, defaultValue = "", options = {}) {
+  return appModal({
+    title,
+    message: options.message || "",
+    input: { label: options.label || "", placeholder: options.placeholder || "", type: options.type || "text", rows: options.rows },
+    defaultValue,
+    actions: [
+      { label: options.cancelText || "取消", value: false, kind: "secondary" },
+      { label: options.confirmText || "确认", value: true, kind: "primary" },
+    ],
+    width: options.width || "440px",
+  });
 }
 function escapeHtml(s) {
   const div = document.createElement("div");
@@ -44,6 +150,52 @@ async function fetchJson(url, opts = {}) {
     throw new Error(msg);
   }
   return data;
+}
+async function loadRuntimeProfile() {
+  try {
+    const data = await fetchJson(API + "/runtime");
+    window.RUNTIME_PROFILE = data.runtime || null;
+  } catch {
+    window.RUNTIME_PROFILE = null;
+  }
+  applyRuntimeUiHints();
+  return window.RUNTIME_PROFILE;
+}
+function getRuntimeProfile() {
+  return window.RUNTIME_PROFILE || {};
+}
+function runtimeCanLaunchBrowser() {
+  const profile = getRuntimeProfile();
+  return profile.can_launch_headful_browser !== false;
+}
+function runtimeManualLoginMessage(type = "steam") {
+  const label = type === "buff" ? "Buff" : "Steam";
+  const profile = getRuntimeProfile();
+  if (profile.can_launch_headful_browser === false) {
+    return `当前后端运行在服务器/无桌面环境，无法弹出 ${label} 登录浏览器。请在你本机浏览器完成登录后，复制 ${label} Cookie 并粘贴保存。`;
+  }
+  return `请从已登录的浏览器复制 ${label} Cookie 后粘贴到下方。`;
+}
+function applyRuntimeUiHints() {
+  const canLaunch = runtimeCanLaunchBrowser();
+  const reloginOpen = el("relogin-btn-open");
+  const reloginOk = el("relogin-btn-ok");
+  if (reloginOpen) reloginOpen.textContent = canLaunch ? "打开浏览器并登录" : "手动填写 Cookie";
+  if (reloginOk && !canLaunch) reloginOk.disabled = true;
+
+  const wizardBuffOpen = el("wiz-buff-open");
+  if (wizardBuffOpen) {
+    const icon = wizardBuffOpen.querySelector("svg")?.outerHTML || "";
+    wizardBuffOpen.innerHTML = `${icon}${canLaunch ? "打开浏览器登录 Buff" : "手动填写 Buff Cookie"}`;
+  }
+  const wizardBuffDesc = document.querySelector("#wizard-step-3 .wizard-desc");
+  if (wizardBuffDesc && !canLaunch) {
+    wizardBuffDesc.textContent = "AetherSwap 需要您的 Buff Cookie 来读取市场数据和下单。当前后端无法弹出图形浏览器，请在本机浏览器登录 Buff 后复制 Cookie 并粘贴保存。";
+  }
+  const accountGuideStep = document.querySelector("#accounts-guide-callout .agu-step:nth-child(2)");
+  if (accountGuideStep && !canLaunch) {
+    accountGuideStep.innerHTML = '<span class="agu-num">2</span> 点击账号卡片上的「<strong>验证</strong>」，若服务器无法自动处理则手动粘贴 Cookie';
+  }
 }
 function buildAccountAvatar(name, avatarUrl, size = 40) {
   const initial = (name || "?").trim().charAt(0).toUpperCase() || "?";

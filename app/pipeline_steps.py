@@ -5,9 +5,9 @@ import time
 from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
-from app.purchase_limit import calculate_safe_purchase_limit
 from app.services.iflow_client import fetch_iflow_rows as _fetch_iflow_rows
 from app.state import get_purchases, set_status
+from app.strategy_engine import evaluate_strategy_runtime_modules, is_strategy_module_enabled
 from app.services.steam_client import SteamClient
 from app.services.analysis_client import StabilityAnalyzer
 from app.services.buff_client import count_lowest_price_orders, first_order_at_price
@@ -390,6 +390,90 @@ def _check_max_discount_precheck(
             return False
     return True
 
+
+def _build_buy_strategy_outputs(
+    item: Dict[str, Any],
+    steam_sell_data: Optional[Dict[str, Any]] = None,
+    smart_price: Optional[float] = None,
+    est_ratio: Optional[float] = None,
+    ref_price_est: Optional[float] = None,
+    report: Optional[Dict[str, Any]] = None,
+    pipeline_cfg: Optional[dict] = None,
+) -> Dict[str, Any]:
+    outputs: Dict[str, Any] = {}
+    if steam_sell_data:
+        orders = steam_sell_data.get("sell_orders") or []
+        daily_volume = int(item.get("daily_volume", 0) or 0)
+        sell_pressure = None
+        if daily_volume > 0 and orders:
+            try:
+                n = int((pipeline_cfg or {}).get("sell_pressure_orders_n", 5) or 5)
+                top_orders = orders[:max(1, n)]
+                volume = sum(int(o.get("quantity", 0) or 0) for o in top_orders if isinstance(o, dict))
+                sell_pressure = volume / daily_volume
+            except Exception:
+                sell_pressure = None
+        outputs["buy.steam_sell_depth"] = {
+            "smart_price": smart_price if smart_price is not None else steam_sell_data.get("smart_price"),
+            "sell_orders_count": len(orders),
+            "sell_pressure": sell_pressure,
+            "reference_price": ref_price_est,
+            "estimated_ratio": est_ratio,
+        }
+    if report:
+        outputs["guard.history_data_window"] = {
+            key: report.get(key)
+            for key in (
+                "status", "avg", "cv", "r_squared", "slope", "price_percentile",
+                "ma7", "ma30", "is_stable",
+            )
+        }
+    if est_ratio is not None:
+        outputs["guard.max_discount"] = {
+            "estimated_ratio": est_ratio,
+            "limit": (pipeline_cfg or {}).get("max_discount"),
+        }
+    return outputs
+
+
+def _passes_custom_buy_modules(
+    item: Dict[str, Any],
+    config: dict,
+    *,
+    steam_sell_data: Optional[Dict[str, Any]] = None,
+    smart_price: Optional[float] = None,
+    est_ratio: Optional[float] = None,
+    ref_price_est: Optional[float] = None,
+    report: Optional[Dict[str, Any]] = None,
+    log_fn: Optional[Callable[[str, str], None]] = None,
+) -> bool:
+    outputs = _build_buy_strategy_outputs(
+        item,
+        steam_sell_data=steam_sell_data,
+        smart_price=smart_price,
+        est_ratio=est_ratio,
+        ref_price_est=ref_price_est,
+        report=report,
+        pipeline_cfg=config.get("pipeline") or {},
+    )
+    context = {
+        "item": item,
+        "config": config,
+    }
+    results, blocking = evaluate_strategy_runtime_modules(
+        config,
+        "buy",
+        "buy.candidate_guard",
+        context=context,
+        outputs=outputs,
+    )
+    if log_fn:
+        for result in results:
+            level = "warn" if result.get("status") in {"reject", "error"} else "info"
+            log_fn(f"[策略模块] {result.get('module_name')}: {result.get('reason')} ({result.get('status')})", level)
+    return blocking is None
+
+
 def pick_stable_item(
     filtered: List[Dict[str, Any]],
     config: dict,
@@ -412,6 +496,18 @@ def pick_stable_item(
     n = len(filtered)
     request_interval = float(stability_cfg.get("request_interval_seconds", 2.5))
     failure_delay = max(0, float(stability_cfg.get("request_failure_delay_seconds", 5) or 5))
+    legacy_history_enabled = is_strategy_module_enabled(config, "buy", "guard.history_stability", default=False)
+    history_data_enabled = legacy_history_enabled or is_strategy_module_enabled(config, "buy", "guard.history_data_window")
+    volatility_enabled = legacy_history_enabled or is_strategy_module_enabled(config, "buy", "guard.volatility_cv")
+    trend_quality_enabled = legacy_history_enabled or is_strategy_module_enabled(config, "buy", "guard.trend_quality")
+    price_position_enabled = legacy_history_enabled or is_strategy_module_enabled(config, "buy", "guard.price_position")
+    history_analysis_enabled = any((
+        legacy_history_enabled,
+        history_data_enabled,
+        volatility_enabled,
+        trend_quality_enabled,
+        price_position_enabled,
+    ))
     for i, item in enumerate(filtered):
         if is_stop_requested():
             return None, stability_failed
@@ -431,11 +527,15 @@ def pick_stable_item(
         verbose_detail = bool(pipeline_cfg.get("verbose_debug", False))
         if item_log and verbose_detail:
             item_log(f"[稳定性] 开始预检 ({i+1}/{n}) Buff参考价={item.get('min_price')} 比例={item.get('ratio')}", "debug")
-        max_discount = pipeline_cfg.get("max_discount")
-        sell_pressure_threshold = _parse_threshold(pipeline_cfg.get("sell_pressure_threshold"))
+        max_discount = pipeline_cfg.get("max_discount") if is_strategy_module_enabled(config, "buy", "guard.max_discount") else None
+        sell_pressure_threshold = _parse_threshold(pipeline_cfg.get("sell_pressure_threshold")) if is_strategy_module_enabled(config, "buy", "guard.sell_pressure") else None
+        steam_depth_enabled = is_strategy_module_enabled(config, "buy", "buy.steam_sell_depth")
         need_steam = (
-            max_discount is not None
-            or (sell_pressure_threshold is not None and sell_pressure_threshold > 0 and int(item.get("daily_volume", 0) or 0) > 0)
+            steam_depth_enabled
+            and (
+                max_discount is not None
+                or (sell_pressure_threshold is not None and sell_pressure_threshold > 0 and int(item.get("daily_volume", 0) or 0) > 0)
+            )
         )
         steam_sell_data: Optional[Dict[str, Any]] = None
         smart_price: Optional[float] = None
@@ -446,7 +546,7 @@ def pick_stable_item(
             plan_price = item.get("min_price")
 
             # 1. Buff 价格预检
-            if buff_client:
+            if buff_client and is_strategy_module_enabled(config, "buy", "buy.buff_realtime_price"):
                 if item_log and verbose_detail:
                     item_log("[稳定性] 检查 Buff 实时卖单…", "debug")
                 buff_ok, plan_price = _check_buff_price(
@@ -505,6 +605,27 @@ def pick_stable_item(
                     jittered_sleep(failure_delay)
                 continue
 
+        if not history_analysis_enabled:
+            if smart_price is None and not need_steam:
+                steam_sell_data = _fetch_steam_sell_data(market_hash_name, config, app_id=730)
+                smart_price = steam_sell_data.get("smart_price") if steam_sell_data else None
+            item["_steam_sell_data"] = steam_sell_data
+            if not _passes_custom_buy_modules(
+                item,
+                config,
+                steam_sell_data=steam_sell_data,
+                smart_price=smart_price,
+                est_ratio=est_ratio,
+                ref_price_est=ref_price_est,
+                log_fn=item_log,
+            ):
+                if gid:
+                    stability_failed.add(gid)
+                continue
+            if item_log:
+                item_log("[稳定性] 历史稳定性模块未启用，跳过历史分析，选定本件", "info")
+            return item, stability_failed
+
         # 6. 拉历史K线 + 稳定性分析
         if item_log:
             item_log("[稳定性] 拉取历史价格…", "info")
@@ -525,7 +646,7 @@ def pick_stable_item(
             continue
 
         # 利润特别大时适当放宽价格分位限制
-        dyn_price_percentile_ceil = float(stability_cfg.get("price_percentile_ceil", 0.8))
+        dyn_price_percentile_ceil = float(stability_cfg.get("price_percentile_ceil", 0.8)) if price_position_enabled else 999.0
         if est_ratio is not None and est_ratio > 0 and max_discount is not None:
             max_discount_float = float(max_discount)
             huge_offset = float(pipeline_cfg.get("huge_profit_offset", 0.05))
@@ -544,17 +665,17 @@ def pick_stable_item(
             history,
             days=stability_days,
             currency=currency,
-            cv_threshold=cv_threshold,
-            r2_threshold=r2_threshold,
-            min_daily_trades=min_daily_trades,
+            cv_threshold=cv_threshold if volatility_enabled else 999.0,
+            r2_threshold=r2_threshold if trend_quality_enabled else 2.0,
+            min_daily_trades=min_daily_trades if history_data_enabled else 0,
             current_price=smart_price,
             price_percentile_ceil=dyn_price_percentile_ceil,
-            r2_rising_threshold=float(stability_cfg.get("r2_rising_threshold", 0.8)),
-            slope_pct_ceil=float(stability_cfg.get("slope_pct_ceil", 0.01)),
-            ma_deviation_ceil=float(stability_cfg.get("ma_deviation_ceil", 1.1)),
-            last_price_ma30_ceil=float(stability_cfg.get("last_price_ma30_ceil", 1.05)),
-            slope_stable_floor=float(stability_cfg.get("slope_stable_floor", -0.005)),
-            price_percentile_ceil_rising=float(stability_cfg.get("price_percentile_ceil_rising", 0.5)),
+            r2_rising_threshold=float(stability_cfg.get("r2_rising_threshold", 0.8)) if trend_quality_enabled else -1.0,
+            slope_pct_ceil=float(stability_cfg.get("slope_pct_ceil", 0.01)) if trend_quality_enabled else 999.0,
+            ma_deviation_ceil=float(stability_cfg.get("ma_deviation_ceil", 1.1)) if price_position_enabled else 999.0,
+            last_price_ma30_ceil=float(stability_cfg.get("last_price_ma30_ceil", 1.05)) if price_position_enabled else 999.0,
+            slope_stable_floor=float(stability_cfg.get("slope_stable_floor", -0.005)) if trend_quality_enabled else -999.0,
+            price_percentile_ceil_rising=float(stability_cfg.get("price_percentile_ceil_rising", 0.5)) if price_position_enabled else 999.0,
             use_vwap=bool(stability_cfg.get("use_vwap", True)),
         )
         if smart_price is not None and not report.get("valid"):
@@ -577,6 +698,21 @@ def pick_stable_item(
             steam_sell_data = _fetch_steam_sell_data(market_hash_name, config, app_id=730)
             smart_price = steam_sell_data.get("smart_price") if steam_sell_data else None
         item["_steam_sell_data"] = steam_sell_data
+        if not _passes_custom_buy_modules(
+            item,
+            config,
+            steam_sell_data=steam_sell_data,
+            smart_price=smart_price,
+            est_ratio=est_ratio,
+            ref_price_est=ref_price_est,
+            report=report,
+            log_fn=item_log,
+        ):
+            if gid:
+                stability_failed.add(gid)
+            if failure_delay > 0:
+                jittered_sleep(failure_delay)
+            continue
         if item_log:
             st = report.get("status", "")
             sl = report.get("slope", 0)
@@ -821,11 +957,15 @@ def lock_and_confirm_payment(
         return None
     market_hash_name = (item.get("steam_market_name") or item.get("name") or "").strip()
     scfg = config.get("pipeline", {})
-    max_discount = scfg.get("max_discount")
-    sell_pressure_threshold = _parse_threshold(scfg.get("sell_pressure_threshold"))
+    max_discount = scfg.get("max_discount") if is_strategy_module_enabled(config, "buy", "guard.max_discount") else None
+    sell_pressure_threshold = _parse_threshold(scfg.get("sell_pressure_threshold")) if is_strategy_module_enabled(config, "buy", "guard.sell_pressure") else None
+    steam_depth_enabled = is_strategy_module_enabled(config, "buy", "buy.steam_sell_depth")
     need_steam = (
-        max_discount is not None
-        or (sell_pressure_threshold is not None and sell_pressure_threshold > 0 and int(item.get("daily_volume", 0) or 0) > 0)
+        steam_depth_enabled
+        and (
+            max_discount is not None
+            or (sell_pressure_threshold is not None and sell_pressure_threshold > 0 and int(item.get("daily_volume", 0) or 0) > 0)
+        )
     )
     cached_steam_data = item.get("_steam_sell_data")
     steam_sell_error = None
@@ -873,17 +1013,42 @@ def lock_and_confirm_payment(
                 return None
         elif daily_vol <= 0 and log_fn:
             log_fn("[Buff]   → 卖压检查: 日销量为0，跳过", "info")
-    safe_limit = calculate_safe_purchase_limit(
-        item_price=lowest_price,
-        daily_volume=int(item.get("daily_volume", 0) or 0),
-        hard_qty_cap=int(scfg.get("safe_purchase_hard_qty_cap", 50)),
-        liquidity_ratio=float(scfg.get("safe_purchase_liquidity_ratio", 0.05)),
-        low_price_threshold=float(scfg.get("safe_purchase_low_price_threshold", 5.0)),
-        low_price_penalty=float(scfg.get("safe_purchase_low_price_penalty", 0.5)),
-        low_price_hard_cap=int(scfg.get("safe_purchase_low_price_hard_cap", 30)),
-    )
+    buy_runtime = ((config or {}).get("_strategy_runtime") or {}).get("buy")
+    if buy_runtime:
+        legacy_safe_enabled = is_strategy_module_enabled(config, "buy", "guard.safe_purchase_limit", default=False)
+        hard_cap_enabled = legacy_safe_enabled or is_strategy_module_enabled(config, "buy", "guard.purchase_hard_cap", default=False)
+        liquidity_cap_enabled = legacy_safe_enabled or is_strategy_module_enabled(config, "buy", "guard.purchase_liquidity_cap", default=False)
+        low_price_guard_enabled = legacy_safe_enabled or is_strategy_module_enabled(config, "buy", "guard.low_price_purchase_guard", default=False)
+        held_same_guard_enabled = legacy_safe_enabled or is_strategy_module_enabled(config, "buy", "guard.held_same_item_guard", default=False)
+    else:
+        hard_cap_enabled = True
+        liquidity_cap_enabled = True
+        low_price_guard_enabled = True
+        held_same_guard_enabled = True
+    safe_purchase_enabled = any((
+        hard_cap_enabled,
+        liquidity_cap_enabled,
+        low_price_guard_enabled,
+        held_same_guard_enabled,
+    ))
+    if safe_purchase_enabled:
+        cap_candidates = []
+        daily_volume = int(item.get("daily_volume", 0) or 0)
+        is_low_price = lowest_price < float(scfg.get("safe_purchase_low_price_threshold", 5.0))
+        if hard_cap_enabled:
+            cap_candidates.append(int(scfg.get("safe_purchase_hard_qty_cap", 50)))
+        if liquidity_cap_enabled:
+            volume_cap = int(daily_volume * float(scfg.get("safe_purchase_liquidity_ratio", 0.05)))
+            if low_price_guard_enabled and is_low_price:
+                volume_cap = int(volume_cap * float(scfg.get("safe_purchase_low_price_penalty", 0.5)))
+            cap_candidates.append(volume_cap)
+        if low_price_guard_enabled and is_low_price:
+            cap_candidates.append(int(scfg.get("safe_purchase_low_price_hard_cap", 30)))
+        safe_limit = max(min(cap_candidates), 0) if cap_candidates else count_at_lowest
+    else:
+        safe_limit = count_at_lowest
     item_name = market_hash_name
-    if item_name:
+    if item_name and held_same_guard_enabled:
         purchases_snapshot = get_purchases()
         holdings = [p for p in purchases_snapshot if not (p.get("sale_price") and float(p.get("sale_price", 0) or 0) > 0)]
         held_same = sum(1 for p in holdings if (p.get("name") or "").strip() == item_name)
@@ -892,7 +1057,7 @@ def lock_and_confirm_payment(
             log_fn(f"[Buff]   → 已持有同名(英文) {held_same} 件，安全上限 {safe_limit + held_same} → {safe_limit}", "info")
     if safe_limit <= 0:
         if log_fn:
-            log_fn("[Buff]   → 安全采购上限=0（流动性不足或低价惩罚），跳过本件", "warn")
+            log_fn("[Buff]   → 安全采购模块限制为0，跳过本件", "warn")
         return SKIP_NO_FAILED
     remaining = target_balance - acc
     num_to_buy = min(count_at_lowest, max(1, int(remaining / lowest_price)))

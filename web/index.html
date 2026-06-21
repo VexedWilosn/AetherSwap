@@ -332,6 +332,20 @@
           </svg>
           <span>代理池</span>
         </button>
+        <button class="nav-item" data-tab="strategies">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 21v-7"></path>
+            <path d="M4 10V3"></path>
+            <path d="M12 21v-9"></path>
+            <path d="M12 8V3"></path>
+            <path d="M20 21v-5"></path>
+            <path d="M20 12V3"></path>
+            <path d="M2 14h4"></path>
+            <path d="M10 8h4"></path>
+            <path d="M18 16h4"></path>
+          </svg>
+          <span>策略中心</span>
+        </button>
         <button class="nav-item" data-tab="settings">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="3"></circle>
@@ -687,10 +701,87 @@
         </div>
       </section>
 
+      <section id="panel-strategies" class="panel">
+        <div class="strategy-shell">
+          <div class="strategy-hero">
+            <div>
+              <div class="strategy-kicker">Strategy Center</div>
+              <h2>策略中心</h2>
+              <p>管理购入与出售策略，组装内置模块，登记自定义模块，并在启用前完成风险确认。</p>
+            </div>
+            <div class="strategy-hero-actions">
+              <button type="button" class="btn btn-secondary" id="strategy-btn-refresh">刷新</button>
+              <button type="button" class="btn btn-secondary" id="strategy-btn-import">导入策略</button>
+              <button type="button" class="btn btn-primary" id="strategy-btn-new">新建策略</button>
+              <input id="strategy-import-file" type="file" accept=".json" hidden />
+            </div>
+          </div>
+
+          <div class="strategy-tabs" role="tablist">
+            <button type="button" class="strategy-tab active" data-strategy-view="buy">购入策略</button>
+            <button type="button" class="strategy-tab" data-strategy-view="sell">出售策略</button>
+            <button type="button" class="strategy-tab" data-strategy-view="modules">模块管理</button>
+          </div>
+
+          <div class="strategy-workbench" id="strategy-workbench">
+            <aside class="strategy-panel strategy-list-panel">
+              <div class="strategy-panel-head">
+                <div>
+                  <span class="strategy-label">策略库</span>
+                  <strong id="strategy-list-title">购入策略</strong>
+                </div>
+                <span class="strategy-pill" id="strategy-active-pill">—</span>
+              </div>
+              <div id="strategy-list" class="strategy-list"></div>
+            </aside>
+
+            <main class="strategy-panel strategy-flow-panel">
+              <div class="strategy-editor-head">
+                <div>
+                  <span class="strategy-label" id="strategy-editor-origin">—</span>
+                  <h3 id="strategy-editor-name">选择一个策略</h3>
+                  <p id="strategy-editor-desc">策略步骤会在这里显示。</p>
+                </div>
+                <div class="strategy-editor-actions">
+                  <button type="button" class="btn btn-sm btn-secondary" id="strategy-btn-copy">复制</button>
+                  <button type="button" class="btn btn-sm btn-secondary" id="strategy-btn-export">导出</button>
+                  <button type="button" class="btn btn-sm btn-secondary" id="strategy-btn-simulate">模拟</button>
+                  <button type="button" class="btn btn-sm btn-secondary" id="strategy-btn-reset-defaults">恢复默认</button>
+                  <button type="button" class="btn btn-sm btn-primary" id="strategy-btn-save">保存</button>
+                  <button type="button" class="btn btn-sm btn-primary" id="strategy-btn-activate">启用</button>
+                  <button type="button" class="btn btn-sm btn-danger-outline" id="strategy-btn-delete">删除</button>
+                </div>
+              </div>
+              <div id="strategy-steps" class="strategy-steps"></div>
+              <div id="strategy-sim-results" class="strategy-sim-results hidden"></div>
+              <div class="strategy-editor-foot">
+                <button type="button" class="btn btn-secondary" id="strategy-btn-add-step">添加模块</button>
+              </div>
+            </main>
+          </div>
+
+          <div class="strategy-modules-view hidden" id="strategy-modules-view">
+            <div class="strategy-panel">
+              <div class="strategy-panel-head">
+                <div>
+                  <span class="strategy-label">Module Library</span>
+                  <strong>模块管理</strong>
+                </div>
+                <div class="strategy-editor-actions">
+                  <button type="button" class="btn btn-secondary" id="strategy-btn-import-module">导入用户模块</button>
+                  <input id="strategy-module-import-file" type="file" accept=".json" hidden />
+                </div>
+              </div>
+              <div id="strategy-modules-list" class="strategy-modules-list"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section id="panel-settings" class="panel">
         <div class="settings-layout">
           <div class="settings-group">
-            <h2>SteamDT 配置</h2>
+            <h2>SteamDT 数据源</h2>
             <div class="form-grid">
               <div class="field">
                 <label for="cfg-games">SteamDT 类型</label>
@@ -701,7 +792,7 @@
                 <input id="cfg-platforms" placeholder="e.g. BUFF" />
               </div>
               <div class="field">
-                <label for="cfg-sort_by">排序策略</label>
+                <label for="cfg-sort_by">排序方式</label>
                 <select id="cfg-sort_by">
                   <option value="sell">最优寄售</option>
                   <option value="buy">最优求购</option>
@@ -710,7 +801,7 @@
               <div class="field-row">
                 <div class="field">
                   <label>最低价</label>
-                  <input type="number" id="cfg-min_price" step="0.01" />
+                  <input type="number" id="cfg-min_price" min="0" step="0.01" />
                 </div>
                 <div class="field">
                   <label>最高价</label>
@@ -727,7 +818,7 @@
           </div>
 
           <div class="settings-group">
-            <h2>Buff 交易策略</h2>
+            <h2>Buff 支付</h2>
             <div class="form-grid">
               <div class="field">
                 <label for="cfg-pay_method">支付方式</label>
@@ -735,33 +826,6 @@
                   <option value="alipay">支付宝 (Alipay)</option>
                   <option value="wechat">微信 (WeChat)</option>
                 </select>
-              </div>
-              <div class="field-row">
-                <div class="field">
-                  <label>目标余额</label>
-                  <input type="number" id="cfg-target_balance" />
-                </div>
-                <div class="field">
-                  <label>最高折扣</label>
-                  <input type="number" id="cfg-max_discount" placeholder="0-1，二次验证用"
-                    title="锁单时(Steam参考价/Buff)×1.15须<此值；不在此处筛SteamDT" />
-                </div>
-              </div>
-              <div class="field-row">
-                <div class="field">
-                  <label>巨额利润阈值差 (默认0.05)</label>
-                  <input type="number" id="cfg-huge_profit_offset" step="0.01" placeholder="0.05"
-                    title="巨额利润阈值 = 最高折扣 - 此差值" />
-                </div>
-                <div class="field">
-                  <label>SteamDT 取前N条</label>
-                  <input type="number" id="cfg-iflow_top_n" min="0" placeholder="50"
-                    title=">0时仅取SteamDT前N条排查；0=不限制；最高折扣在锁单二次验证生效" />
-                </div>
-              </div>
-              <div class="field">
-                <label>关键词排除 (每行一个)</label>
-                <textarea id="cfg-exclude_keywords" rows="4"></textarea>
               </div>
             </div>
           </div>
@@ -786,102 +850,6 @@
                   <label for="cfg-end-time-hour">结束时间（几点）</label>
                   <input type="number" id="cfg-end-time-hour" min="0" max="23" placeholder="22"
                     title="0–23，例 22 表示 22:00" />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="settings-group">
-            <h2>出售策略</h2>
-            <div class="form-grid">
-              <div class="field">
-                <label for="cfg-sell_strategy">策略</label>
-                <select id="cfg-sell_strategy">
-                  <option value="1">策略1：可出售后立即上架</option>
-                  <option value="2">策略2：可出售后查趋势，下降则按最新价+补偿上架，上升则等待</option>
-                  <option value="3">策略3：智能判断汇率利润，避免低价售出</option>
-                  <option value="4">策略4：暂停自动出售（手动出售）</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="cfg-sell_price_offset">价格补偿 (策略1/2，±元)</label>
-                <input type="number" id="cfg-sell_price_offset" step="0.01" placeholder="0" />
-              </div>
-              <div class="field-row">
-                <div class="field">
-                  <label for="cfg-sell_price_wall_volume">价格墙数量阈值</label>
-                  <input type="number" id="cfg-sell_price_wall_volume" min="1" max="200" placeholder="20"
-                    title="累积多少数量视为价格墙" />
-                </div>
-                <div class="field">
-                  <label for="cfg-sell_price_max_ignore_volume">断层跳跃容忍量</label>
-                  <input type="number" id="cfg-sell_price_max_ignore_volume" min="0" max="50" placeholder="4"
-                    title="当断层前累积数量≤此值时，可跳过低价单挂高价；如 3.62(1)+3.97(1) 共2个≤4，可跳过挂4.43下" />
-                </div>
-              </div>
-              <div class="field-row">
-                <div class="field">
-                  <label for="cfg-sell_trend_days">出售趋势判断天数 (策略2)</label>
-                  <input type="number" id="cfg-sell_trend_days" min="1" max="90" placeholder="7"
-                    title="策略2 使用最近 N 天 Steam 成交数据做趋势判断；敏感度按价格动态(低价1.5%/中价0.8%/高价0.4%)" />
-                </div>
-                <div class="field">
-                  <label for="cfg-max_listings_per_item">同名在售上限</label>
-                  <input type="number" id="cfg-max_listings_per_item" min="1" max="50" placeholder="5"
-                    title="同一物品名称在售数量不超过此值，超过则本件不再上架" />
-                </div>
-                <div class="field">
-                  <label for="cfg-listing_delay_seconds">上架间隔(秒)</label>
-                  <input type="number" id="cfg-listing_delay_seconds" min="1" max="30" placeholder="3"
-                    title="每件上架后等待秒数，避免 Steam 报「前一操作未完成」" />
-                </div>
-              </div>
-              <div class="field">
-                <label for="cfg-resell_ratio">出售比率</label>
-                <input type="number" id="cfg-resell_ratio" step="0.01" min="0.01" max="1" placeholder="0.85"
-                  title="出售到手比例 (0–1)，变现收益=税后价格×出售比率-购入价；自用收益=税后价格-购入价" />
-              </div>
-              <div class="field-row">
-                <div class="field">
-                  <label for="cfg-safe_purchase_hard_qty_cap">安全采购-硬上限</label>
-                  <input type="number" id="cfg-safe_purchase_hard_qty_cap" min="1" max="500" placeholder="50"
-                    title="单品种最大购买数量，防操作过载" />
-                </div>
-                <div class="field">
-                  <label for="cfg-safe_purchase_liquidity_ratio">安全采购-流动性比例</label>
-                  <input type="number" id="cfg-safe_purchase_liquidity_ratio" step="0.01" min="0.01" max="0.5"
-                    placeholder="0.05" title="持有量不超过日销量比例，如0.05=5%" />
-                </div>
-              </div>
-              <div class="field-row">
-                <div class="field">
-                  <label for="cfg-safe_purchase_low_price_threshold">低价阈值(元)</label>
-                  <input type="number" id="cfg-safe_purchase_low_price_threshold" step="0.1" min="0" placeholder="5"
-                    title="低于此价启用低价惩罚" />
-                </div>
-              </div>
-              <div class="field-row">
-                <div class="field">
-                  <label for="cfg-safe_purchase_low_price_penalty">低价惩罚系数</label>
-                  <input type="number" id="cfg-safe_purchase_low_price_penalty" step="0.1" min="0.1" max="1"
-                    placeholder="0.5" title="低价时流动性上限乘以此系数" />
-                </div>
-                <div class="field">
-                  <label for="cfg-safe_purchase_low_price_hard_cap">低价硬上限</label>
-                  <input type="number" id="cfg-safe_purchase_low_price_hard_cap" min="1" max="100" placeholder="30"
-                    title="低价品单品种最大购买数" />
-                </div>
-              </div>
-              <div class="field-row">
-                <div class="field">
-                  <label for="cfg-sell_pressure_orders_n">卖压-前N档</label>
-                  <input type="number" id="cfg-sell_pressure_orders_n" min="1" max="20" placeholder="5"
-                    title="取Steam最低N个价位档的积压量" />
-                </div>
-                <div class="field">
-                  <label for="cfg-sell_pressure_threshold">卖压-阈值</label>
-                  <input type="number" id="cfg-sell_pressure_threshold" step="0.5" min="0" placeholder="2"
-                    title="前N档总量/日销量>此值则跳过，0=关闭" />
                 </div>
               </div>
             </div>
@@ -982,59 +950,6 @@
           <div class="settings-group">
             <h2>系统参数</h2>
             <div class="form-grid">
-              <div class="field-row field-row--4">
-                <div class="field">
-                  <label>CV 阈值</label>
-                  <input type="number" id="cfg-cv_threshold" step="0.01" placeholder="0.05"
-                    title="低于此值判为「极稳」通过；放宽(如0.08)可通过更多" />
-                </div>
-                <div class="field">
-                  <label>R² 趋势阈值</label>
-                  <input type="number" id="cfg-r2_threshold" step="0.01" placeholder="0.6"
-                    title="高于此值且斜率符合则判为上涨/下跌；放宽(如0.5)可通过更多" />
-                </div>
-                <div class="field">
-                  <label>价格分位上限</label>
-                  <input type="number" id="cfg-price_percentile_ceil" step="0.05" min="0" max="1" placeholder="0.8"
-                    title="当前价在30天分布分位>此值则不买，0.2–0.6为理想区间" />
-                </div>
-                <div class="field">
-                  <label>RISING R² 审慎阈值</label>
-                  <input type="number" id="cfg-r2_rising_threshold" step="0.05" min="0" max="1" placeholder="0.8"
-                    title="RISING 状态需 R²>此值才可买入" />
-                </div>
-                <div class="field">
-                  <label>RISING 日斜率上限</label>
-                  <input type="number" id="cfg-slope_pct_ceil" step="0.001" min="0" placeholder="0.01"
-                    title="RISING 状态 slope/avg 须≤此值(1%=0.01)，过陡视为加速赶顶剔除" />
-                </div>
-                <div class="field">
-                  <label>MA7/MA30 偏离上限</label>
-                  <input type="number" id="cfg-ma_deviation_ceil" step="0.05" min="1" placeholder="1.1"
-                    title="MA7>MA30×此值则不买，均值回归风险" />
-                </div>
-                <div class="field">
-                  <label>last_price/MA30 上限</label>
-                  <input type="number" id="cfg-last_price_ma30_ceil" step="0.01" min="1" placeholder="1.05"
-                    title="现价(参考价)/MA30>此值则不买，防刺" />
-                </div>
-                <div class="field">
-                  <label>STABLE slope 下限</label>
-                  <input type="number" id="cfg-slope_stable_floor" step="0.001" placeholder="-0.005"
-                    title="STABLE状态slope低于此值(阴跌)则不买" />
-                </div>
-                <div class="field">
-                  <label>RISING 分位上限</label>
-                  <input type="number" id="cfg-price_percentile_ceil_rising" step="0.05" min="0" max="1"
-                    placeholder="0.5" title="RISING时价格分位>此值不买，横盘可0.8" />
-                </div>
-                <div class="field field--switch">
-                  <label class="checkbox-wrapper">
-                    <input type="checkbox" id="cfg-use_vwap" checked title="用成交量加权均价替代简单均价" />
-                    <span>使用VWAP</span>
-                  </label>
-                </div>
-              </div>
               <div class="field-row">
                 <div class="field">
                   <label>无符合时重试间隔（秒）</label>
@@ -1827,9 +1742,9 @@
   <div id="relogin-overlay" class="relogin-overlay hidden">
     <div class="relogin-modal">
       <h3 id="relogin-title">Steam 登录已过期</h3>
-      <p id="relogin-message">登录已过期，请在弹出的浏览器中重新登录 Steam，完成后点击下方按钮继续。</p>
+      <p id="relogin-message">登录已过期，请按当前运行环境打开浏览器登录，或手动填写 Cookie 后继续。</p>
       <div class="relogin-actions">
-        <button type="button" id="relogin-btn-open" class="btn btn-primary">打开浏览器并登录</button>
+        <button type="button" id="relogin-btn-open" class="btn btn-primary">登录 / 填写 Cookie</button>
         <button type="button" id="relogin-btn-ok" class="btn btn-primary" disabled>完成登录</button>
         <button type="button" id="relogin-btn-fail" class="btn btn-secondary">登录失败</button>
       </div>
@@ -1845,17 +1760,13 @@
   <script src="/js/transactions.js"></script>
   <script src="/js/settings.js"></script>
   <script src="/js/proxy.js"></script>
+  <script src="/js/strategies.js"></script>
   <script src="/js/main.js?v=3"></script>
   <script src="/js/gift.js"></script>
   <script src="/js/steamDeals.js"></script>
   <script>
     // 简单的辅助脚本，用于更新标题显示
-    document.querySelectorAll('.nav-item').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const text = btn.querySelector('span').innerText;
-        document.getElementById('page-title-display').innerText = text;
-      });
-    });
+    // 页面标题由 tabSwitch 统一处理，避免取消离开策略编辑时标题提前切换。
   </script>
 
 
@@ -1933,7 +1844,7 @@
       <div class="wizard-step" id="wizard-step-3">
         <div class="wizard-icon">🛒</div>
         <h3 class="wizard-title">Buff 账号登录</h3>
-        <p class="wizard-desc">AetherSwap 需要您的 Buff Cookie 来读取市场数据和下单。点击下方按钮将弹出浏览器，在其中完成 Buff 登录后返回点击「已完成登录」。</p>
+        <p class="wizard-desc">AetherSwap 需要您的 Buff Cookie 来读取市场数据和下单。桌面环境可打开浏览器登录；无桌面服务器可手动填写 Cookie。</p>
         <div class="wizard-buff-actions">
           <button type="button" id="wiz-buff-open" class="btn btn-secondary">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -1941,7 +1852,7 @@
               <polyline points="15 3 21 3 21 9" />
               <line x1="10" y1="14" x2="21" y2="3" />
             </svg>
-            打开浏览器登录 Buff
+            登录 / 填写 Buff Cookie
           </button>
           <button type="button" id="wiz-buff-done" class="btn btn-primary" disabled>已完成登录 ✓</button>
         </div>

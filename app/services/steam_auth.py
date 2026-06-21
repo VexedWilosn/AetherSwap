@@ -180,6 +180,48 @@ def _build_steam_guard_dict(cur: dict, cfg: dict) -> Optional[dict]:
         "identity_secret": identity_secret,
         "device_id": device_id,
     }
+def _short_error_detail(exc: Exception, limit: int = 220) -> str:
+    detail = str(exc).strip()
+    detail = re.sub(r"\s+", " ", detail)
+    if len(detail) > limit:
+        detail = detail[: limit - 3] + "..."
+    return detail
+def _classify_steam_login_exception(exc: Exception) -> str:
+    detail = _short_error_detail(exc)
+    err = detail.lower()
+    network_markers = (
+        "max retries exceeded",
+        "newconnectionerror",
+        "failed to establish a new connection",
+        "connection refused",
+        "connection reset",
+        "connection aborted",
+        "name resolution",
+        "temporary failure in name resolution",
+        "getaddrinfo failed",
+        "timed out",
+        "read timed out",
+        "connect timeout",
+    )
+    request_network_types = (
+        _req.exceptions.ConnectionError,
+        _req.exceptions.Timeout,
+        _req.exceptions.ProxyError,
+    )
+    if isinstance(exc, request_network_types) or any(m in err for m in network_markers):
+        return (
+            "network_error: Steam 登录网络连接失败，程序没有成功连上 "
+            "steamcommunity.com:443；这不是账号密码或 Steam Guard 错误。"
+            "请检查本机直连、加速器/代理、DNS 或稍后重试。"
+            f" 原始错误: {detail}"
+        )
+    if isinstance(exc, _req.exceptions.SSLError) or "ssl" in err or "certificate" in err:
+        return (
+            "network_error: Steam 登录 HTTPS/SSL 握手失败；通常是代理、加速器、"
+            "证书拦截或本机网络环境导致。"
+            f" 原始错误: {detail}"
+        )
+    return detail[:120]
 def _do_steampy_login(username: str, password: str, steam_guard_dict: Optional[dict]) -> Tuple[bool, str, dict]:
     """Core Steam login using steampy's SteamClient with JWT/Protobuf protocol.
     Uses class-level requests.Session.request monkey-patch to bypass SSL
@@ -223,6 +265,9 @@ def _do_steampy_login(username: str, password: str, steam_guard_dict: Optional[d
         return True, '', merged
     except Exception as e:
         err = str(e).lower()
+        network_error = _classify_steam_login_exception(e)
+        if network_error.startswith("network_error:"):
+            return False, network_error, {}
         if 'invalid' in err or 'incorrect' in err or 'wrong' in err or 'bad credentials' in err or 'client_id' in err or 'client id' in err:
             return False, 'wrong_creds', {}
         if 'two-factor' in err or 'twofactor' in err or '2fa' in err or 'guard' in err:
@@ -231,7 +276,7 @@ def _do_steampy_login(username: str, password: str, steam_guard_dict: Optional[d
             return False, 'captcha', {}
         if 'expecting value' in err or 'no response' in err:
             return False, 'ip_blocked: Steam API无响应，请尝试重启加速器或更换IP', {}
-        return False, str(e)[:120], {}
+        return False, network_error, {}
     finally:
         _req.Session.request = _old_request
 def _extract_creds_from_cookie_dict(cookie_dict: dict) -> Tuple[str, str, str]:
@@ -321,6 +366,10 @@ def _try_steam_auto_relogin_impl() -> tuple:
     if err_code == "captcha":
         log("auto_relogin: Steam 要求人机验证（Captcha），自动登录暂时失败", "warn", category="steam")
         return False, "captcha", "Steam 触发了人机验证，请稍后重试或手动登录"
+    if err_code.startswith("network_error:"):
+        msg = err_code.split(": ", 1)[1] if ": " in err_code else err_code
+        log(f"auto_relogin: {msg}", "warn", category="steam")
+        return False, "network_error", msg
     log(f"auto_relogin: 登录失败 – {err_code}", "warn", category="steam")
     return False, "error", (err_code or "自动登录失败，请检查网络或手动重登")
 def verify_steam_auto_login(account_id: str) -> dict:
@@ -355,4 +404,7 @@ def verify_steam_auto_login(account_id: str) -> dict:
         return {"ok": False, "status": "wrong_creds", "message": "账号或密码错误"}
     if err_code == "captcha":
         return {"ok": False, "status": "captcha", "message": "Steam 触发了人机验证，请稍后重试"}
+    if err_code.startswith("network_error:"):
+        msg = err_code.split(": ", 1)[1] if ": " in err_code else err_code
+        return {"ok": False, "status": "network_error", "message": msg}
     return {"ok": False, "status": "error", "message": err_code or "验证失败"}

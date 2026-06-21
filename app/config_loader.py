@@ -22,8 +22,8 @@ def get_steam_credentials() -> dict:
     return get_steam()
 def get_buff_credentials() -> dict:
     return get_buff()
-def update_steam_creds(cookies: str, session_id: str) -> None:
-    update_steam_credentials(cookies, session_id)
+def update_steam_creds(cookies: str, session_id: str, steam_id: str = None) -> None:
+    update_steam_credentials(cookies, session_id, steam_id)
 def update_buff_creds(cookies: str) -> None:
     update_buff_credentials(cookies)
 def load_app_config_validated() -> dict:

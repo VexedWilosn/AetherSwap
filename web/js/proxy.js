@@ -187,7 +187,7 @@ function selectStrategy(strategyId) {
     });
 }
 async function clearAllProxies() {
-    if (!confirm(`确定要清空所有 ${_proxyList.length} 个代理吗？此操作不可撤销。`)) return;
+    if (!(await appConfirm(`确定要清空所有 ${_proxyList.length} 个代理吗？此操作不可撤销。`, { title: "清空代理", danger: true, confirmText: "清空" }))) return;
     const btn = el("btn-proxy-clear");
     if (btn) { btn.disabled = true; btn.textContent = "清除中..."; }
     try {

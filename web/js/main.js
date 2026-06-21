@@ -4,8 +4,13 @@ function formatTimeHHMM(d = new Date()) {
   const mm = String(d.getMinutes()).padStart(2, "0");
   return `${hh}:${mm}`;
 }
-function tabSwitch(name) {
+async function tabSwitch(name) {
   console.log("tabSwitch called with name:", name);
+  const activePanel = document.querySelector(".panel.active");
+  if (activePanel?.id === "panel-strategies" && name !== "strategies" && typeof window.strategyConfirmLeave === "function") {
+    const ok = await window.strategyConfirmLeave();
+    if (!ok) return false;
+  }
   document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
   document.querySelectorAll(".nav-item").forEach((b) => b.classList.remove("active"));
   const panel = el("panel-" + name);
@@ -17,7 +22,11 @@ function tabSwitch(name) {
     panel.offsetHeight;
     panel.style.animation = '';
   }
-  if (btn) btn.classList.add("active");
+  if (btn) {
+    btn.classList.add("active");
+    const text = btn.querySelector("span")?.innerText;
+    if (text && el("page-title-display")) el("page-title-display").innerText = text;
+  }
   if (name === "debug") refreshLog();
   if (name === "inventory") refreshInventory(false);
   if (name === "purchases" || name === "sales" || name === "purchase-history") refreshTransactions();
@@ -28,6 +37,10 @@ function tabSwitch(name) {
   if (name === "proxy") {
     loadProxyConfig();
   }
+  if (name === "strategies" && typeof loadStrategies === "function") {
+    loadStrategies();
+  }
+  return true;
 }
 
 let lastStatus = "idle";
@@ -212,7 +225,7 @@ function showReloginModal(type, opts = {}) {
         : "Buff 需要刷新页面状态或完成人机验证。请打开内置浏览器，进入 Buff 市场或任意商品页，完成验证后点击完成。";
     } else {
       if (title) title.textContent = "Buff 登录已过期";
-      if (msg) msg.textContent = "登录已过期，请在弹出的浏览器中重新登录 Buff，完成后点击下方按钮继续。";
+      if (msg) msg.textContent = "登录已过期，请按当前运行环境打开浏览器登录 Buff，或手动填写 Cookie 后继续。";
     }
   } else {
     if (title) title.textContent = "Steam 登录已过期";
@@ -221,11 +234,16 @@ function showReloginModal(type, opts = {}) {
     } else if (opts.error) {
       if (msg) msg.textContent = opts.error;
     } else {
-      if (msg) msg.textContent = "登录已过期，请在弹出的浏览器中重新登录 Steam，完成后点击下方按钮继续。";
+      if (msg) msg.textContent = "登录已过期，请按当前运行环境打开浏览器登录 Steam，或手动填写 Cookie 后继续。";
     }
   }
   const btnOk = el("relogin-btn-ok");
   if (btnOk) btnOk.disabled = false;
+  if (typeof runtimeCanLaunchBrowser === "function" && !runtimeCanLaunchBrowser()) {
+    if (msg && typeof runtimeManualLoginMessage === "function") msg.textContent = runtimeManualLoginMessage(reloginType);
+    if (btnOk) btnOk.disabled = true;
+  }
+  if (typeof applyRuntimeUiHints === "function") applyRuntimeUiHints();
 }
 function hideReloginModal() {
   const overlay = el("relogin-overlay");
@@ -469,8 +487,8 @@ function bindEvents() {
   document.querySelectorAll(".nav-item").forEach((btn) => {
     btn.addEventListener("click", () => tabSwitch(btn.dataset.tab));
   });
-  el("btn-quit")?.addEventListener("click", () => {
-    if (confirm("确定要退出程序吗？退出后后台所有的交易、保活和查询任务都将停止。")) {
+  el("btn-quit")?.addEventListener("click", async () => {
+    if (await appConfirm("确定要退出程序吗？退出后后台所有的交易、保活和查询任务都将停止。", { title: "退出程序", danger: true, confirmText: "退出" })) {
       fetchJson(API + "/system/shutdown", { method: "POST" })
         .then(() => {
           toast("程序正在退出", "您可以安全地直接关闭此窗口", 100000);
@@ -579,10 +597,10 @@ function bindEvents() {
   });
   el("btn-export-config")?.addEventListener("click", exportConfig);
   el("btn-data-init")?.addEventListener("click", async () => {
-    if (!confirm("警告：此操作将清空所有数据（包括交易记录、自动挂刀配置、绑定的 Steam 账号与凭据）！\n\n您确定要进行“恢复出厂设置”吗？")) {
+    if (!(await appConfirm("警告：此操作将清空所有数据（包括交易记录、自动挂刀配置、绑定的 Steam 账号与凭据）！\n\n您确定要进行“恢复出厂设置”吗？", { title: "恢复出厂设置", danger: true, confirmText: "继续" }))) {
       return;
     }
-    if (!confirm("再次确认：数据一旦清空将无法恢复。是否继续？")) {
+    if (!(await appConfirm("再次确认：数据一旦清空将无法恢复。是否继续？", { title: "最终确认", danger: true, confirmText: "清空数据" }))) {
       return;
     }
     try {
@@ -749,7 +767,7 @@ function bindEvents() {
       toast("请先勾选要删除的项");
       return;
     }
-    if (!confirm(`确定删除所选 ${indices.length} 条记录？删除后将从持有饰品与操作记录中同时移除。`)) return;
+    if (!(await appConfirm(`确定删除所选 ${indices.length} 条记录？删除后将从持有饰品与操作记录中同时移除。`, { title: "批量删除记录", danger: true, confirmText: "删除" }))) return;
     try {
       const sorted = indices.slice().sort((a, b) => b - a);
       for (const idx of sorted) {
@@ -770,7 +788,7 @@ function bindEvents() {
       toast("请先勾选要删除的项");
       return;
     }
-    if (!confirm(`确定删除所选 ${indices.length} 条记录？`)) return;
+    if (!(await appConfirm(`确定删除所选 ${indices.length} 条记录？`, { title: "批量删除记录", danger: true, confirmText: "删除" }))) return;
     try {
       const sorted = indices.slice().sort((a, b) => b - a);
       for (const idx of sorted) {
@@ -819,13 +837,11 @@ function setupScrollToTop() {
 }
 function setupKeyboardShortcuts() {
   const tabMap = { "1": "auto", "2": "inventory", "3": "purchases", "4": "purchase-history", "5": "analytics", "6": "sales", "7": "accounts", "8": "steam-guard", "9": "settings", "0": "debug" };
-  document.addEventListener("keydown", (e) => {
+  document.addEventListener("keydown", async (e) => {
     if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT" || e.target.isContentEditable) return;
     if (e.altKey && tabMap[e.key]) {
       e.preventDefault();
-      tabSwitch(tabMap[e.key]);
-      const text = document.querySelector(`[data-tab="${tabMap[e.key]}"] span`)?.innerText;
-      if (text) el("page-title-display").innerText = text;
+      await tabSwitch(tabMap[e.key]);
     }
   });
 }
@@ -843,6 +859,9 @@ async function init() {
   setupKeyboardShortcuts();
   setupButtonInteractions();
   bindUXEvents();
+  if (typeof loadRuntimeProfile === "function") {
+    await loadRuntimeProfile();
+  }
 
   let wizardShown = false;
   try {

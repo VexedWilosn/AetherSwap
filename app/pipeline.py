@@ -21,6 +21,7 @@ from app.services.analysis_client import StabilityAnalyzer
 from app.services.buff_client import create_buff_client_from_config
 from app.services.steam_client import SteamClient
 from app.state import get_state, append_sale
+from app.strategy_engine import apply_strategy_to_config
 from buff.buyer import BuffAuthExpired, BuffVerificationRequired
 from steamdt.models import SteamDTQueryParams
 from utils.delay import jittered_sleep
@@ -185,7 +186,7 @@ def _run_pipeline(config: dict) -> None:
     state.clear_stop()
     state.set_buff_auth_expired(False)
     state.set_buff_verification_required(False)
-    cfg = merge(DEFAULTS, config)
+    cfg = apply_strategy_to_config(merge(DEFAULTS, config), "buy")
     pipeline_cfg = cfg.get("pipeline", {})
     verbose = bool(pipeline_cfg.get("verbose_debug", False))
     ctx = PipelineContext(state, str(uuid.uuid4())[:8], verbose=verbose)

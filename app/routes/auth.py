@@ -22,6 +22,7 @@ from app.services.steam_auth import (
     fetch_steam_profile_via_api,
     try_steam_auto_relogin,
 )
+from app.runtime_env import get_runtime_profile
 router = APIRouter()
 _relogin_lock = threading.Lock()
 _relogin_type = None
@@ -33,8 +34,68 @@ _relogin_wake = threading.Event()
 _relogin_done = threading.Event()
 _relogin_success = False
 _relogin_error = None
+def _manual_cookie_required_response(relogin_type: str, reason: str):
+    label = "Steam" if relogin_type == "steam" else "Buff"
+    return {
+        "ok": False,
+        "code": "manual_cookie_required",
+        "manual_cookie_required": True,
+        "error": f"{label} 登录需要图形浏览器，但当前运行环境不支持。请使用手动 Cookie 登录。",
+        "reason": reason,
+        "runtime": get_runtime_profile().as_dict(),
+    }
 class ReloginFinishBody(BaseModel):
     success: bool
+class ManualCookieBody(BaseModel):
+    cookies: str
+    session_id: str = ""
+    steam_id: str = ""
+def _normalize_cookie_input(raw: str) -> str:
+    text = (raw or "").strip()
+    text = re.sub(r"^\s*cookie\s*:\s*", "", text, flags=re.I)
+    pieces = []
+    for part in re.split(r";|\r?\n", text):
+        part = part.strip()
+        if not part or "=" not in part:
+            continue
+        name, _, value = part.partition("=")
+        name = name.strip()
+        value = value.strip()
+        if name:
+            pieces.append(f"{name}={value}")
+    return "; ".join(pieces)
+def _cookie_value(cookie_str: str, name: str) -> str:
+    wanted = name.lower()
+    for part in (cookie_str or "").split(";"):
+        if "=" not in part:
+            continue
+        key, _, value = part.partition("=")
+        if key.strip().lower() == wanted:
+            return value.strip()
+    return ""
+def _steam_id_from_cookie_str(cookie_str: str) -> str:
+    value = _cookie_value(cookie_str, "steamLoginSecure")
+    if "%7C%7C" in value:
+        return value.split("%7C%7C", 1)[0].strip()
+    if "||" in value:
+        return value.split("||", 1)[0].strip()
+    return value.strip() if value.strip().isdigit() else ""
+def _maybe_resume_after_buff_cookie_update() -> None:
+    set_buff_auth_expired(False)
+    set_buff_verification_required(False)
+    try:
+        from app.state import get_status
+        from app.pipeline import start_pipeline
+        st = get_status()
+        err_msg = str(st.get("step") or "")
+        if st.get("status") == "error" and err_msg in ("BUFF_AUTH_EXPIRED", "BUFF_VERIFICATION_REQUIRED"):
+            log("检测到 Buff Cookie 已手动更新，尝试自动恢复流水线...", "info", category="system")
+            try:
+                start_pipeline(load_app_config_validated())
+            except Exception as resume_err:
+                log(f"自动恢复流水线失败: {resume_err}", "warn", category="system")
+    except Exception as resume_err:
+        log(f"Buff Cookie 更新后的恢复检查失败: {resume_err}", "warn", category="system")
 def _relogin_worker(relogin_type: str) -> None:
     global _relogin_playwright, _relogin_browser, _relogin_context, _relogin_error, _relogin_success
     try:
@@ -120,6 +181,9 @@ def _relogin_worker(relogin_type: str) -> None:
         _relogin_done.set()
 def _relogin_start(relogin_type: str):
     global _relogin_type, _relogin_error, _relogin_success, _relogin_playwright, _relogin_browser, _relogin_context
+    profile = get_runtime_profile()
+    if not profile.can_launch_headful_browser:
+        return _manual_cookie_required_response(relogin_type, profile.reason)
     with _relogin_lock:
         if _relogin_context or _relogin_browser:
             try:
@@ -193,6 +257,31 @@ def api_auth_buff_relogin_start():
 @router.post("/api/auth/buff/relogin_finish")
 def api_auth_buff_relogin_finish(body: ReloginFinishBody):
     return _relogin_finish(body.success)
+@router.post("/api/auth/{relogin_type}/manual_cookie")
+def api_auth_manual_cookie(relogin_type: str, body: ManualCookieBody):
+    cookie_str = _normalize_cookie_input(body.cookies)
+    if not cookie_str:
+        return {"ok": False, "error": "Cookie 不能为空"}
+    if relogin_type == "steam":
+        session_id = (body.session_id or "").strip() or _cookie_value(cookie_str, "sessionid")
+        if not _cookie_value(cookie_str, "steamLoginSecure"):
+            return {"ok": False, "error": "Steam Cookie 缺少 steamLoginSecure"}
+        if not session_id:
+            return {"ok": False, "error": "Steam Cookie 缺少 sessionid"}
+        if not _cookie_value(cookie_str, "sessionid"):
+            cookie_str = f"{cookie_str}; sessionid={session_id}"
+        steam_id = (body.steam_id or "").strip() or _steam_id_from_cookie_str(cookie_str)
+        update_steam_creds(cookie_str, session_id, steam_id or None)
+        cur = get_current_account()
+        if cur:
+            display_name, avatar_url = fetch_steam_profile_via_api(steam_id or cur.get("steam_id", ""), cookie_str)
+            update_account(cur["id"], steam_id=steam_id or cur.get("steam_id", ""), display_name=display_name, avatar_url=avatar_url)
+        return {"ok": True, "message": "Steam Cookie 已保存", "steam_id": steam_id}
+    if relogin_type == "buff":
+        update_buff_creds(cookie_str)
+        _maybe_resume_after_buff_cookie_update()
+        return {"ok": True, "message": "Buff Cookie 已保存"}
+    return {"ok": False, "error": "未知登录类型"}
 @router.get("/api/steam_guard")
 def api_steam_guard():
     cfg = load_app_config_validated()

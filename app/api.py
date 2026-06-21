@@ -22,6 +22,7 @@ from app.services.workers import (
 )
 from app.services.task_queue import get_task_queue
 from app.state import log, request_stop
+from app.runtime_env import get_runtime_profile
 _bg_started = False
 _bg_lock = threading.Lock()
 def _start_background_workers() -> None:
@@ -45,6 +46,10 @@ async def _lifespan(application: FastAPI):
     _start_background_workers()
     yield
 app = FastAPI(title="aetherswap", lifespan=_lifespan)
+@app.get("/api/runtime")
+def api_runtime():
+    return {"ok": True, "runtime": get_runtime_profile().as_dict()}
+
 @app.get("/api/tasks")
 def api_tasks(limit: int = 50):
     q = get_task_queue()

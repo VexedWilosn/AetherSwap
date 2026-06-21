@@ -31,29 +31,32 @@ def _extract_line1(html: str) -> Optional[list]:
             if depth == 0:
                 return json.loads(html[start : j + 1])
     return None
-def detect_currency(html: str) -> Optional[str]:  
+def detect_currency(html: str) -> Optional[str]:
     s = html or ""
-    if "¥" in s or "CNY" in s or "RMB" in s or "人民币" in s:
+    upper = s.upper()
+    if "CNY" in upper or "RMB" in upper or "\u4eba\u6c11\u5e01" in s:
         return CURRENCY_CNY
-    if "HK$" in s or "HKD" in s:
+    if "CN\u00a5" in upper or "CN\uffe5" in upper or "\uffe5" in s:
+        return CURRENCY_CNY
+    if "HK$" in upper or "HKD" in upper:
         return "HKD"
-    if "₹" in s or "INR" in s:
+    if "\u20b9" in s or "INR" in upper:
         return "INR"
-    if "₽" in s or "RUB" in s:
+    if "\u20bd" in s or "RUB" in upper:
         return "RUB"
-    if "€" in s or "EUR" in s:
+    if "\u20ac" in s or "EUR" in upper:
         return "EUR"
-    if "₺" in s or "TRY" in s:
+    if "\u20ba" in s or "TRY" in upper:
         return "TRY"
-    if "R$" in s or "BRL" in s:
+    if "R$" in upper or "BRL" in upper:
         return "BRL"
-    if "ARS" in s or "AR$" in s:
+    if "ARS" in upper or "AR$" in upper:
         return "ARS"
-    if "CLP" in s or "CL$" in s:
+    if "CLP" in upper or "CL$" in upper:
         return "CLP"
-    if "¥" in s or "JPY" in s:
+    if "JPY" in upper or "JP\u00a5" in upper or "\u5186" in s:
         return "JPY"
-    if "USD" in s or "US$" in s or " USD" in s or '"USD"' in s:
+    if "USD" in upper or "US$" in upper or " USD" in upper or '"USD"' in upper:
         return CURRENCY_USD
     if "$" in s:  
         return CURRENCY_USD

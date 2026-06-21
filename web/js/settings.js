@@ -163,14 +163,26 @@ async function loadConfig() {
 }
 
 function formToConfig() {
-  return {
+  const readNumberInput = (id) => {
+    const node = el(id);
+    if (!node) return undefined;
+    const raw = String(node.value ?? "").trim();
+    if (raw === "") return undefined;
+    const value = Number(raw);
+    return Number.isFinite(value) ? value : undefined;
+  };
+  const readIntInput = (id) => {
+    const value = readNumberInput(id);
+    return value === undefined ? undefined : Math.trunc(value);
+  };
+  return compactConfig({
     iflow: {
       type: el("cfg-games") ? el("cfg-games").value.trim() : undefined,
       platforms: el("cfg-platforms") ? el("cfg-platforms").value.trim() : undefined,
       sort_by: el("cfg-sort_by") ? el("cfg-sort_by").value.trim() : undefined,
-      min_price: el("cfg-min_price") ? parseFloat(el("cfg-min_price").value) || undefined : undefined,
-      max_price: el("cfg-max_price") ? parseFloat(el("cfg-max_price").value) || undefined : undefined,
-      min_volume: el("cfg-min_volume") ? parseInt(el("cfg-min_volume").value, 10) || undefined : undefined,
+      min_price: readNumberInput("cfg-min_price"),
+      max_price: readNumberInput("cfg-max_price"),
+      min_volume: readIntInput("cfg-min_volume"),
     },
     buff: {
       pay_method: el("cfg-pay_method") ? el("cfg-pay_method").value : undefined,
@@ -184,18 +196,18 @@ function formToConfig() {
       iflow_top_n: el("cfg-iflow_top_n") ? parseInt(el("cfg-iflow_top_n").value, 10) || undefined : undefined,
       sell_price_ratio: el("cfg-sell_ratio") ? parseFloat(el("cfg-sell_ratio").value) || undefined : undefined,
       retry_interval_seconds: el("cfg-retry_interval_seconds") ? parseInt(el("cfg-retry_interval_seconds").value, 10) || undefined : undefined,
-      exclude_keywords: Array.from(
+      exclude_keywords: el("cfg-exclude_keywords") ? Array.from(
         new Set(
           (el("cfg-exclude_keywords").value || "")
             .split(/\n/)
             .map((s) => s.trim())
             .filter(Boolean)
         )
-      ),
+      ) : undefined,
       verbose_debug: el("cfg-verbose-debug") ? el("cfg-verbose-debug").checked : false,
       steam_listings_debug: el("cfg-steam-listings-debug") ? el("cfg-steam-listings-debug").checked : false,
-      sell_strategy: el("cfg-sell_strategy") ? parseInt(el("cfg-sell_strategy").value, 10) || 1 : 1,
-      sell_price_offset: el("cfg-sell_price_offset") ? parseFloat(el("cfg-sell_price_offset").value) || 0 : 0,
+      sell_strategy: el("cfg-sell_strategy") ? parseInt(el("cfg-sell_strategy").value, 10) || 1 : undefined,
+      sell_price_offset: el("cfg-sell_price_offset") ? parseFloat(el("cfg-sell_price_offset").value) || 0 : undefined,
       sell_price_wall_volume: el("cfg-sell_price_wall_volume") ? parseInt(el("cfg-sell_price_wall_volume").value, 10) : undefined,
       sell_price_max_ignore_volume: el("cfg-sell_price_max_ignore_volume") ? parseInt(el("cfg-sell_price_max_ignore_volume").value, 10) : undefined,
       sell_trend_days: el("cfg-sell_trend_days") ? parseInt(el("cfg-sell_trend_days").value, 10) || undefined : undefined,
@@ -262,7 +274,21 @@ function formToConfig() {
       max_game_threads: el("cfg-steam-deals-game-threads") ? parseInt(el("cfg-steam-deals-game-threads").value, 10) || undefined : undefined,
       max_region_threads: el("cfg-steam-deals-region-threads") ? parseInt(el("cfg-steam-deals-region-threads").value, 10) || undefined : undefined,
     },
-  };
+  });
+}
+function compactConfig(value) {
+  if (Array.isArray(value)) return value.map(compactConfig);
+  if (value && typeof value === "object") {
+    const out = {};
+    Object.entries(value).forEach(([key, val]) => {
+      if (val === undefined) return;
+      const cleaned = compactConfig(val);
+      if (cleaned && typeof cleaned === "object" && !Array.isArray(cleaned) && Object.keys(cleaned).length === 0) return;
+      out[key] = cleaned;
+    });
+    return out;
+  }
+  return value;
 }
 async function saveConfigFromForm() {
   const d = await fetchJson(API + "/config");
@@ -515,6 +541,20 @@ function _showWizard(startAtBuffStep = false) {
       buffOpenBtn.disabled = true;
       const statusEl = el("wiz-buff-status");
       if (statusEl) statusEl.textContent = "正在打开浏览器，请稍候…";
+      if (typeof runtimeCanLaunchBrowser === "function" && !runtimeCanLaunchBrowser()) {
+        if (statusEl) statusEl.textContent = "当前为服务器/无桌面模式，请手动粘贴 Buff Cookie。";
+        const saved = await promptManualCookieLogin("buff", "", {
+          refreshAfterSave: false,
+          message: typeof runtimeManualLoginMessage === "function" ? runtimeManualLoginMessage("buff") : "",
+        });
+        if (saved) {
+          if (statusEl) statusEl.textContent = "✅ Buff Cookie 已手动保存！";
+          setTimeout(() => goToStep(currentStep + 1), 800);
+        } else {
+          buffOpenBtn.disabled = false;
+        }
+        return;
+      }
       try {
         const r = await fetchJson(API + "/auth/buff/relogin_start", { method: "POST" });
         if (r.ok) {
@@ -522,12 +562,24 @@ function _showWizard(startAtBuffStep = false) {
           if (statusEl) statusEl.textContent = "✅ 浏览器已打开，请在其中完成 Buff 登录后点击「已完成登录」。";
           if (buffDoneBtn) buffDoneBtn.disabled = false;
         } else {
-          if (statusEl) statusEl.textContent = "❌ 打开失败：" + (r.error || "请检查运行环境");
-          buffOpenBtn.disabled = false;
+          const saved = await promptManualCookieLogin("buff", r.error || "", { refreshAfterSave: false });
+          if (saved) {
+            if (statusEl) statusEl.textContent = "✅ Buff Cookie 已手动保存！";
+            setTimeout(() => goToStep(currentStep + 1), 800);
+          } else {
+            if (statusEl) statusEl.textContent = "❌ 打开失败：" + (r.error || "请检查运行环境");
+            buffOpenBtn.disabled = false;
+          }
         }
       } catch (e) {
-        if (statusEl) statusEl.textContent = "❌ 请求失败：" + (e.message || "");
-        buffOpenBtn.disabled = false;
+        const saved = await promptManualCookieLogin("buff", e.message || "", { refreshAfterSave: false });
+        if (saved) {
+          if (statusEl) statusEl.textContent = "✅ Buff Cookie 已手动保存！";
+          setTimeout(() => goToStep(currentStep + 1), 800);
+        } else {
+          if (statusEl) statusEl.textContent = "❌ 请求失败：" + (e.message || "");
+          buffOpenBtn.disabled = false;
+        }
       }
     };
   }

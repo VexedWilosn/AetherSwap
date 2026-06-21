@@ -11,6 +11,7 @@ from app.config_loader import get_steam_credentials, load_app_config_validated
 from app.config_schema import DEFAULTS, merge
 from app.inventory_cs2 import scan_cs2_inventory
 from app.pipeline_context import PipelineContext
+from app.strategy_engine import apply_strategy_to_config, evaluate_strategy_runtime_modules
 from app.state import get_state, append_sale
 from app.steam_confirm import auto_confirm_once
 from app.steam_listings import fetch_my_listings
@@ -250,6 +251,8 @@ def _build_listing_plan(
             ctx.log(f"[出售] {name} assetid={aid} 无法计算定价({reason})，跳过", "warn", category="steam")
             continue
         list_price = round(float(list_price), 2)
+        trend = None
+        profit_output = {}
 
         # Currency conversion for display
         display_price = list_price
@@ -285,11 +288,17 @@ def _build_listing_plan(
                 if buy_price > 0 and market_price_at_buy > 0 and list_price > 0:
                     current_ratio = buy_price / (list_price / 1.15)
                     original_ratio = buy_price / (market_price_at_buy / 1.15)
-                    ratio_limit = original_ratio * 1.05
+                    ratio_multiplier = float(pipeline_cfg.get("profit_ratio_multiplier", 1.05) or 1.05)
+                    ratio_limit = original_ratio * ratio_multiplier
+                    profit_output = {
+                        "current_ratio": current_ratio,
+                        "original_ratio": original_ratio,
+                        "ratio_limit": ratio_limit,
+                    }
                     if current_ratio > ratio_limit:
                         ctx.log(
                             f"[出售] 策略3不满足: {name} 当前买入/挂刀价比例({current_ratio:.4f}) "
-                            f"高于 购入时买入/市场底价比例的1.05倍({ratio_limit:.4f})，避免过低价格售出，跳过",
+                            f"高于 购入时买入/市场底价比例的{ratio_multiplier:.2f}倍({ratio_limit:.4f})，避免过低价格售出，跳过",
                             "info", category="steam",
                         )
                         continue
@@ -297,6 +306,50 @@ def _build_listing_plan(
                         f"[出售] 策略3满足: {name} 当前买入/挂刀价比例({current_ratio:.4f}) <= {ratio_limit:.4f}，允许出售",
                         "info", category="steam",
                     )
+
+        custom_outputs = {
+            "guard.max_listings_per_item": {
+                "steam_same_name": steam_same_name,
+                "round_same_name": already_in_this_round,
+                "max_per_item": max_per_item,
+            },
+            "pricing.steam_wall_price": {
+                "list_price": list_price,
+                "reason": reason,
+                "order_count": len(orders_data.get("sell_orders") or []),
+            },
+            "pricing.steam_wall_gap": {
+                "list_price": list_price,
+                "reason": reason,
+                "order_count": len(orders_data.get("sell_orders") or []),
+            },
+            "pricing.price_offset": {"sell_price_offset": sell_offset},
+            "guard.rising_trend_wait": {"trend": trend, "trend_days": trend_days},
+            "guard.profit_ratio": profit_output,
+        }
+        custom_context = {
+            "item": it,
+            "buy_record": buy_record or {},
+            "listing": {"list_price": list_price, "display_price": display_price},
+            "config": cfg,
+        }
+        custom_results, blocking = evaluate_strategy_runtime_modules(
+            cfg,
+            "sell",
+            "sell.listing_guard",
+            context=custom_context,
+            outputs=custom_outputs,
+        )
+        for result in custom_results:
+            level = "warn" if result.get("status") in {"reject", "error"} else "info"
+            ctx.log(
+                f"[策略模块] {name} assetid={aid} {result.get('module_name')}: "
+                f"{result.get('reason')} ({result.get('status')})",
+                level,
+                category="steam",
+            )
+        if blocking:
+            continue
 
         price_cents = list_price_display_to_cents(display_price, account_currency)
         to_list_by_name[market_hash_name] += 1
@@ -440,6 +493,7 @@ def _auto_confirm_listings(ctx: PipelineContext, cfg: dict, steam_id: str, cooki
 # ---------------------------------------------------------------------------
 
 def _run_sell_phase_impl(cfg: dict, state, flow_id: str, items: Optional[list] = None) -> None:
+    cfg = apply_strategy_to_config(cfg, "sell")
     pipeline_cfg = cfg.get("pipeline", {})
     verbose = bool(pipeline_cfg.get("verbose_debug", False))
     ctx = PipelineContext(state, flow_id, verbose=verbose)

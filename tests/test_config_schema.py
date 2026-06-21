@@ -47,6 +47,11 @@ def test_validate_字符串转int():
     assert result["pipeline"]["iflow_top_n"] == 30
 
 
+def test_validate_iflow_min_price_zero_is_preserved():
+    result = validate_and_fill({"iflow": {"min_price": 0}}, DEFAULTS)
+    assert result["iflow"]["min_price"] == 0
+
+
 def test_validate_缺少section用默认值():
     result = validate_and_fill({}, DEFAULTS)
     assert result["stability"]["cv_threshold"] == DEFAULTS["stability"]["cv_threshold"]
