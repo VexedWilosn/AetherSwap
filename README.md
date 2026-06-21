@@ -464,16 +464,7 @@ python -m pip install -r requirements.txt
 AetherSwap 的 FastAPI 架构完整支持无头 Linux 环境。直接运行：
 
 ```bash
-pip install -r requirements-server.txt
-python -m playwright install --with-deps chromium
-AETHERSWAP_MODE=server AETHERSWAP_AGREE_DISCLAIMER=1 python run.py
-```
 
-也可以直接运行 Uvicorn：
-
-```bash
-python -m uvicorn app.api:app --host 0.0.0.0 --port 28472
-```
 
 `python run.py` 会自动判断当前环境：有桌面时打开本地窗口，无桌面 Linux/服务器环境则进入服务器模式并监听 `0.0.0.0:28472`。可通过 `AETHERSWAP_MODE=server|desktop`、`AETHERSWAP_HOST`、`AETHERSWAP_PORT` 覆盖默认行为；首次以非交互服务运行时，确认已阅读免责声明后可设置 `AETHERSWAP_AGREE_DISCLAIMER=1`。
 
