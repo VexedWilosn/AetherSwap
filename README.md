@@ -150,7 +150,7 @@
 **第 1 步：克隆项目**
 
 ```bash
-git clone https://gitee.com/vexed-wilson/AetherSwap.git
+git clone https://github.com/vexed-wilson/AetherSwap.git
 cd AetherSwap
 ```
 
