@@ -385,3 +385,53 @@ def test_list_item_by_name_preserves_safe_response_contract(
     assert result["response"] == expected_response
     if text == "null":
         assert result["error"] == "null"
+
+
+@pytest.mark.parametrize("during_retry", [False, True])
+def test_listing_429_stops_batch_and_respects_cooldown(monkeypatch, during_retry):
+    from app import sell_pipeline
+    from steam.request_policy import MarketCooldown
+
+    now = [1000.0]
+    monkeypatch.setattr(sell_pipeline, "_listing_cooldown", MarketCooldown(lambda: now[0]), raising=False)
+    limited = {"status_code": 429, "text": "null", "retry_after": "120"}
+    pending = {"status_code": 200, "text": '{"success": false, "message": "until your previous action completes"}'}
+    send = MagicMock(side_effect=([pending, limited] if during_retry else [limited]))
+    recorded = MagicMock()
+    monkeypatch.setattr(sell_pipeline, "list_item", send)
+    monkeypatch.setattr(sell_pipeline, "_record_listing_success", recorded)
+    monkeypatch.setattr(sell_pipeline, "jittered_sleep", lambda *_args: None)
+    ctx = _context()
+    entries = [_entry(), _entry(), _entry()]
+
+    assert sell_pipeline._submit_listings(ctx, entries, object(), "session-id", 0) == 0
+    assert send.call_count == (2 if during_retry else 1)
+    recorded.assert_not_called()
+    assert any("429" in message and "120" in message for message in _messages(ctx))
+
+    send.reset_mock(side_effect=True)
+    send.return_value = {"status_code": 200, "text": '{"success": true}'}
+    assert sell_pipeline._submit_listings(ctx, entries, object(), "session-id", 0) == 0
+    send.assert_not_called()
+    now[0] += 121
+    assert sell_pipeline._submit_listings(ctx, [_entry()], object(), "session-id", 0) == 1
+    send.assert_called_once()
+
+
+def test_listing_429_preserves_prior_success_count(monkeypatch):
+    from app import sell_pipeline
+    from steam.request_policy import MarketCooldown
+
+    monkeypatch.setattr(sell_pipeline, "_listing_cooldown", MarketCooldown(), raising=False)
+    send = MagicMock(side_effect=[
+        {"status_code": 200, "text": '{"success": true}'},
+        {"status_code": 429, "text": '{"success": true}'},
+    ])
+    recorded = MagicMock()
+    monkeypatch.setattr(sell_pipeline, "list_item", send)
+    monkeypatch.setattr(sell_pipeline, "_record_listing_success", recorded)
+    monkeypatch.setattr(sell_pipeline, "jittered_sleep", lambda *_args: None)
+
+    assert sell_pipeline._submit_listings(_context(), [_entry()] * 3, object(), "session-id", 0) == 1
+    assert send.call_count == 2
+    recorded.assert_called_once()

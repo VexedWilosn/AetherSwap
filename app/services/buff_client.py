@@ -56,11 +56,8 @@ class BuffClient:
     Non-idempotent writes intentionally have no generic retry decorator.
     """
 
-    # BUFF's current batch checkout requires preview state, a server-issued
-    # batch_id/trace and conditional password_token.  The former implementation
-    # did not implement that contract, so production must safely use single
-    # checkout until the full flow can be verified end to end.
-    supports_batch_buy = False
+    supports_batch_buy = True
+    batch_pay_methods = ("wechat", "alipay")
 
     def __init__(
         self,
@@ -288,15 +285,39 @@ class BuffClient:
         num: int,
         *,
         on_created: Optional[Callable[[str], None]] = None,
+        can_create: Optional[Callable[[], bool]] = None,
     ) -> Optional[Dict[str, Any]]:
-        del goods_id, game, orders, unit_price, num, on_created
-        return {
-            "success": False,
-            "code": "NOT_SUPPORTED",
-            "created": False,
-            "safe_to_fallback": True,
-            "msg": "BUFF 批量购买协议已变化，已安全降级为单件购买",
-        }
+        def operation(buyer: BuffBuyer) -> Dict[str, Any]:
+            preview = buyer.prepare_batch_buy(goods_id, game, orders, unit_price, num)
+            if not preview.get("success"):
+                return preview
+            if can_create is not None and not can_create():
+                return {"success": False, "created": False, "code": "BATCH_CANCELLED",
+                        "msg": "批量预检后任务已停止或购买时间窗已关闭，未创建批次"}
+            batch_id = buyer.batch_buy_create(goods_id, unit_price, num, game)
+            if on_created is not None:
+                try:
+                    on_created(batch_id)
+                except Exception as exc:
+                    error = BuffWriteResultUnknown(
+                        "BUFF 批次已创建，但批次号未能写入本地对账门禁", method="POST",
+                    )
+                    error.batch_id = batch_id
+                    raise error from exc
+            pay_type = "wechat" if buyer.pay_method == PAY_METHOD_WECHAT else "alipay"
+            try:
+                pay_url = buyer.batch_buy_pay_url(batch_id, game)
+            except Exception:
+                # A failure after funding creation must never allow single-buy fallback.
+                pay_url = None
+            result = {"created": True, "batch_id": batch_id,
+                      "pay_type": pay_type, "total_price": preview["total_price"]}
+            if not isinstance(pay_url, str) or not pay_url.strip():
+                return dict(result, success=False, code="CREATED_WITHOUT_PAY_URL",
+                            msg="批次已创建，但未取得付款链接，请在 BUFF 官网核对", pay_url=None)
+            return dict(result, success=True, pay_url=pay_url.strip())
+
+        return self._run(operation)
 
     def batch_buy_find_and_finalize(
         self,
@@ -315,7 +336,7 @@ class BuffClient:
             seen_sell_order_ids = set()
             seen_bill_order_ids = set()
             try:
-                orders = buyer.get_sell_orders(goods_id, game)
+                orders = buyer.batch_buy_orders_for_finalize(goods_id, game, max_price, num, batch_id)
             except Exception as exc:
                 setattr(exc, "partial_results", list(matched))
                 setattr(exc, "batch_id", str(batch_id))

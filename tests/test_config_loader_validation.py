@@ -14,7 +14,6 @@ def test_validate_and_fill_preserves_real_boolean_values():
         merge(
             DEFAULTS,
             {
-                "buff": {"auto_ask_seller_to_send": True},
                 "stability": {"use_vwap": False},
                 "pipeline": {
                     "verbose_debug": True,
@@ -30,7 +29,6 @@ def test_validate_and_fill_preserves_real_boolean_values():
         )
     )
 
-    assert cfg["buff"]["auto_ask_seller_to_send"] is True
     assert cfg["stability"]["use_vwap"] is False
     assert cfg["pipeline"]["verbose_debug"] is True
     assert cfg["pipeline"]["steam_listings_debug"] is True
@@ -40,6 +38,14 @@ def test_validate_and_fill_preserves_real_boolean_values():
     assert cfg["system"]["buff_session_keepalive_enabled"] is True
     assert cfg["proxy_pool"]["enabled"] is True
     assert cfg["steam_deals"]["enabled"] is True
+
+
+def test_removed_shipping_opt_out_is_not_exposed_in_validated_config():
+    from app.config_schema import DEFAULTS, merge, validate_and_fill
+
+    cfg = validate_and_fill(merge(DEFAULTS, {"buff": {"auto_ask_seller_to_send": False}}))
+
+    assert "auto_ask_seller_to_send" not in cfg["buff"]
 
 
 def test_load_app_config_validated_applies_range_validation(monkeypatch):

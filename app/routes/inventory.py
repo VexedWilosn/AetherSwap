@@ -39,27 +39,12 @@ def _try_steam_auto_relogin():
 def api_inventory(refresh: bool = False):
     if refresh or not get_inventory():
         if not is_steam_background_allowed():
-            return {"items": get_inventory()}
+            return {"items": get_inventory(), "source": "cache"}
         ok, items, err = scan_cs2_inventory()
         if not ok and err and "登录已过期" in err:
             success, status, msg = _try_steam_auto_relogin()
-            if status == "busy":
-                import time as _time
-                log("inventory: 检测到另一个自动登录正在进行，等待完成后重试库存…", "info", category="steam")
-                for _wait in range(7):
-                    _time.sleep(5)
-                    ok2, items2, err2 = scan_cs2_inventory()
-                    if ok2:
-                        old = get_inventory()
-                        _enrich_inventory_with_steam_prices(items2, old)
-                        set_inventory(items2)
-                        run_sell_phase_on_inventory_update(items2)
-                        log("inventory: 等待后库存获取成功", "info", category="steam")
-                        return {"items": get_inventory()}
-                    if not err2 or "登录已过期" not in err2:
-                        break
-                log("inventory: 等待其他登录完成超时，返回缓存库存", "warn", category="steam")
-                return {"items": get_inventory()}
+            if status in ("busy", "auth_pending", "network_error", "account_changed"):
+                return {"items": get_inventory(), "source": "cache", "auth_status": status, "error": msg}
             if success:
                 import time as _time
                 log("auto_relogin: 登录成功，等待 Steam 服务端会话生效 (8s)…", "info", category="steam")
@@ -70,7 +55,7 @@ def api_inventory(refresh: bool = False):
                     _enrich_inventory_with_steam_prices(items, old)
                     set_inventory(items)
                     run_sell_phase_on_inventory_update(items)
-                    return {"items": get_inventory()}
+                    return {"items": get_inventory(), "source": "live"}
                 if err and "登录已过期" in err:
                     log("auto_relogin: 首次重试仍过期，再等 7 秒…", "info", category="steam")
                     _time.sleep(7)
@@ -80,10 +65,11 @@ def api_inventory(refresh: bool = False):
                         _enrich_inventory_with_steam_prices(items, old)
                         set_inventory(items)
                         run_sell_phase_on_inventory_update(items)
-                        return {"items": get_inventory()}
+                        return {"items": get_inventory(), "source": "live"}
                 log(f"auto_relogin: 登录成功但库存获取仍失败: {err}，返回缓存", "warn", category="steam")
-                return {"items": get_inventory()}
-            out = {"items": [], "error": err, "auth_expired": True}
+                return {"items": get_inventory(), "source": "cache", "error": err}
+            out = {"items": get_inventory(), "source": "cache", "error": msg or err,
+                   "auth_expired": True, "auth_status": status}
             if status == "need_2fa":
                 out["auth_expired_reason"] = "need_2fa"
                 out["error"] = "需要二次验证（验证码），请到库存页手动重新登录 Steam"
@@ -91,7 +77,7 @@ def api_inventory(refresh: bool = False):
                 out["auth_expired_reason"] = "no_creds"
             return out
         if not ok:
-            out = {"items": [], "error": err}
+            out = {"items": get_inventory(), "source": "cache", "error": err}
             if err and ("登录已过期" in err or "未配置" in err):
                 out["auth_expired"] = True
             return out
@@ -99,7 +85,8 @@ def api_inventory(refresh: bool = False):
         _enrich_inventory_with_steam_prices(items, old)
         set_inventory(items)
         run_sell_phase_on_inventory_update(items)
-    return {"items": get_inventory()}
+        return {"items": get_inventory(), "source": "live"}
+    return {"items": get_inventory(), "source": "cache"}
 @router.get("/api/market-prices")
 def api_market_prices():
     """统一批量市场价查询接口.

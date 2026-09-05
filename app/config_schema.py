@@ -18,10 +18,6 @@ DEFAULTS = {
         "pay_method": "alipay",
         "game": "csgo",
         "price_tolerance": 0.5,
-        # Optional ancillary POSTs add traffic and can themselves have an
-        # unknown result. Keep seller reminders manual unless explicitly opted
-        # in by an advanced user.
-        "auto_ask_seller_to_send": False,
     },
     "stability": {
         "days": 30,

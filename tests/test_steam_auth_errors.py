@@ -124,8 +124,9 @@ def test_steam_refresh_token_poll_timeout_has_actionable_error():
 
     message = str(exc_info.value)
     assert "refresh_token" not in message
-    assert "shared_secret" in message
-    assert "系统时间" in message
+    assert "停止等待" in message
+    assert "shared_secret" not in message
+    assert "系统时间" not in message
 
 
 def test_do_steampy_login_repairs_upstream_single_poll_and_restores_patch(monkeypatch):
@@ -449,6 +450,7 @@ def test_verify_account_surfaces_auth_pending_instead_of_refresh_token(monkeypat
         },
     )
     monkeypatch.setattr(steam_auth, "set_current", lambda _account_id: True)
+    monkeypatch.setattr(steam_auth, "get_steam_credentials", lambda: {})
     monkeypatch.setattr(
         steam_auth,
         "load_app_config_validated",

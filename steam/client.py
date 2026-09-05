@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import parse_qs, quote, unquote, urlparse
 import requests
 import urllib3
+from .request_policy import parse_retry_after
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CURRENCY_CNY = "CNY"
 CURRENCY_USD = "USD"
@@ -255,6 +256,39 @@ def _parse_cookie_str(s: str) -> dict:
             k, _, v = part.partition("=")
             out[k.strip()] = v.strip()
     return out
+
+
+class SteamHistoryError(Exception):
+    """History failure metadata; never retains raw bodies, URLs, or credentials."""
+
+    def __init__(self, reason: str, response=None):
+        self.status_code = response.status_code if response is not None else None
+        self.retry_after = None
+        self.retryable = self.status_code is None or self.status_code == 408 or (
+            self.status_code is not None and self.status_code >= 500
+        )
+        details = [reason]
+        if response is not None:
+            content_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip()
+            if len(content_type) > 80 or not re.fullmatch(r"[\w.+-]+/[\w.+-]+", content_type):
+                content_type = "unknown"
+            try:
+                data = response.json()
+                body_kind = "null" if data is None else {
+                    dict: "object", list: "array", str: "string", bool: "boolean",
+                }.get(type(data), "number")
+            except ValueError:
+                body_kind = "non-json" if response.content else "empty"
+            details.extend([
+                f"HTTP {self.status_code}", f"content_type={content_type}",
+                f"body={body_kind}", f"bytes={len(response.content)}",
+            ])
+            if self.status_code == 429:
+                self.retry_after = parse_retry_after(response.headers.get("Retry-After"))
+                details.append(f"cooldown={self.retry_after:g}s")
+        super().__init__("; ".join(details))
+
+
 def fetch_history(
     market_hash_name: str,
     app_id: int = 730,
@@ -265,6 +299,7 @@ def fetch_history(
     proxies: Optional[dict] = None,
     cookies: Optional[Union[dict, str]] = None,
     return_currency: bool = False,
+    raise_on_error: bool = False,
 ) -> Union[Optional[list], Optional[dict]]:
     encoded = quote(market_hash_name, safe="")
     url = f"https://steamcommunity.com/market/pricehistory/?appid={app_id}&market_hash_name={encoded}"
@@ -288,10 +323,17 @@ def fetch_history(
             timeout=timeout,
         )
         if resp.status_code != 200:
-            return None
-        data = resp.json()
-        if not data or not data.get("success") or "prices" not in data:
-            return None
+            raise SteamHistoryError("http_error", resp)
+        try:
+            data = resp.json()
+        except ValueError:
+            raise SteamHistoryError("invalid_json", resp) from None
+        if not isinstance(data, dict):
+            raise SteamHistoryError("unexpected_json", resp)
+        if data.get("success") not in (True, 1):
+            raise SteamHistoryError("unsuccessful_response", resp)
+        if not isinstance(data.get("prices"), list):
+            raise SteamHistoryError("invalid_prices", resp)
         history = data["prices"]
         if return_currency:
             currency_clue = data.get("price_prefix", "") + data.get("price_suffix", "")
@@ -300,5 +342,11 @@ def fetch_history(
                 currency = detect_currency(resp.text)
             return {"history": history, "currency": currency}
         return history
-    except Exception:
+    except SteamHistoryError:
+        if raise_on_error:
+            raise
+        return None
+    except Exception as exc:
+        if raise_on_error:
+            raise SteamHistoryError(type(exc).__name__) from None
         return None

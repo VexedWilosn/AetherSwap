@@ -6,7 +6,9 @@ and auto-relogin logic.
 import re
 import threading
 import time
+from concurrent.futures import Future, TimeoutError as FutureTimeoutError
 from typing import Optional, Tuple
+from urllib.parse import unquote, urlparse
 import urllib3
 import requests as _req
 from app.state import log
@@ -24,21 +26,20 @@ from app.accounts import (
 )
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-_STEAM_AUTH_POLL_MAX_ATTEMPTS = 10
+_STEAM_AUTH_POLL_MAX_ATTEMPTS = 30
 _STEAM_AUTH_POLL_INTERVAL_SECONDS = 1.0
+_STEAM_AUTH_POLL_TIMEOUT_SECONDS = 60.0
+_STEAM_AUTH_JOIN_TIMEOUT_SECONDS = 120.0
 _STEAM_LOGIN_REQUEST_TIMEOUT = (10, 25)
 _steampy_login_patch_lock = threading.Lock()
 
 
 class SteamAuthTokenPending(RuntimeError):
-    """Steam accepted the auth flow but has not returned its refresh token yet."""
+    """Steam has not returned a refresh token within the polling window."""
 
 
-def _verify_steam_cookies_valid(cookie_str: str, steam_id: str = "") -> bool:
-    """Use an actual HTTP request to verify if Steam cookies are truly valid.
-    Returns True if cookies are valid, False if expired/invalid.
-    Uses the Steam Store JSON API for reliable detection without page rendering.
-    """
+def _verify_steam_cookies_valid(cookie_str: str, steam_id: str = "") -> Optional[bool]:
+    """Return True/False for confirmed validity, None for an inconclusive check."""
     cookie_dict = {}
     for part in (cookie_str or "").split(";"):
         s = part.strip()
@@ -47,44 +48,43 @@ def _verify_steam_cookies_valid(cookie_str: str, steam_id: str = "") -> bool:
             cookie_dict[k.strip()] = v.strip()
     if not cookie_dict.get("steamLoginSecure"):
         return False
+    cookie_steam_id = steam_id_from_cookie_str(cookie_str)
+    if not cookie_steam_id or (steam_id and cookie_steam_id != steam_id):
+        return False
     session = _req.Session()
     session.verify = False
     session.cookies.update(cookie_dict)
     session.headers.update({
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
     })
     try:
-        r = session.get(
-            "https://store.steampowered.com/pointssummary/ajaxgetasyncconfig",
-            timeout=12,
-        )
-        if r.status_code == 200:
-            try:
-                data = r.json()
-                if isinstance(data, dict):
-                    if data.get("logged_in") is True:
-                        return True
-                    if data.get("logged_in") is False:
-                        return False
-            except Exception:
-                pass
-    except Exception:
-        pass
-    try:
-        r2 = session.get(
+        response = session.get(
             "https://steamcommunity.com/my/profile",
             timeout=12,
             allow_redirects=True,
         )
-        final_url = (r2.url or "").lower()
-        if "login" in final_url:
+        final_url = urlparse(response.url or "")
+        if final_url.scheme != "https" or final_url.hostname != "steamcommunity.com":
+            return None
+        if final_url.path.startswith("/login"):
             return False
-        if r2.status_code in (401, 403):
+        if response.status_code in (401, 403):
             return False
-        return True
-    except Exception:
-        return True
+        if response.status_code != 200:
+            return None
+        profile = re.fullmatch(r"/profiles/(\d+)(?:/.*)?", final_url.path)
+        if profile:
+            return profile.group(1) == cookie_steam_id
+        # /my/ redirects to the authenticated user's numeric or vanity profile.
+        if response.history and re.fullmatch(r"/id/[^/]+(?:/.*)?", final_url.path):
+            return True
+        return None
+    except _req.RequestException:
+        return None
+    finally:
+        session.close()
 def fetch_steam_profile_via_api(steam_id: str, cookies_str: str) -> tuple:
     if not steam_id:
         return "", ""
@@ -264,6 +264,8 @@ def _poll_steam_refresh_token(
     max_attempts: int = _STEAM_AUTH_POLL_MAX_ATTEMPTS,
     interval_seconds: float = _STEAM_AUTH_POLL_INTERVAL_SECONDS,
     sleeper=None,
+    clock=None,
+    timeout_seconds: float = _STEAM_AUTH_POLL_TIMEOUT_SECONDS,
 ) -> str:
     """Poll Steam until the auth session actually contains a refresh token.
 
@@ -274,12 +276,17 @@ def _poll_steam_refresh_token(
     """
     if sleeper is None:
         sleeper = time.sleep
+    if clock is None:
+        clock = time.monotonic
+    deadline = clock() + max(0.0, float(timeout_seconds))
     attempts = max(1, int(max_attempts))
     delay = max(0.0, float(interval_seconds))
     current_client_id = client_id
     last_status = None
 
     for attempt in range(attempts):
+        if attempt and clock() >= deadline:
+            break
         response = executor._api_call(
             "POST",
             "IAuthenticationService",
@@ -290,13 +297,15 @@ def _poll_steam_refresh_token(
             },
         )
         last_status = getattr(response, "status_code", None)
+        if last_status not in (None, 200):
+            raise RuntimeError(f"Steam 登录状态查询失败（HTTP {last_status}），请稍后重试")
         try:
             payload = response.json()
-        except Exception:
-            payload = {}
+        except ValueError:
+            raise RuntimeError("Steam 登录状态响应无法解析，请稍后重试") from None
         response_data = payload.get("response") if isinstance(payload, dict) else None
         if not isinstance(response_data, dict):
-            response_data = {}
+            raise RuntimeError("Steam 登录状态响应格式异常，请稍后重试")
 
         refresh_token = response_data.get("refresh_token")
         if refresh_token:
@@ -308,16 +317,15 @@ def _poll_steam_refresh_token(
         if new_client_id:
             current_client_id = new_client_id
 
-        if last_status not in (None, 200):
-            raise SteamAuthTokenPending(
-                f"Steam 登录状态查询失败（HTTP {last_status}），请稍后重试"
-            )
         if attempt + 1 < attempts:
-            sleeper(delay)
+            remaining = deadline - clock()
+            if remaining <= 0:
+                break
+            sleeper(min(delay, remaining))
 
     raise SteamAuthTokenPending(
-        "Steam 登录确认尚未返回凭证；已自动重试。"
-        "请确认 shared_secret 与当前账号匹配、系统时间准确，然后稍后重试"
+        "等待 Steam 登录凭证超时；本次已停止等待，请稍后重试。"
+        "这不代表账号密码或令牌一定有误"
     )
 
 
@@ -395,8 +403,7 @@ def _do_steampy_login_once(
             detail = str(e).strip("'\" ")
             if not detail or detail == "refresh_token":
                 detail = (
-                    "Steam 登录确认尚未返回凭证，请确认 shared_secret 与当前账号匹配、"
-                    "系统时间准确，然后稍后重试"
+                    "Steam 登录确认尚未返回凭证；本次已停止等待，请稍后重试"
                 )
             return False, f"auth_pending: {detail}", {}
         network_error = _classify_steam_login_exception(e)
@@ -530,49 +537,68 @@ def steam_id_from_cookie_str(cookie_str: str) -> str:
         if key.strip().lower() == "steamloginsecure":
             slc = value.strip()
             break
-    if "%7C%7C" in slc:
-        return slc.split("%7C%7C", 1)[0].strip()
-    elif "||" in slc:
-        return slc.split("||", 1)[0].strip()
-    return slc.strip() if slc.strip().isdigit() else ""
+    subject = unquote(slc).split("||", 1)[0].strip()
+    return subject if subject.isdigit() else ""
 def _extract_creds_from_cookie_dict(cookie_dict: dict) -> Tuple[str, str, str]:
     """From a cookie dict return (cookie_str, session_id, steam_id)."""
     cookie_str = "; ".join(f"{k}={v}" for k, v in cookie_dict.items())
     session_id = cookie_dict.get("sessionid", "")
     steam_id = steam_id_from_cookie_str(cookie_str)
     return cookie_str, session_id, steam_id
-_auto_relogin_lock = threading.Lock()
-_auto_relogin_last_success = 0.0
-def try_steam_auto_relogin() -> tuple:
-    global _auto_relogin_last_success
-    if not _auto_relogin_lock.acquire(blocking=False):
-        log("auto_relogin: 另一个自动登录正在进行，跳过", "info", category="steam")
-        if time.time() - _auto_relogin_last_success < 30:
-            return True, "auto_ok", "另一个自动登录刚刚完成"
-        return False, "busy", "另一个自动登录正在进行"
+_steam_auth_lock = threading.Lock()
+_steam_auth_inflight = None
+
+
+def _coordinate_steam_login(account: dict) -> tuple:
+    """Manual verification and automatic relogin share the same in-flight result."""
+    global _steam_auth_inflight
+    if not account:
+        return False, "no_account", "未设置当前 Steam 账号，无法自动登录"
+    account = dict(account)
+    account_id = account["id"]
+    with _steam_auth_lock:
+        if _steam_auth_inflight is not None:
+            active_id, future = _steam_auth_inflight
+            if active_id != account_id:
+                return False, "busy", "另一个账号正在登录，请等待其完成后重试"
+            owner = False
+        else:
+            future = Future()
+            _steam_auth_inflight = (account_id, future)
+            owner = True
+    if not owner:
+        try:
+            return future.result(timeout=_STEAM_AUTH_JOIN_TIMEOUT_SECONDS)
+        except FutureTimeoutError:
+            return False, "busy", "Steam 登录仍在进行，请稍后重试"
+    result = (False, "error", "Steam 登录流程异常，请稍后重试")
     try:
-        return _try_steam_auto_relogin_impl()
+        result = _try_steam_auto_relogin_impl(account)
+        return result
+    except Exception as exc:
+        log(f"steam_auth: 登录流程异常 ({type(exc).__name__})", "warn", category="steam")
+        return result
     finally:
-        _auto_relogin_lock.release()
-def _try_steam_auto_relogin_impl() -> tuple:
-    global _auto_relogin_last_success
-    cur = get_current_account()
+        with _steam_auth_lock:
+            future.set_result(result)
+            _steam_auth_inflight = None
+def try_steam_auto_relogin() -> tuple:
+    return _coordinate_steam_login(get_current_account())
+def _try_steam_auto_relogin_impl(cur: Optional[dict] = None) -> tuple:
+    cur = dict(cur or get_current_account() or {})
     if not cur:
         log("auto_relogin: 未设置当前账号", "warn", category="steam")
         return False, "no_account", "未设置当前 Steam 账号，无法自动登录"
     account_id = cur.get("id")
     username = (cur.get("username") or "").strip()
     password = (cur.get("password") or "").strip()
-    if not username or not password:
-        log("auto_relogin: 无账号或密码", "warn", category="steam")
-        return False, "no_creds", "未保存账号或密码，无法自动登录"
     set_current(account_id)
     existing = get_steam_credentials()
     existing_cookies = existing.get("cookies") or existing.get("cookie") or ""
     if existing_cookies and "steamLoginSecure" in existing_cookies:
         expected_steam_id = str(cur.get("steam_id") or "").strip()
-        existing_steam_id = str(existing.get("steam_id") or steam_id_from_cookie_str(existing_cookies) or "").strip()
-        can_reuse_existing = True
+        existing_steam_id = steam_id_from_cookie_str(existing_cookies)
+        can_reuse_existing = bool(expected_steam_id and existing_steam_id)
         if expected_steam_id and existing_steam_id and expected_steam_id != existing_steam_id:
             can_reuse_existing = False
             log(
@@ -589,11 +615,18 @@ def _try_steam_auto_relogin_impl() -> tuple:
             )
         if can_reuse_existing:
             log("auto_relogin: 检测到现有 steamLoginSecure cookie，用 HTTP API 验证是否仍有效…", "info", category="steam")
-            if _verify_steam_cookies_valid(existing_cookies):
+            valid = _verify_steam_cookies_valid(existing_cookies, expected_steam_id)
+            if (get_current_account() or {}).get("id") != account_id:
+                return False, "account_changed", "当前账号已切换，本次验证结果不再应用"
+            if valid is True:
                 log("auto_relogin: HTTP 验证通过，Cookie 仍有效，无需重新登录", "info", category="steam")
-                _auto_relogin_last_success = time.time()
-                return True, "auto_ok", "Cookie 验证有效，无需重新登录"
+                return True, "session_valid", "当前 Steam 会话有效，无需重新登录；本次未校验已保存的密码和令牌"
+            if valid is None:
+                return False, "network_error", "暂时无法确认 Steam 会话状态，已保留现有凭证；请稍后重试"
             log("auto_relogin: HTTP 验证显示现有 cookie 已过期，继续密码登录", "info", category="steam")
+    if not username or not password:
+        log("auto_relogin: 无账号或密码", "warn", category="steam")
+        return False, "no_creds", "未保存账号或密码，无法自动登录"
     log("auto_relogin: 开始自动登录…", "info", category="steam")
     cfg = load_app_config_validated()
     steam_guard_dict = _build_steam_guard_dict(cur, cfg)
@@ -604,7 +637,11 @@ def _try_steam_auto_relogin_impl() -> tuple:
     ok, err_code, cookie_dict = _do_steampy_login(username, password, steam_guard_dict)
     if ok and cookie_dict.get("steamLoginSecure"):
         cookie_str, session_id, steam_id = _extract_creds_from_cookie_dict(cookie_dict)
-        update_steam_creds(cookie_str, session_id or "")
+        if (get_current_account() or {}).get("id") != account_id:
+            return False, "account_changed", "当前账号已切换，本次登录凭证未保存"
+        if not steam_id or (cur.get("steam_id") and steam_id != str(cur["steam_id"])):
+            return False, "account_mismatch", "Steam 返回的登录账号不匹配，凭证未保存"
+        update_steam_creds(cookie_str, session_id or "", steam_id=steam_id)
         try:
             dn, av = fetch_steam_profile_via_api(steam_id or cur.get("steam_id", ""), cookie_str)
             update_account(account_id,
@@ -614,7 +651,6 @@ def _try_steam_auto_relogin_impl() -> tuple:
         except Exception:
             pass
         log("auto_relogin: 登录成功", "info", category="steam")
-        _auto_relogin_last_success = time.time()
         return True, "auto_ok", "已自动登录并更新凭证"
     if err_code == "wrong_creds":
         log("auto_relogin: 账号或密码错误", "warn", category="steam")
@@ -649,38 +685,5 @@ def verify_steam_auto_login(account_id: str) -> dict:
     acc = get_account(account_id)
     if not acc:
         return {"ok": False, "status": "no_account", "message": "账号不存在"}
-    username = (acc.get("username") or "").strip()
-    password = (acc.get("password") or "").strip()
-    if not username or not password:
-        return {"ok": False, "status": "no_creds", "message": "未保存账号或密码，无法验证"}
-    set_current(account_id)
-    cfg = load_app_config_validated()
-    steam_guard_dict = _build_steam_guard_dict(acc, cfg)
-    ok, err_code, cookie_dict = _do_steampy_login(username, password, steam_guard_dict)
-    if ok and cookie_dict.get("steamLoginSecure"):
-        cookie_str, session_id, steam_id = _extract_creds_from_cookie_dict(cookie_dict)
-        update_steam_creds(cookie_str, session_id or "")
-        cur_acc = get_account(account_id)
-        if cur_acc:
-            try:
-                dn, av = fetch_steam_profile_via_api(steam_id or "", cookie_str)
-                update_account(account_id,
-                               steam_id=steam_id or cur_acc.get("steam_id", ""),
-                               display_name=dn or cur_acc.get("display_name", ""),
-                               avatar_url=av or cur_acc.get("avatar_url", ""))
-            except Exception:
-                pass
-        return {"ok": True, "status": "auto_ok", "message": "可自动登录"}
-    if err_code == "need_2fa":
-        return {"ok": False, "status": "need_2fa", "message": "需要二次验证，请配置 shared_secret 后重试"}
-    if err_code == "wrong_creds":
-        return {"ok": False, "status": "wrong_creds", "message": "账号或密码错误"}
-    if err_code == "captcha":
-        return {"ok": False, "status": "captcha", "message": "Steam 触发了人机验证，请稍后重试"}
-    if err_code.startswith("auth_pending:"):
-        msg = err_code.split(": ", 1)[1] if ": " in err_code else err_code
-        return {"ok": False, "status": "auth_pending", "message": msg}
-    if err_code.startswith("network_error:"):
-        msg = err_code.split(": ", 1)[1] if ": " in err_code else err_code
-        return {"ok": False, "status": "network_error", "message": msg}
-    return {"ok": False, "status": "error", "message": err_code or "验证失败"}
+    ok, status, message = _coordinate_steam_login(acc)
+    return {"ok": ok, "status": status, "message": message}

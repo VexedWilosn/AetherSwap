@@ -2,6 +2,7 @@ import json
 import time
 import logging
 import copy
+from decimal import Decimal, InvalidOperation
 from typing import Callable, Optional
 from urllib.parse import urljoin
 
@@ -184,6 +185,10 @@ API_BUY = "https://buff.163.com/api/market/goods/buy"
 API_PAGE_PAY = "https://buff.163.com/api/market/bill_order/page_pay"
 API_WX_PAY_QRCODE = "https://buff.163.com/api/market/bill_order/wx_pay_qrcode"
 API_BATCH_WX_PAY_QRCODE = "https://buff.163.com/api/market/goods/batch_buy/wx_pay_qrcode"
+API_BATCH_PREVIEW = "https://buff.163.com/api/market/goods/batch_buy/preview"
+API_BATCH_CREATE = "https://buff.163.com/api/market/goods/batch_buy/create"
+API_BATCH_PAGE_PAY = "https://buff.163.com/api/market/goods/batch_buy/page_pay"
+API_BATCH_CHECK_STATE = "https://buff.163.com/api/market/goods/batch_buy/check_state"
 API_ASK_SELLER_SEND = "https://buff.163.com/api/market/bill_order/ask_seller_to_send_offer"
 API_STEAM_TRADE = "https://buff.163.com/api/market/steam_trade"
 def _parse_cookies(cookie_str: str) -> dict:
@@ -277,6 +282,8 @@ class BuffBuyer:
         self._user_agent = user_agent or DEFAULT_USER_AGENT
         self.steam_id = str(steam_id or "").strip()
         self._buff_cashier_trace_id = ""
+        self._batch_quote = None
+        self._batch_context = None
         self.headers = {
             "Host": "buff.163.com",
             "Accept": "application/json, text/javascript, */*; q=0.01",
@@ -1117,6 +1124,109 @@ class BuffBuyer:
             time.sleep(30)
         except Exception as e:
             logger.exception("生成二维码失败: %s", e)
+    @staticmethod
+    def _batch_money(value) -> Decimal:
+        try:
+            amount = Decimal(str(value))
+            if not amount.is_finite() or amount <= 0 or amount != amount.quantize(Decimal("0.01")):
+                raise ValueError
+            return amount
+        except (InvalidOperation, TypeError, ValueError) as exc:
+            raise BuffRequestBlocked("BUFF 批量价格无效，未发送购买请求") from exc
+
+    def prepare_batch_buy(
+        self, goods_id: int, game: str, orders: list, max_price: float, num: int,
+    ) -> dict:
+        """Preview only. Never fund a batch or silently switch to wallet spending."""
+        active = getattr(self, "_batch_context", None)
+        if active and len(active["completed"]) != len(active["orders"]):
+            raise BuffRequestBlocked("BUFF 仍有未完成批次，请先核对订单和付款状态")
+        self._batch_quote = None
+
+        def rejected(message, code="NOT_SUPPORTED"):
+            return {"success": False, "created": False, "code": code,
+                    "safe_to_fallback": code == "NOT_SUPPORTED", "msg": message}
+
+        if self.pay_method not in (PAY_METHOD_WECHAT, PAY_METHOD_ALIPAY):
+            return rejected("当前支付方式尚不支持外部付款批次，不会自动切换余额支付")
+        if isinstance(num, bool) or not isinstance(num, int) or num < 2:
+            return rejected("批量购买至少需要两件物品", "PREVIEW_INVALID")
+        ceiling = self._batch_money(max_price)
+        selected = {}
+        for row in orders:
+            sell_id = _normalize_server_identifier(row.get("id"))
+            try:
+                price = self._batch_money(row.get("price"))
+            except BuffRequestBlocked:
+                continue
+            if sell_id and sell_id not in selected and price <= ceiling:
+                selected[sell_id] = format(price, ".2f")
+            if len(selected) == num:
+                break
+        if len(selected) != num:
+            return rejected("符合价格上限的独立卖单不足，未创建批次")
+        if not self.steam_id and not self.verify_session():
+            raise BuffAuthExpired("BUFF 在线会话预检失败，未发送批量购买请求")
+        if not self.steam_id:
+            raise BuffRequestBlocked("BUFF 账户未返回已绑定的 SteamID")
+        payload = {"game": game, "goods_id": goods_id, "sell_orders": list(selected),
+                   "select_epay": 1, "steamid": self.steam_id}
+        try:
+            response = self._make_request(
+                "POST", API_BATCH_PREVIEW, data=json.dumps(payload),
+                headers={"Referer": f"https://buff.163.com/goods/{goods_id}?from=market"},
+            )
+        except BuffWriteResultUnknown as exc:
+            # This particular POST only quotes a purchase. Funding has not begun.
+            raise BuffRequestBlocked("BUFF 批量预检请求失败，未发送创建或购买请求") from exc
+        if response.get("code") != "OK":
+            return rejected(str(response.get("error") or response.get("msg")
+                                or "BUFF 批量预检被拒绝"), "PREVIEW_REJECTED")
+        data = response.get("data")
+        if not isinstance(data, dict) or not _normalize_server_identifier(data.get("batch_id")):
+            return rejected("BUFF 批量预检缺少批次编号", "PREVIEW_INVALID")
+        total = sum((Decimal(price) for price in selected.values()), Decimal("0"))
+        try:
+            quoted_total = self._batch_money(data.get("price"))
+        except BuffRequestBlocked:
+            return rejected("BUFF 批量预检总价无效", "PREVIEW_INVALID")
+        if quoted_total != total:
+            return rejected("BUFF 批量预检总价已变化，请刷新卖单", "PREVIEW_INVALID")
+        methods = data.get("pay_methods")
+        if not isinstance(methods, list) or not methods:
+            return rejected("BUFF 批量预检未提供可用支付方式")
+        methods = [method for method in methods if isinstance(method, dict)]
+        # The website prefunds only these external WeChat/Alipay methods.
+        # Single-checkout Alipay 51 must not be sent to batch_buy/create.
+        supported = (6,) if self.pay_method == PAY_METHOD_WECHAT else (49, 10)
+        candidates = [method for value in supported for method in methods
+                      if str(method.get("value")) == str(value)]
+        payment = next((method for method in candidates
+                        if method.get("btn_clickable") is True and not method.get("error")), None)
+        if payment is None:
+            details = "; ".join(str(method.get("error") or method.get("name")
+                                     or method.get("value")) for method in (candidates or methods))
+            return rejected(f"BUFF 未提供当前支付方式的批量付款选项: {details}")
+        if payment.get("free_password") not in (True, "true"):
+            return rejected("批量付款需要在 BUFF 官网完成支付密码确认")
+        if payment.get("sub_pay") or payment.get("ejzb_auth"):
+            return rejected("批量付款需要额外授权或组合支付，请在 BUFF 官网处理")
+        try:
+            fee = Decimal(str(payment.get("pay_fee_rate", 0)))
+        except InvalidOperation:
+            fee = Decimal("NaN")
+        if not fee.is_finite() or fee != 0:
+            return rejected("批量付款包含未计入预算的手续费，请在 BUFF 官网确认")
+        self._batch_quote = {
+            "game": game, "goods_id": goods_id, "steamid": self.steam_id,
+            "orders": selected, "max_price": ceiling, "total": total,
+            "preview_id": str(data["batch_id"]), "pay_method": int(payment["value"]),
+            "passback_params": copy.deepcopy(payment.get("passback_params") or ""),
+            "hide_non_epay": any(method.get("collapse") for method in methods),
+            "prepared_at": time.monotonic(),
+        }
+        return {"success": True, "created": False, "total_price": float(total)}
+
     def batch_buy_create(
         self,
         goods_id: int,
@@ -1124,15 +1234,91 @@ class BuffBuyer:
         num: int,
         game: str = "csgo",
     ) -> Optional[str]:
-        raise BuffRequestBlocked(
-            "BUFF 批量购买协议已变化，旧批量写请求已在本地禁用"
+        quote = getattr(self, "_batch_quote", None)
+        if (not quote or quote["goods_id"] != goods_id or quote["game"] != game
+                or quote["steamid"] != self.steam_id or len(quote["orders"]) != num
+                or quote["max_price"] != self._batch_money(max_price)
+                or time.monotonic() - quote["prepared_at"] > 30):
+            raise BuffRequestBlocked("BUFF 缺少匹配且有效的批量预检，未创建批次")
+        self._batch_quote = None
+        context = dict(quote, funding_id="", paid=False, attempted=set(), completed=set())
+        self._batch_context = context
+        payload = {"game": game, "goods_id": goods_id, "pay_method": quote["pay_method"],
+                   "frozen_amount": format(quote["total"], ".2f"),
+                   "max_price": format(quote["max_price"], ".2f"), "num": num,
+                   "steamid": quote["steamid"]}
+        try:
+            response = self._make_request(
+                "POST", API_BATCH_CREATE, data=json.dumps(payload),
+                headers={"Referer": f"https://buff.163.com/goods/{goods_id}?from=market"},
+                with_cashier_trace_id=True,
+            )
+        except (BuffAuthExpired, BuffRequestBlocked):
+            self._batch_context = None
+            raise
+        except BuffWriteResultUnknown:
+            raise
+        except Exception as exc:
+            raise BuffWriteResultUnknown("BUFF 批次创建结果未知，禁止重试", method="POST",
+                                         url=API_BATCH_CREATE) from exc
+        data = response.get("data")
+        funding_id = (_normalize_server_identifier(data.get("batch_buy_id"))
+                      if response.get("code") == "OK" and isinstance(data, dict) else "")
+        if not funding_id:
+            raise BuffWriteResultUnknown("BUFF 批次创建未返回有效付款批次号，请核对订单",
+                                         method="POST", url=API_BATCH_CREATE)
+        context["funding_id"] = funding_id
+        return funding_id
+
+    def batch_buy_pay_url(self, batch_id: str, game: str = "csgo") -> Optional[str]:
+        context = self._require_batch_context(batch_id)
+        if context["pay_method"] == PAY_METHOD_WECHAT:
+            return self.batch_buy_wx_qrcode(batch_id, game)
+        response = self._make_request(
+            "GET", API_BATCH_PAGE_PAY, params={"batch_buy_id": batch_id},
+            headers={"Referer": f"https://buff.163.com/goods/{context['goods_id']}?from=market"},
         )
+        if response.get("code") != "OK":
+            return None
+        data = response.get("data") or {}
+        return (data.get("elements_v2", {}).get("alipay", {}).get("url")
+                or data.get("elements", {}).get("url") or data.get("url"))
+
+    def _require_batch_context(self, batch_id: str) -> dict:
+        context = getattr(self, "_batch_context", None)
+        if (not context or not batch_id or context["funding_id"] != str(batch_id)
+                or context["steamid"] != self.steam_id):
+            raise BuffRequestBlocked("BUFF 批次与当前会话不匹配，请在官网核对已创建批次")
+        return context
+
+    def batch_buy_orders_for_finalize(
+        self, goods_id: int, game: str, max_price: float, num: int, batch_id: str,
+    ) -> list:
+        context = self._require_batch_context(batch_id)
+        if (context["goods_id"] != goods_id or context["game"] != game
+                or context["max_price"] != self._batch_money(max_price)
+                or len(context["orders"]) != num or context["attempted"]):
+            raise BuffRequestBlocked("BUFF 批次参数已改变或已开始核销，请先核对订单")
+        context["paid"] = False
+        response = self._make_request(
+            "GET", API_BATCH_CHECK_STATE, params={"batch_buy_id": str(batch_id)},
+            headers={"Referer": f"https://buff.163.com/goods/{goods_id}?from=market"},
+        )
+        data = response.get("data")
+        if (response.get("code") != "OK" or not isinstance(data, dict)
+                or str(data.get("state")) != "2"):
+            raise BuffRequestBlocked("BUFF 服务端尚未确认批次付款成功，未发送核销请求")
+        context["paid"] = True
+        # Keep the approved seller ids/prices. Do not spend a paid batch on
+        # replacement listings that were never part of its preview.
+        return [{"id": sell_id, "price": price} for sell_id, price in context["orders"].items()]
     def batch_buy_wx_qrcode(self, batch_id: str, game: str = "csgo") -> Optional[str]:
+        context = self._require_batch_context(batch_id)
         params = {
             "batch_buy_id": str(batch_id),
             "_": str(int(time.time() * 1000)),
         }
-        h = {"Referer": "https://buff.163.com/goods/0?from=market"}
+        h = {"Referer": f"https://buff.163.com/goods/{context['goods_id']}?from=market"}
         try:
             res = self._make_request("GET", API_BATCH_WX_PAY_QRCODE, params=params, headers=h)
             if res.get("code") != "OK":
@@ -1151,9 +1337,40 @@ class BuffBuyer:
         price: str,
         batch_buy_id: str,
     ) -> Optional[str]:
-        raise BuffRequestBlocked(
-            "BUFF 批量购买协议已变化，旧批量核销请求已在本地禁用"
-        )
+        context = self._require_batch_context(batch_buy_id)
+        sell_order_id = str(sell_order_id)
+        if (not context["paid"] or context["game"] != game or context["goods_id"] != goods_id
+                or sell_order_id not in context["orders"] or sell_order_id in context["attempted"]
+                or self._batch_money(price) != Decimal(context["orders"][sell_order_id])):
+            raise BuffRequestBlocked("BUFF 核销必须匹配已付款批次，且同一卖单只能提交一次")
+        payload = {
+            "game": game, "goods_id": goods_id, "sell_order_id": sell_order_id,
+            "price": context["orders"][sell_order_id], "batch": 1,
+            "pay_method": context["pay_method"], "passback_params": context["passback_params"],
+            "allow_tradable_cooldown": 0, "hide_non_epay": context["hide_non_epay"],
+            "batch_id": context["preview_id"], "batch_buy_id": str(batch_buy_id),
+            "steamid": context["steamid"],
+        }
+        context["attempted"].add(sell_order_id)
+        try:
+            response = self._make_request(
+                "POST", API_BUY, data=json.dumps(payload),
+                headers={"Referer": f"https://buff.163.com/goods/{goods_id}?from=market"},
+                with_cashier_trace_id=True,
+            )
+        except (BuffAuthExpired, BuffRequestBlocked, BuffWriteResultUnknown):
+            raise
+        except Exception as exc:
+            raise BuffWriteResultUnknown("BUFF 批量核销结果未知，禁止重试", method="POST",
+                                         url=API_BUY) from exc
+        data = response.get("data")
+        bill_id = (_normalize_server_identifier(data.get("id"))
+                   if response.get("code") == "OK" and isinstance(data, dict) else "")
+        if not bill_id or bill_id in context["completed"]:
+            raise BuffWriteResultUnknown("BUFF 批量核销未返回唯一有效订单号，请核对批次",
+                                         method="POST", url=API_BUY)
+        context["completed"].add(bill_id)
+        return bill_id
     def ask_seller_to_send(self, bill_order_id_or_ids, game: str = "csgo") -> bool:
         if isinstance(bill_order_id_or_ids, (list, tuple)):
             raw_ids = bill_order_id_or_ids

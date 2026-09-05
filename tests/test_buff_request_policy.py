@@ -6,6 +6,8 @@ import requests
 from requests.cookies import RequestsCookieJar, create_cookie
 
 from buff.buyer import (
+    API_BATCH_PREVIEW,
+    API_BATCH_CREATE,
     API_BUY,
     API_BUY_PREVIEW,
     API_HISTORY,
@@ -883,6 +885,30 @@ def test_buy_never_invents_cashier_trace_when_server_did_not_issue_one():
     buyer.lock_and_get_pay_url("csgo", 1, "sell-order", "10.00")
 
     assert "Buff-Cashier-Trace-ID" not in session.calls[2][2]["headers"]
+
+
+def test_batch_funding_uses_server_trace_and_rotated_csrf_after_preview():
+    session = FakeSession(
+        FakeResponse({"code": "OK", "data": {
+            "batch_id": "preview-1", "price": "0.58", "pay_methods": [
+                {"value": 6, "btn_clickable": True, "free_password": True}],
+        }}, headers={"Buff-Cashier-Trace-ID": "server-batch-trace"},
+            cookies={"csrf_token": "rotated-csrf"}),
+        FakeResponse({"code": "OK", "data": {"batch_buy_id": "funding-1"}}),
+    )
+    buyer = BuffBuyer("session=test; csrf_token=old-csrf", pay_method=6,
+                     steam_id=STEAM_ID, session=session, request_policy=no_wait_policy())
+    assert buyer.prepare_batch_buy(42, "csgo", [
+        {"id": "sell-1", "price": "0.29"}, {"id": "sell-2", "price": "0.29"},
+    ], 0.29, 2)["success"]
+    assert buyer.batch_buy_create(42, 0.29, 2) == "funding-1"
+    assert [(method, url) for method, url, _ in session.calls] == [
+        ("POST", API_BATCH_PREVIEW), ("POST", API_BATCH_CREATE)]
+    assert "Buff-Cashier-Trace-ID" not in session.calls[0][2]["headers"]
+    headers = session.calls[1][2]["headers"]
+    assert headers["Buff-Cashier-Trace-ID"] == "server-batch-trace"
+    assert headers["X-Csrftoken"] == "rotated-csrf"
+    assert headers["Origin"] == "https://buff.163.com"
 
 
 @pytest.mark.parametrize(

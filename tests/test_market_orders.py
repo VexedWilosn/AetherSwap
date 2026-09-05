@@ -1,6 +1,8 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
@@ -307,6 +309,75 @@ def test_新版_orderbook_action_按精确名称拉取目标变体(monkeypatch):
     assert requested["params"]["q"] == "Load"
     assert json.loads(requested["params"]["qp"]) == [730, target]
     assert requested["headers"]["x-valve-request-type"] == "queryAction"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {
+            "data": {
+                "success": True,
+                "data": {
+                    "eCurrency": 23,
+                    "amtMinSellOrder": 340,
+                    "rgCompactSellOrders": [340, 2, 351, 4],
+                },
+            }
+        },
+        {
+            "data": {
+                "eCurrency": 23,
+                "amtMinSellOrder": 340,
+                "rgCompactSellOrders": [340, 2, 351, 4],
+            }
+        },
+    ],
+    ids=["double-envelope", "data-without-success"],
+)
+def test_get_sell_orders_cny_兼容新版_orderbook_响应格式(monkeypatch, payload):
+    from steam import market_orders
+
+    target = "Sawed-Off | Analog Input (Minimal Wear)"
+
+    class DummyResponse:
+        status_code = 200
+        text = ""
+
+        def __init__(self, payload=None):
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    class DummySession:
+        def get(
+            self,
+            url,
+            params=None,
+            headers=None,
+            timeout=None,
+            proxies=None,
+            allow_redirects=True,
+        ):
+            if url.endswith("/market/orderbook"):
+                return DummyResponse(payload)
+            return DummyResponse()
+
+    monkeypatch.setattr(
+        market_orders,
+        "get_proxy_manager",
+        lambda: type("PM", (), {"get_proxies_for_request": lambda self, failed=False: None})(),
+    )
+
+    result, error = market_orders.get_sell_orders_cny(
+        DummySession(),
+        target,
+        use_cache=False,
+        return_error=True,
+    )
+
+    assert error is None
+    assert result == {"lowest_price": 3.4, "sell_orders": [(3.4, 2), (3.51, 4)]}
 
 
 def test_get_sell_orders_cny_ssr预取错变体时回退新版_orderbook_action(monkeypatch):

@@ -1112,9 +1112,10 @@ def _do_batch_wait_finalize_and_append(
     log_fn: Optional[Callable[[str, str], None]],
     market_price: Optional[float] = None,
     on_entering_payment: Optional[Callable[[], None]] = None,
+    pay_type: str = "wechat",
 ) -> Optional[float]:
     ok = _do_payment_notify_and_wait(
-        item, config, unit_price, num, pay_url, "wechat", batch_id, acc,
+        item, config, unit_price, num, pay_url, pay_type, batch_id, acc,
         set_pending_payment, wait_payment_confirm, confirm_payment,
         is_stop_requested, log_fn, on_entering_payment,
     )
@@ -1127,7 +1128,7 @@ def _do_batch_wait_finalize_and_append(
         )
         return None
     if log_fn:
-        log_fn("[Buff]   → 正在扫描市场匹配卖家并核销…", "info")
+        log_fn("[Buff]   → 正在核对批次付款状态并核销预检卖单…", "info")
     _ensure_checkout_identity_unchanged(buff_client)
     update_checkout(
         expected_intent_id=checkout_intent_id,
@@ -1225,7 +1226,7 @@ def _do_batch_wait_finalize_and_append(
             raise
         if isinstance(exc, (BuffAuthExpired, BuffRequestBlocked)):
             pending = PurchaseOrderCreatedPending(
-                "批次已创建，核销时认证/请求策略中断，需人工对账",
+                f"批次已创建，核销未完成，需人工对账: {exc}",
                 batch_id=str(batch_id),
             )
             _mark_committed(pending, committed_total, orders=len(partial))
@@ -1295,14 +1296,11 @@ def _do_batch_wait_finalize_and_append(
         for m in matched
         if m.get("bill_order_id")
     ]
-    auto_ask_seller = bool(
-        (config.get("buff") or {}).get("auto_ask_seller_to_send", False)
-    )
-    if auto_ask_seller and bill_order_ids:
+    if bill_order_ids:
         try:
             if buff_client.ask_seller_to_send(bill_order_ids, game_buff) and log_fn:
                 log_fn(
-                    f"[Buff]   → 已逐单提醒 {len(set(bill_order_ids))} 个卖家发货，请留意 Steam 报价",
+                    f"[Buff]   → 已提醒 {len(set(bill_order_ids))} 笔订单的卖家发货，请留意 Steam 报价",
                     "info",
                 )
             elif log_fn:
@@ -1334,8 +1332,6 @@ def _do_batch_wait_finalize_and_append(
             )
             _mark_committed(halted, total, orders=len(matched))
             raise halted from exc
-    elif log_fn:
-        log_fn("[Buff]   → 已跳过自动催发货，以减少风控敏感写请求", "info")
     resolve_checkout(
         "batch_purchase_recorded",
         expected_intent_id=checkout_intent_id,
@@ -1394,43 +1390,37 @@ def _do_wait_payment_and_append(
         order_id=str(order_id),
         reason="订单已写入本地交易记录",
     )
-    auto_ask_seller = bool(
-        (config.get("buff") or {}).get("auto_ask_seller_to_send", False)
-    )
-    if auto_ask_seller:
-        try:
-            if buff_client.ask_seller_to_send(order_id, game_buff) and log_fn:
-                log_fn("[Buff]   → 已提醒卖家发货，请留意 Steam 报价", "info")
-            elif log_fn:
-                log_fn("[Buff]   → 提醒卖家发货未成功（可稍后在订单页手动催发货）", "warn")
-        except (BuffAuthExpired, BuffRequestBlocked) as exc:
-            resolve_checkout(
-                "single_purchase_recorded_shipping_prompt_blocked",
-                expected_intent_id=checkout_intent_id,
+    try:
+        if buff_client.ask_seller_to_send(order_id, game_buff) and log_fn:
+            log_fn("[Buff]   → 已提醒卖家发货，请留意 Steam 报价", "info")
+        elif log_fn:
+            log_fn("[Buff]   → 提醒卖家发货未成功（可稍后在订单页手动催发货）", "warn")
+    except (BuffAuthExpired, BuffRequestBlocked) as exc:
+        resolve_checkout(
+            "single_purchase_recorded_shipping_prompt_blocked",
+            expected_intent_id=checkout_intent_id,
+        )
+        _mark_committed(exc, unit_price * num)
+        raise
+    except Exception as exc:
+        update_checkout(
+            expected_intent_id=checkout_intent_id,
+            stage="shipping_reminder_unknown",
+            order_id=str(order_id),
+            reason=f"{type(exc).__name__}: {exc}",
+            last_error_type=type(exc).__name__,
+        )
+        if log_fn:
+            log_fn(
+                f"[Buff]   → 成交已记录；提醒卖家发货结果未知 ({type(exc).__name__})，已停止后续 BUFF 写请求",
+                "warn",
             )
-            _mark_committed(exc, unit_price * num)
-            raise
-        except Exception as exc:
-            update_checkout(
-                expected_intent_id=checkout_intent_id,
-                stage="shipping_reminder_unknown",
-                order_id=str(order_id),
-                reason=f"{type(exc).__name__}: {exc}",
-                last_error_type=type(exc).__name__,
-            )
-            if log_fn:
-                log_fn(
-                    f"[Buff]   → 成交已记录；提醒卖家发货结果未知 ({type(exc).__name__})，已停止后续 BUFF 写请求",
-                    "warn",
-                )
-            halted = PurchaseWriteResultUnknown(
-                "成交已记录，但提醒卖家发货的写请求结果未知",
-                order_id=str(order_id),
-            )
-            _mark_committed(halted, unit_price * num)
-            raise halted from exc
-    elif log_fn:
-        log_fn("[Buff]   → 已跳过自动催发货，以减少风控敏感写请求", "info")
+        halted = PurchaseWriteResultUnknown(
+            "成交已记录，但提醒卖家发货的写请求结果未知",
+            order_id=str(order_id),
+        )
+        _mark_committed(halted, unit_price * num)
+        raise halted from exc
     resolve_checkout(
         "single_purchase_recorded",
         expected_intent_id=checkout_intent_id,
@@ -2002,7 +1992,7 @@ def lock_and_confirm_payment(
             or buff_cfg.get("pay_method")
             or "alipay"
         ).strip().lower()
-        if configured_pay_method != "wechat":
+        if configured_pay_method not in getattr(buff_client, "batch_pay_methods", ("wechat",)):
             return _PurchaseAttempt(
                 _PurchaseAttemptStatus.SAFE_TO_FALLBACK,
                 reason="当前支付方式不支持批量购买，且尚未发送写请求",
@@ -2046,19 +2036,24 @@ def lock_and_confirm_payment(
                         expected_intent_id=checkout_intent_id,
                         stage="batch_created",
                         batch_id=str(batch_id),
-                        reason="批次已创建，正在获取支付二维码",
+                        reason="批次已创建，正在获取支付链接",
                     )
 
                 try:
                     create_batch = buff_client.try_batch_buy
                     if _supports_keyword_argument(create_batch, "on_created"):
+                        batch_kwargs = {"on_created": _on_batch_created}
+                        if _supports_keyword_argument(create_batch, "can_create"):
+                            batch_kwargs["can_create"] = lambda: (
+                                not is_stop_requested() and _time_window_is_open()
+                            )
                         batch_result = create_batch(
                             goods_id,
                             game_buff,
                             orders,
                             lowest_price,
                             num_to_buy,
-                            on_created=_on_batch_created,
+                            **batch_kwargs,
                         )
                     else:
                         batch_result = create_batch(
@@ -2129,7 +2124,7 @@ def lock_and_confirm_payment(
                     expected_intent_id=checkout_intent_id,
                 )
             if log_fn:
-                log_fn("[Buff]   → 批量锁单失败，接口未返回成功状态", "warn")
+                log_fn(f"[Buff]   → 批量购买未完成: {attempt.reason}", "warn")
             return attempt
         batch_id = str(batch_result.get("batch_id") or "")
         pay_url = str(batch_result.get("pay_url") or "")
@@ -2198,6 +2193,7 @@ def lock_and_confirm_payment(
                 log_fn,
                 market_price=ref_price,
                 on_entering_payment=on_entering_payment,
+                pay_type=str(batch_result.get("pay_type") or "wechat"),
             )
         except BuffWriteResultUnknown as e:
             update_checkout(
@@ -2277,6 +2273,6 @@ def lock_and_confirm_payment(
     batch_attempt = _try_batch_buy()
     if batch_attempt.status is _PurchaseAttemptStatus.SAFE_TO_FALLBACK:
         if log_fn:
-            log_fn("[Buff]   → 批量购买明确不支持/未创建，安全降级为单件购买", "info")
+            log_fn(f"[Buff]   → 批量未创建，降级为单件购买: {batch_attempt.reason}", "info")
         return _finish_attempt(_try_single_buy())
     return _finish_attempt(batch_attempt)

@@ -26,6 +26,18 @@
   align-items: center;
   margin-bottom: 20px;
 }
+#panel-inventory .panel-toolbar {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+#inv-data-status {
+  flex-basis: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+#btn-acc-verify {
+  min-width: 88px;
+}
 .panel-toolbar--purchases {
   flex-direction: column;
   align-items: stretch;

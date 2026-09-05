@@ -4,6 +4,7 @@ let accountsCurrentId = null;
 let selectedAccountId = null;
 let accountEditId = null;
 let accountsSearchTerm = '';
+const accountVerificationsInFlight = new Set();
 function renderAccountDetail(acc, currentId) {
   const detail = el("account-detail");
   if (!detail) return;
@@ -50,7 +51,7 @@ function renderAccountDetail(acc, currentId) {
         </div>
       </div>
       <div class="account-detail-actions">
-        <button type="button" class="btn btn-secondary btn-sm" id="btn-acc-verify" data-id="${escapeHtml(acc.id)}">验证</button>
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-acc-verify" data-id="${escapeHtml(acc.id)}" ${accountVerificationsInFlight.has(acc.id) ? 'disabled' : ''}>${accountVerificationsInFlight.has(acc.id) ? '验证中…' : '验证'}</button>
         ${!isCurrent ? `<button type="button" class="btn btn-primary btn-sm" id="btn-acc-set-current" data-id="${escapeHtml(acc.id)}">设为当前</button>` : ""}
         <button type="button" class="btn btn-edit btn-sm" id="btn-acc-edit" data-id="${escapeHtml(acc.id)}">编辑</button>
         <button type="button" class="btn btn-danger-outline btn-sm" id="btn-acc-del" data-id="${escapeHtml(acc.id)}">删除</button>
@@ -109,14 +110,14 @@ function renderAccountDetail(acc, currentId) {
   detail.querySelector("#btn-acc-verify")?.addEventListener("click", async (e) => {
     const btn = e.currentTarget;
     const id = btn?.dataset?.id;
-    if (!id) return;
-    const origText = btn.textContent;
+    if (!id || accountVerificationsInFlight.has(id)) return;
+    accountVerificationsInFlight.add(id);
     btn.disabled = true;
     btn.textContent = "验证中…";
     try {
       const r = await fetchJson(API + "/accounts/" + id + "/verify", { method: "POST" });
       if (r.ok) {
-        toast("验证通过", r.message || "可自动登录");
+        toast(r.status === "session_valid" ? "当前登录有效" : "验证通过", r.message || "已自动登录");
         refreshAccounts();
       } else if (r.status === "need_2fa") {
         toast(r.message || "需要二次验证");
@@ -125,14 +126,26 @@ function renderAccountDetail(acc, currentId) {
         if (btnOpen) btnOpen.click();
       } else if (r.status === "network_error") {
         toast("Steam 网络连接失败", r.message || "请检查加速器或代理设置");
+      } else if (r.status === "auth_pending") {
+        toast("等待登录凭证超时", r.message || "本次已停止等待，请稍后重试");
+      } else if (r.status === "busy") {
+        toast("登录进行中", r.message || "请等待当前登录完成");
+      } else if (r.status === "account_changed") {
+        toast("账号已切换", r.message || "请重新验证当前账号");
       } else {
         toast("验证未通过", r.message || "请检查账号密码");
       }
     } catch (err) {
       toast("验证失败", err.message || "");
     } finally {
+      accountVerificationsInFlight.delete(id);
       btn.disabled = false;
-      btn.textContent = origText || "验证";
+      btn.textContent = "验证";
+      const visibleButton = el("btn-acc-verify");
+      if (visibleButton?.dataset?.id === id) {
+        visibleButton.disabled = false;
+        visibleButton.textContent = "验证";
+      }
     }
   });
 }

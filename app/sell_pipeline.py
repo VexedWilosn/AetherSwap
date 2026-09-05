@@ -19,6 +19,7 @@ from app.steam_confirm import auto_confirm_once
 from app.steam_listings import fetch_my_listings
 from steam.market import list_item, parse_sell_response
 from steam.market_orders import compute_smart_list_price, get_sell_orders_cny
+from steam.request_policy import MarketCooldown
 from steam.session import create_market_session
 from utils.delay import jittered_sleep
 from utils.money import USD_TO_CNY_DEFAULT, list_price_display_to_cents
@@ -26,6 +27,7 @@ from utils.time import parse_steam_history_date
 from utils.trend import calculate_trend_robust
 
 _sell_phase_lock = threading.Lock()
+_listing_cooldown = MarketCooldown()
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -483,6 +485,19 @@ def _listing_response_is_success(out: object, data: dict, message: str) -> bool:
     )
 
 
+def _listing_rate_limited(ctx: PipelineContext, out: object) -> bool:
+    if not isinstance(out, dict) or out.get("status_code") != 429:
+        return False
+    remaining = _listing_cooldown.defer(out.get("retry_after"))
+    preview = _listing_response_body_preview(out.get("text"))
+    ctx.log(
+        f"[出售] 上架接口 HTTP 429; body={preview}，冷却约 {remaining:.0f}s，"
+        "停止本批次，剩余物品未提交，不自动重试上架",
+        "warn", category="steam",
+    )
+    return True
+
+
 def _submit_listings(
     ctx: PipelineContext,
     to_list: list,
@@ -494,6 +509,10 @@ def _submit_listings(
 
     Returns the count of successfully submitted listings.
     """
+    remaining = _listing_cooldown.remaining()
+    if remaining > 0:
+        ctx.log(f"[出售] 上架接口冷却中，约 {remaining:.0f}s 后可重试，本批次未提交", "warn", category="steam")
+        return 0
     listed = 0
     for entry in to_list:
         if ctx.is_stop_requested():
@@ -520,6 +539,8 @@ def _submit_listings(
 
         try:
             out = _do_list()
+            if _listing_rate_limited(ctx, out):
+                break
             data, response_error = _parse_listing_response(out)
             if data is None:
                 ctx.log(
@@ -543,6 +564,8 @@ def _submit_listings(
                 ctx.log(f"[出售] {name} assetid={aid} 前一操作未完成，等待 5s 后重试", "info", category="steam")
                 jittered_sleep(5)
                 out2 = _do_list()
+                if _listing_rate_limited(ctx, out2):
+                    break
                 data2, retry_error = _parse_listing_response(out2)
                 if data2 is None:
                     ctx.log(

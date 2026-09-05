@@ -252,8 +252,25 @@ function hideReloginModal() {
 async function refreshInventory(forceRefresh = true) {
   if (inventoryRefreshInFlight) return;
   inventoryRefreshInFlight = true;
+  const dataStatus = el("inv-data-status");
+  if (dataStatus) {
+    dataStatus.textContent = "正在读取库存…";
+    dataStatus.title = "";
+  }
   try {
     const d = await fetchJson(API + "/inventory" + (forceRefresh ? "?refresh=1" : ""));
+    if (dataStatus) {
+      const authLabels = {
+        auth_pending: "登录凭证等待超时",
+        busy: "登录进行中",
+        network_error: "会话状态暂无法确认",
+        account_changed: "账号已切换",
+      };
+      const sourceLabel = d.source === "live" ? "实时库存" : "缓存库存";
+      const detail = authLabels[d.auth_status] || (d.auth_expired ? "登录已过期" : d.error ? "刷新失败" : "");
+      dataStatus.textContent = detail ? `${sourceLabel} · ${detail}` : sourceLabel;
+      dataStatus.title = d.error || "";
+    }
     if (d.auth_expired && _hasAnyAccount) {
       showReloginModal("steam", { reason: d.auth_expired_reason, error: d.error });
       return;
@@ -310,6 +327,10 @@ async function refreshInventory(forceRefresh = true) {
     const taxEl = el("inv-tax-value");
     if (taxEl) taxEl.textContent = (totalValue / 1.15).toFixed(2);
   } catch (e) {
+    if (dataStatus) {
+      dataStatus.textContent = "刷新失败 · 保留原有库存";
+      dataStatus.title = e.message || "";
+    }
     toast("刷新库存失败", e.message || "请检查 Steam Cookie");
   } finally {
     inventoryRefreshInFlight = false;

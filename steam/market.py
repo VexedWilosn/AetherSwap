@@ -43,7 +43,11 @@ def list_item(
     }
     try:
         r = session.post(SELL_ITEM_URL, data=payload, timeout=15)
-        return {"status_code": r.status_code, "text": r.text}
+        return {
+            "status_code": r.status_code,
+            "text": r.text,
+            "retry_after": r.headers.get("Retry-After"),
+        }
     except Exception:
         return None
 def list_item_by_name(
