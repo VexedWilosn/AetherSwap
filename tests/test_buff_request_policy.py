@@ -17,6 +17,7 @@ from buff.buyer import (
     API_USER_INFO,
     API_WX_PAY_QRCODE,
     DEFAULT_USER_AGENT,
+    PAY_METHOD_ALIPAY,
     PAY_METHOD_WECHAT,
     BuffBuyer,
 )
@@ -109,7 +110,7 @@ def user_info_response(*, steam_id=STEAM_ID):
     )
 
 
-def buy_preview_response(*, pay_method=51, btn_clickable=True):
+def buy_preview_response(*, pay_method=PAY_METHOD_ALIPAY, btn_clickable=True):
     return FakeResponse(
         {
             "code": "OK",
@@ -125,7 +126,7 @@ def buy_preview_response(*, pay_method=51, btn_clickable=True):
     )
 
 
-def checkout_responses(*after_preview, pay_method=51):
+def checkout_responses(*after_preview, pay_method=PAY_METHOD_ALIPAY):
     """Responses required before and after a single-item checkout POST."""
 
     return (
@@ -146,6 +147,12 @@ def test_default_user_agent_is_stable_and_can_be_overridden():
     assert second.headers["User-Agent"] == DEFAULT_USER_AGENT
     assert custom.headers["User-Agent"] == "Browser/7"
     assert custom.user_agent == "Browser/7"
+
+
+def test_generic_alipay_uses_wallet_channel_not_credit_card_huabei():
+    # BUFF currently exposes 49 as "Alipay" and 51 as the distinct
+    # "Alipay - credit card/Huabei" channel.
+    assert PAY_METHOD_ALIPAY == 49
 
 
 def test_close_only_releases_an_internally_owned_session(monkeypatch):
@@ -722,7 +729,7 @@ def test_every_order_creating_write_rejects_malformed_success_data(
     ]
 
 
-@pytest.mark.parametrize("pay_method", [51, PAY_METHOD_WECHAT])
+@pytest.mark.parametrize("pay_method", [PAY_METHOD_ALIPAY, PAY_METHOD_WECHAT])
 def test_execute_preflights_user_info_and_clickable_payment_method_before_post(
     pay_method,
 ):
@@ -777,8 +784,8 @@ def test_known_steam_id_skips_user_info_but_never_skips_buy_preview():
     [
         [],
         [{"value": 6, "btn_clickable": True}],
-        [{"value": 51, "btn_clickable": False}],
-        [{"value": 51}],
+        [{"value": PAY_METHOD_ALIPAY, "btn_clickable": False}],
+        [{"value": PAY_METHOD_ALIPAY}],
     ],
 )
 @pytest.mark.parametrize(
@@ -845,7 +852,9 @@ def test_buy_reuses_server_cashier_trace_and_current_browser_write_headers():
         {
             "code": "OK",
             "data": {
-                "pay_methods": [{"value": 51, "btn_clickable": True}]
+                "pay_methods": [
+                    {"value": PAY_METHOD_ALIPAY, "btn_clickable": True}
+                ]
             },
         },
         headers={"Buff-Cashier-Trace-ID": "server-issued-trace"},

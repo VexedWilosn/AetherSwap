@@ -174,7 +174,9 @@ def _looks_like_html(headers, text: str) -> bool:
 def _html_looks_like_login(text: str) -> bool:
     lowered = str(text or "").lower()
     return any(marker in lowered for marker in ("/login", "登录", "未登录", "sign in"))
-PAY_METHOD_ALIPAY = 51
+# BUFF labels 49 as the general Alipay channel.  Method 51 is the separate
+# "Alipay - credit card/Huabei" channel and must not be used as the default.
+PAY_METHOD_ALIPAY = 49
 PAY_METHOD_WECHAT = 6
 API_HISTORY = "https://buff.163.com/api/market/buy_order/history"
 API_USER_INFO = "https://buff.163.com/account/api/user/info/v2"
