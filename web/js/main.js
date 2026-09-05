@@ -287,12 +287,16 @@ async function refreshInventory(forceRefresh = true) {
       const tradeHtml =
         `<span class="${it.can_trade ? "text-ok" : "text-bad"}">${it.can_trade ? "是" : "否"}</span>` +
         (it.tradable ? "" : ' <span class="text-bad">(不可交易)</span>');
-      const rawTime = it.cooldown_at_iso || it.cooldown_text || "";
-      let displayTime = rawTime;
-      if (it.cooldown_at_iso) {
-        const d = new Date(it.cooldown_at_iso);
+      // Also extract timestamps from inventory cached before the backend parser fix.
+      const dateMatch = (it.cooldown_text || "").match(/\[date\](\d+)\[\/date\]/);
+      const cooldownSeconds = Number(it.cooldown_at || (dateMatch && dateMatch[1]));
+      const rawTime = it.cooldown_at_iso || (cooldownSeconds > 0 ? cooldownSeconds * 1000 : null);
+      let displayTime = "";
+      if (rawTime !== null) {
+        const d = new Date(rawTime);
         if (!isNaN(d.getTime())) {
-          displayTime = d.toLocaleString();
+          const pad = (value) => String(value).padStart(2, "0");
+          displayTime = `${String(d.getFullYear()).padStart(4, "0")}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
         }
       }
       const timeHtml = displayTime ? `<span class="text-bad">${escapeHtml(displayTime)}</span>` : "—";
