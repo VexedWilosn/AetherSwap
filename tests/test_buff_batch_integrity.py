@@ -8,7 +8,7 @@ from app.pipeline_steps import (
 )
 from app.services.buff_client import BuffClient
 from buff import BuffRequestBlocked, BuffWriteResultUnknown
-from buff.buyer import BuffBuyer, PAY_METHOD_WECHAT
+from buff.buyer import BuffBuyer, PAY_METHOD_ALIPAY, PAY_METHOD_WECHAT
 
 
 @pytest.mark.parametrize(
@@ -82,7 +82,9 @@ def _start_batch(buyer, **kwargs):
 
 
 @pytest.mark.parametrize(("configured", "advertised", "pay_type"),
-                         [(6, 6, "wechat"), (51, 49, "alipay"), (51, 10, "alipay")])
+                         [(PAY_METHOD_WECHAT, 6, "wechat"),
+                          (PAY_METHOD_ALIPAY, 49, "alipay"),
+                          (PAY_METHOD_ALIPAY, 10, "alipay")])
 def test_client_batch_checkout_uses_preview_funding_and_paid_state(
     monkeypatch, configured, advertised, pay_type,
 ):
