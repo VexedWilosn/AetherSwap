@@ -71,8 +71,11 @@ class SteamClient:
         cfg = load_app_config_validated()
         from utils.proxy_manager import get_proxy_manager
         pm = get_proxy_manager()
+        auth_relogin_attempted = False
+        retrying_after_auth = False
         for attempt in range(steam_retry_attempts):
-            failed = (attempt > 0)
+            failed = attempt > 0 and not retrying_after_auth
+            retrying_after_auth = False
             proxies = pm.get_proxies_for_request(failed=failed)
             if proxies is None and not pm.is_proxy_enabled():
                 proxy_url = cfg.get("steam", {}).get("proxy")
@@ -91,6 +94,20 @@ class SteamClient:
                 from app.state import log
                 log(f"[SteamClient] 历史数据请求失败 (attempt={attempt+1}/{steam_retry_attempts}): {exc}", "warn", category="steam")
                 if exc.status_code == 429:
+                    if exc.auth_refresh_redirected and not auth_relogin_attempted:
+                        auth_relogin_attempted = True
+                        from app.services.steam_auth import try_steam_auto_relogin
+
+                        log("[SteamClient] 历史接口登录刷新后返回 429，尝试恢复 Steam 会话", "warn", category="steam")
+                        relogin_ok, _status, relogin_msg = try_steam_auto_relogin()
+                        if relogin_ok:
+                            refreshed = get_steam_credentials()
+                            cookies = (refreshed.get("cookies") or "").strip() or None
+                            retrying_after_auth = True
+                            log("[SteamClient] Steam 会话已恢复，重新请求历史数据", "info", category="steam")
+                            continue
+                        log(f"[SteamClient] Steam 会话恢复未完成: {relogin_msg}", "warn", category="steam")
+                        return None
                     remaining = _history_cooldown.defer(exc.retry_after)
                     log(f"[SteamClient] 历史接口 HTTP 429，暂停请求约 {remaining:.0f}s，不切换代理重试", "warn", category="steam")
                     return None

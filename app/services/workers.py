@@ -547,9 +547,27 @@ def _session_keepalive_is_safe() -> bool:
     )
 
 
-def session_keepalive_worker() -> None:
+def _keepalive_sessions() -> None:
     from app.services.buff_auth import try_buff_auto_relogin
+    from app.services.steam_auth import try_steam_auto_relogin
 
+    log("keepalive: 开始本轮 Steam 后台会话保活...", "info", category="keepalive")
+    steam_ok, _steam_status, steam_msg = try_steam_auto_relogin()
+    if not steam_ok:
+        log(f"keepalive: Steam 保活未完成: {steam_msg}", "warn", category="keepalive")
+    else:
+        log(f"keepalive: Steam 保活成功: {steam_msg}", "info", category="keepalive")
+
+    log("keepalive: 开始本轮 Buff 后台会话保活...", "info", category="keepalive")
+    buff_ok, _buff_status, buff_msg = try_buff_auto_relogin()
+    if not buff_ok:
+        log(f"keepalive: Buff 保活未完成: {buff_msg}", "warn", category="keepalive")
+    else:
+        log(f"keepalive: Buff 保活成功: {buff_msg}", "info", category="keepalive")
+    log("keepalive: 本轮 Steam/Buff 后台会话保活已完成", "info", category="keepalive")
+
+
+def session_keepalive_worker() -> None:
     while True:
         try:
             cfg = load_app_config_validated()
@@ -589,13 +607,7 @@ def session_keepalive_worker() -> None:
             # race between the wait loop and a newly started pipeline.
             if not _session_keepalive_is_safe():
                 continue
-            log("keepalive: 开始本轮 Buff 后台会话保活...", "info", category="keepalive")
-            buff_ok, _buff_status, buff_msg = try_buff_auto_relogin()
-            if not buff_ok:
-                log(f"keepalive: Buff 保活未完成: {buff_msg}", "warn", category="keepalive")
-            else:
-                log(f"keepalive: Buff 保活成功: {buff_msg}", "info", category="keepalive")
-            log("keepalive: 本轮 Buff 后台会话保活已完成", "info", category="keepalive")
+            _keepalive_sessions()
         except Exception as e:
             log(f"keepalive: worker 异常 {e}, 15 分钟后重试", "error", category="keepalive")
             time.sleep(900)

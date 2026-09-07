@@ -809,3 +809,24 @@ def test_keepalive_first_wait_uses_full_configured_interval(monkeypatch):
 
     assert sleeps[0] == 2.0 * 3600
     assert sleeps[0] != 300
+
+
+def test_session_keepalive_refreshes_steam_and_buff(monkeypatch):
+    from app.services import buff_auth, steam_auth, workers
+
+    calls = []
+    monkeypatch.setattr(
+        steam_auth,
+        "try_steam_auto_relogin",
+        lambda: calls.append("steam") or (True, "session_valid", "ready"),
+    )
+    monkeypatch.setattr(
+        buff_auth,
+        "try_buff_auto_relogin",
+        lambda: calls.append("buff") or (True, "session_valid", "ready"),
+    )
+    monkeypatch.setattr(workers, "log", lambda *args, **kwargs: None)
+
+    workers._keepalive_sessions()
+
+    assert calls == ["steam", "buff"]
