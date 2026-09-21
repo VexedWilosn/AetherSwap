@@ -181,6 +181,12 @@ def analyze_by_time(
     prices, out_currency = _apply_currency(raw_prices, currency, usd_to_cny)
     dt_prices_cny = [(dt, prices[i]) for i, (dt, _) in enumerate(dt_prices)]
     count = len(prices)
+    # Steam pricehistory aggregates to at most one point per hour, so the
+    # number of data points is not the number of trades.  Trading activity
+    # must be judged by the summed volume field; the point count is only a
+    # fallback for feeds that carry no volumes.
+    total_volume = sum(volumes)
+    effective_trades = total_volume if total_volume > 0 else count
     if count < MIN_TRADES:
         return {"valid": False, "msg": f"最近 {days} 天内成交过少 ({count} 单)"}
     clean_prices = clean_prices_iqr(prices)
@@ -192,7 +198,6 @@ def analyze_by_time(
     ref_price = vwap if (use_vwap and vwap is not None) else avg
     stdev = statistics.stdev(clean_prices) if len(clean_prices) > 1 else 0
     cv = stdev / avg if avg > 0 else 0
-    total_volume = sum(volumes)
     daily_last = _daily_avg_prices_last_n(dt_prices_cny, n=slope_days)
     daily_30 = _daily_avg_prices_last_n(dt_prices_cny, n=min(30, days))
     ma7 = _ema(daily_last, span=slope_days) if daily_last else 0.0
@@ -229,9 +234,9 @@ def analyze_by_time(
             slope, r_squared,
             r2_threshold=r2_threshold,
         )
-        base_ok = count > (days * min_daily_trades)
+        base_ok = effective_trades > (days * min_daily_trades)
         if not base_ok:
-            reasons.append(f"总交易数{count}过低(要求>={int(days * min_daily_trades)})")
+            reasons.append(f"总交易数{effective_trades:.0f}过低(要求>={int(days * min_daily_trades)})")
 
         if status == STATUS_STABLE:
             is_stable = base_ok and slope >= slope_stable_floor and (not cv_filter_enabled or cv <= actual_cv_threshold)
