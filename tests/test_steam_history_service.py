@@ -66,6 +66,34 @@ def test_history_429_stops_retries_and_cools_down_other_candidates(monkeypatch, 
     assert get.call_count == 2
 
 
+def test_history_auth_refresh_429_relogs_in_once_and_retries(monkeypatch, environment):
+    refresh = response(302, None, {"Location": "https://login.steampowered.com/jwt/refresh?redir=market"})
+    expired = response(429, None)
+    expired.history = [refresh]
+    get = Mock(side_effect=[expired, response(body={"success": True, "prices": []})])
+    monkeypatch.setattr(client.requests, "get", get)
+
+    from app.services import steam_auth
+
+    def relogin():
+        environment.credentials["cookies"] = "sessionid=refreshed-cookie"
+        return True, "auto_ok", "ready"
+
+    auto_relogin = Mock(side_effect=relogin)
+    monkeypatch.setattr(steam_auth, "try_steam_auto_relogin", auto_relogin)
+
+    assert service.SteamClient().fetch_history("Item A") == []
+    auto_relogin.assert_called_once_with()
+    assert get.call_count == 2
+    assert get.call_args_list[0].kwargs["cookies"]["sessionid"] == "secret-cookie"
+    assert get.call_args_list[1].kwargs["cookies"]["sessionid"] == "refreshed-cookie"
+    assert [
+        call.kwargs["failed"]
+        for call in environment.proxy.get_proxies_for_request.call_args_list
+    ] == [False, False]
+    assert service._history_cooldown.remaining() == 0
+
+
 def test_failed_history_is_reused_across_clients_then_expires(monkeypatch, environment):
     get = Mock(return_value=response(503, None))
     monkeypatch.setattr(client.requests, "get", get)

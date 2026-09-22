@@ -264,11 +264,18 @@ class SteamHistoryError(Exception):
     def __init__(self, reason: str, response=None):
         self.status_code = response.status_code if response is not None else None
         self.retry_after = None
+        self.auth_refresh_redirected = False
         self.retryable = self.status_code is None or self.status_code == 408 or (
             self.status_code is not None and self.status_code >= 500
         )
         details = [reason]
         if response is not None:
+            for redirect in getattr(response, "history", ()):
+                location = redirect.headers.get("Location", "")
+                parsed = urlparse(location)
+                if parsed.hostname == "login.steampowered.com" and parsed.path == "/jwt/refresh":
+                    self.auth_refresh_redirected = True
+                    break
             content_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip()
             if len(content_type) > 80 or not re.fullmatch(r"[\w.+-]+/[\w.+-]+", content_type):
                 content_type = "unknown"
