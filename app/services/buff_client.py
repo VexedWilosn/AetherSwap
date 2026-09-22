@@ -3,7 +3,10 @@ import threading
 import logging
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-from app.services.buff_auth import get_buff_auth_lock
+from app.services.buff_auth import (
+    fetch_buff_payment_url_via_browser,
+    get_buff_auth_lock,
+)
 from buff import (
     BuffBuyer,
     BuffWriteResultUnknown,
@@ -69,6 +72,7 @@ class BuffClient:
         credential_generation: int = 0,
         credentials_provider: Optional[Callable[[], dict]] = None,
         credentials_update_callback: Optional[Callable[[str, str], None]] = None,
+        pay_url_fetcher: Optional[Callable[[str, str, str], Optional[str]]] = None,
     ) -> None:
         self._pay_method = (pay_method or "alipay").strip().lower()
         self._pay_method_id = (
@@ -77,6 +81,7 @@ class BuffClient:
         self._timeout = timeout_sec
         self._credentials_provider = credentials_provider
         self._credentials_update_callback = credentials_update_callback
+        self._pay_url_fetcher = pay_url_fetcher
         self._credential_generation = self._as_generation(credential_generation)
         self._cookies = cookies or ""
         self._user_agent = (user_agent or "").strip() or None
@@ -100,6 +105,7 @@ class BuffClient:
             account_id=BUFF_ACCOUNT_ID,
             request_timeout=self._timeout,
             steam_id=self._steam_id,
+            pay_url_fetcher=self._pay_url_fetcher,
         )
 
     def _ensure_current_buyer(self) -> BuffBuyer:
@@ -433,4 +439,5 @@ def create_buff_client_from_config(credentials: dict, config: dict) -> BuffClien
         credential_generation=credentials.get("generation", 0),
         credentials_provider=get_buff_credentials,
         credentials_update_callback=persist_rotated_cookies,
+        pay_url_fetcher=fetch_buff_payment_url_via_browser,
     )

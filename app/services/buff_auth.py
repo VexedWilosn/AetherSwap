@@ -569,6 +569,120 @@ def manual_buff_probe_allowed(
         )
 
 
+def fetch_buff_payment_url_via_browser(
+    game: str, order_id: str, pay_type: str
+) -> Optional[str]:
+    """Read a BUFF payment URL from the authenticated browser session.
+
+    BUFF currently rejects Python-client requests to the payment endpoint as a
+    verification flow even when the Cookie and CSRF token are valid.  The
+    browser performs the same read-only request without tripping that check.
+    """
+
+    order_id = str(order_id or "").strip()
+    if not order_id:
+        return None
+    endpoint = (
+        "/api/market/bill_order/wx_pay_qrcode"
+        if str(pay_type or "").lower() == "wechat"
+        else "/api/market/bill_order/page_pay"
+    )
+    profile_dir = (
+        Path(__file__).resolve().parent.parent.parent
+        / "config"
+        / "playwright_buff"
+    )
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    cred = get_buff_credentials() or {}
+    saved_user_agent = str(cred.get("user_agent") or "").strip()
+    context = None
+    try:
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as playwright:
+            launch_options = {
+                "headless": True,
+                "args": BUFF_BROWSER_LAUNCH_ARGS,
+            }
+            if saved_user_agent:
+                launch_options["user_agent"] = saved_user_agent
+            context = playwright.chromium.launch_persistent_context(
+                str(profile_dir),
+                **launch_options,
+            )
+            page = context.pages[0] if context.pages else context.new_page()
+            page.goto(
+                f"{BUFF_ORIGIN}market/buy_order/history?game={game}",
+                wait_until="domcontentloaded",
+                timeout=30000,
+            )
+            result = page.evaluate(
+                """
+                async ({ endpoint, orderId }) => {
+                  const url = endpoint + '?bill_order_id=' +
+                    encodeURIComponent(orderId) + '&_=' + Date.now();
+                  const response = await fetch(url, {
+                    method: 'GET',
+                    credentials: 'include',
+                    cache: 'no-store',
+                    headers: {
+                      'Accept': 'application/json, text/javascript, */*; q=0.01',
+                      'X-Requested-With': 'XMLHttpRequest'
+                    }
+                  });
+                  return {
+                    status: response.status,
+                    text: await response.text()
+                  };
+                }
+                """,
+                {"endpoint": endpoint, "orderId": order_id},
+            )
+            status = int(result.get("status") or 0)
+            try:
+                payload = json.loads(str(result.get("text") or ""))
+            except (TypeError, ValueError):
+                payload = {}
+            if status != 200 or payload.get("code") != "OK":
+                log(
+                    "buff_payment_url: ???????? "
+                    f"http={status} code={payload.get('code') or 'invalid'}",
+                    "warn",
+                    category="buff",
+                )
+                return None
+            data = payload.get("data") or {}
+            if str(pay_type or "").lower() == "wechat":
+                pay_url = (
+                    data.get("url")
+                    or (data.get("elements_v2") or {})
+                    .get("wechatpay", {})
+                    .get("url")
+                )
+            else:
+                pay_url = (
+                    (data.get("elements_v2") or {})
+                    .get("alipay", {})
+                    .get("url")
+                    or (data.get("elements") or {}).get("url")
+                    or data.get("url")
+                )
+            return str(pay_url).strip() if pay_url else None
+    except Exception as exc:
+        log(
+            f"buff_payment_url: ???????????: {exc}",
+            "warn",
+            category="buff",
+        )
+        return None
+    finally:
+        if context is not None:
+            try:
+                context.close()
+            except Exception:
+                pass
+
+
 def try_buff_auto_relogin() -> tuple[bool, str, str]:
     """Refresh a Playwright-managed BUFF session without profile races."""
 

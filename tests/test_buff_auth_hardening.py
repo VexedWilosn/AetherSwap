@@ -809,3 +809,79 @@ def test_keepalive_first_wait_uses_full_configured_interval(monkeypatch):
 
     assert sleeps[0] == 2.0 * 3600
     assert sleeps[0] != 300
+
+
+@pytest.mark.parametrize(
+    ("pay_type", "endpoint", "data", "expected"),
+    [
+        (
+            "alipay",
+            "/api/market/bill_order/page_pay",
+            {"elements_v2": {"alipay": {"url": "https://pay.example/alipay"}}},
+            "https://pay.example/alipay",
+        ),
+        (
+            "wechat",
+            "/api/market/bill_order/wx_pay_qrcode",
+            {"url": "https://pay.example/wechat"},
+            "https://pay.example/wechat",
+        ),
+    ],
+)
+def test_browser_payment_url_lookup_uses_profile(
+    monkeypatch, pay_type, endpoint, data, expected
+):
+    from app.services import buff_auth
+
+    calls = []
+
+    class Page:
+        def goto(self, url, **kwargs):
+            calls.append(("goto", url))
+
+        def evaluate(self, script, payload):
+            calls.append(("evaluate", payload))
+            return {"status": 200, "text": json.dumps({"code": "OK", "data": data})}
+
+    class Context:
+        pages = [Page()]
+
+        def close(self):
+            calls.append(("close", ""))
+
+    class Chromium:
+        def launch_persistent_context(self, *args, **kwargs):
+            calls.append(("launch", kwargs.get("user_agent")))
+            return Context()
+
+    class Playwright:
+        def __enter__(self):
+            return types.SimpleNamespace(chromium=Chromium())
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    sync_api = types.ModuleType("playwright.sync_api")
+    sync_api.sync_playwright = lambda: Playwright()
+    monkeypatch.setitem(__import__("sys").modules, "playwright.sync_api", sync_api)
+    monkeypatch.setattr(
+        buff_auth,
+        "get_buff_credentials",
+        lambda: {"user_agent": "Test Browser/1.0"},
+    )
+
+    result = buff_auth.fetch_buff_payment_url_via_browser(
+        "csgo", "order-1", pay_type
+    )
+
+    assert result == expected
+    assert calls[0] == ("launch", "Test Browser/1.0")
+    assert calls[1] == (
+        "goto",
+        "https://buff.163.com/market/buy_order/history?game=csgo",
+    )
+    assert calls[2] == (
+        "evaluate",
+        {"endpoint": endpoint, "orderId": "order-1"},
+    )
+    assert calls[3] == ("close", "")

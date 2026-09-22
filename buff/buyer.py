@@ -27,6 +27,7 @@ from utils.delay import jittered_sleep
 
 BUFF_COOKIE_DOMAIN = "buff.163.com"
 _SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+PaymentUrlFetcher = Callable[[str, str, str], Optional[str]]
 
 DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -244,6 +245,7 @@ class BuffBuyer:
         account_id: Optional[str] = None,
         request_timeout: float = 10.0,
         steam_id: Optional[str] = None,
+        pay_url_fetcher: Optional[PaymentUrlFetcher] = None,
     ):
         self.cookies_dict = _parse_cookies(cookie_str)
         self.csrf_token = _csrf(self.cookies_dict)
@@ -283,6 +285,7 @@ class BuffBuyer:
         self.account_key = account_fingerprint(self.cookies_dict, account_id)
         self._user_agent = user_agent or DEFAULT_USER_AGENT
         self.steam_id = str(steam_id or "").strip()
+        self._pay_url_fetcher = pay_url_fetcher
         self._buff_cashier_trace_id = ""
         self._batch_quote = None
         self._batch_context = None
@@ -364,6 +367,7 @@ class BuffBuyer:
         method = method.upper()
         headers_override = kwargs.pop("headers", None)
         with_cashier_trace_id = bool(kwargs.pop("with_cashier_trace_id", False))
+        best_effort_write = bool(kwargs.pop("best_effort_write", False))
         verify = kwargs.pop("verify", self.use_ssl)
         timeout = kwargs.pop("timeout", self.request_timeout)
         is_write = method not in _SAFE_METHODS
@@ -484,7 +488,8 @@ class BuffBuyer:
                 raise BuffAuthExpired("BUFF API 已重定向到登录页")
             if navigation_kind == "verification" or redirected:
                 message = "BUFF API 重定向到安全验证页" if navigation_kind else "BUFF API 出现非预期重定向"
-                self.request_policy.trip_verification(self.account_key, message)
+                if not best_effort_write:
+                    self.request_policy.trip_verification(self.account_key, message)
                 if is_write:
                     raise BuffWriteResultUnknown(
                         f"{message}，写请求结果未知，禁止自动重试",
@@ -516,7 +521,8 @@ class BuffBuyer:
                     or data.get("message")
                     or "Buff 需要刷新页面或完成人机验证"
                 )
-                self.request_policy.trip_verification(self.account_key, str(msg))
+                if not best_effort_write:
+                    self.request_policy.trip_verification(self.account_key, str(msg))
                 if is_write:
                     raise BuffWriteResultUnknown(
                         "BUFF 写请求返回安全验证状态，结果未知，禁止自动重试",
@@ -546,9 +552,10 @@ class BuffBuyer:
                     raise BuffAuthExpired("BUFF API 返回登录页面")
                 if is_write:
                     message = "BUFF 写请求返回非预期 HTML，已停止后续请求"
-                    self.request_policy.trip_verification(
-                        self.account_key, message
-                    )
+                    if not best_effort_write:
+                        self.request_policy.trip_verification(
+                            self.account_key, message
+                        )
                     raise BuffWriteResultUnknown(
                         "BUFF 写请求返回 HTML，结果未知，禁止自动重试",
                         method=method,
@@ -1038,12 +1045,11 @@ class BuffBuyer:
                     error.order_id = new_order_id
                     raise error from exc
             pay_type = "wechat" if self.pay_method == PAY_METHOD_WECHAT else "alipay"
+            pay_error = ""
             try:
                 if self.pay_method == PAY_METHOD_WECHAT:
                     jittered_sleep(0.5)
-                    pay_url = self._get_wechat_pay_url(game, new_order_id)
-                else:
-                    pay_url = self._get_alipay_url(game, new_order_id)
+                pay_url = self._lookup_pay_url(game, new_order_id, pay_type)
             except Exception as exc:
                 logger.warning(
                     "BUFF 订单 %s 已创建，但获取支付链接失败: %s",
@@ -1051,6 +1057,7 @@ class BuffBuyer:
                     exc,
                 )
                 pay_url = None
+                pay_error = str(exc) or "BUFF payment URL lookup was blocked"
             if not isinstance(pay_url, str) or not pay_url.strip():
                 return {
                     "success": False,
@@ -1059,6 +1066,7 @@ class BuffBuyer:
                     "pay_url": None,
                     "pay_type": pay_type,
                     "order_id": new_order_id,
+                    "msg": pay_error or "BUFF did not return a payment URL",
                 }
             pay_url = pay_url.strip()
             return {
@@ -1071,6 +1079,23 @@ class BuffBuyer:
             raise
         except Exception as e:
             return {"success": False, "code": "FAIL", "msg": str(e)}
+    def _lookup_pay_url(
+        self, game: str, order_id: str, pay_type: str
+    ) -> Optional[str]:
+        """Resolve the payment URL through the caller's browser-backed path."""
+
+        if self._pay_url_fetcher is not None:
+            try:
+                return self._pay_url_fetcher(game, order_id, pay_type)
+            except Exception as exc:
+                logger.warning(
+                    "BUFF ?? %s ????????????: %s", order_id, exc
+                )
+                return None
+        if pay_type == "wechat":
+            return self._get_wechat_pay_url(game, order_id)
+        return self._get_alipay_url(game, order_id)
+
     def _get_alipay_url(self, game: str, order_id: str) -> Optional[str]:
         params = {"bill_order_id": str(order_id), "_": str(int(time.time() * 1000))}
         h = {
@@ -1079,7 +1104,12 @@ class BuffBuyer:
             "Referer": f"https://buff.163.com/market/buy_order/history?game={game}"
         }
         try:
-            res = self._make_request("GET", API_PAGE_PAY, params=params, headers=h)
+            res = self._make_request(
+                "GET",
+                API_PAGE_PAY,
+                params=params,
+                headers=h,
+            )
             if res.get("code") == "OK":
                 data = res.get("data", {})
                 return data.get("elements_v2", {}).get("alipay", {}).get("url") or data.get("elements", {}).get("url") or data.get("url")
@@ -1092,7 +1122,12 @@ class BuffBuyer:
         params = {"bill_order_id": str(order_id), "_": str(int(time.time() * 1000))}
         h = {"Referer": f"https://buff.163.com/market/buy_order/history?game={game}"}
         try:
-            res = self._make_request("GET", API_WX_PAY_QRCODE, params=params, headers=h)
+            res = self._make_request(
+                "GET",
+                API_WX_PAY_QRCODE,
+                params=params,
+                headers=h,
+            )
             if res.get("code") == "OK":
                 data = res.get("data", {})
                 return data.get("url") or data.get("elements_v2", {}).get("wechatpay", {}).get("url")
@@ -1412,6 +1447,7 @@ class BuffBuyer:
                 API_ASK_SELLER_SEND,
                 headers=h,
                 data=json.dumps(payload),
+                best_effort_write=True,
             )
         except (BuffAuthExpired, BuffRequestBlocked, BuffWriteResultUnknown):
             raise

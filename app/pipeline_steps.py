@@ -1316,25 +1316,11 @@ def _do_batch_wait_finalize_and_append(
             _mark_committed(exc, total, orders=len(matched))
             raise
         except Exception as exc:
-            update_checkout(
-                expected_intent_id=checkout_intent_id,
-                stage="shipping_reminder_unknown",
-                batch_id=str(batch_id),
-                completed_order_ids=completed_ids,
-                reason=f"{type(exc).__name__}: {exc}",
-                last_error_type=type(exc).__name__,
-            )
             if log_fn:
                 log_fn(
-                    f"[Buff]   → 成交已记录；提醒卖家发货结果未知 ({type(exc).__name__})，已停止后续 BUFF 写请求",
+                    f"[Buff]   → 成交已记录；提醒卖家发货结果未知 ({type(exc).__name__})，已跳过自动重试并继续后续流程",
                     "warn",
                 )
-            halted = PurchaseWriteResultUnknown(
-                "成交已记录，但提醒卖家发货的写请求结果未知",
-                batch_id=str(batch_id),
-            )
-            _mark_committed(halted, total, orders=len(matched))
-            raise halted from exc
     resolve_checkout(
         "batch_purchase_recorded",
         expected_intent_id=checkout_intent_id,
@@ -1406,24 +1392,11 @@ def _do_wait_payment_and_append(
         _mark_committed(exc, unit_price * num)
         raise
     except Exception as exc:
-        update_checkout(
-            expected_intent_id=checkout_intent_id,
-            stage="shipping_reminder_unknown",
-            order_id=str(order_id),
-            reason=f"{type(exc).__name__}: {exc}",
-            last_error_type=type(exc).__name__,
-        )
         if log_fn:
             log_fn(
-                f"[Buff]   → 成交已记录；提醒卖家发货结果未知 ({type(exc).__name__})，已停止后续 BUFF 写请求",
+                f"[Buff]   → 成交已记录；提醒卖家发货结果未知 ({type(exc).__name__})，已跳过自动重试并继续后续流程",
                 "warn",
             )
-        halted = PurchaseWriteResultUnknown(
-            "成交已记录，但提醒卖家发货的写请求结果未知",
-            order_id=str(order_id),
-        )
-        _mark_committed(halted, unit_price * num)
-        raise halted from exc
     resolve_checkout(
         "single_purchase_recorded",
         expected_intent_id=checkout_intent_id,

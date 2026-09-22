@@ -1067,6 +1067,54 @@ def test_every_issued_abnormal_write_is_unknown_and_keeps_relevant_circuit(
     assert len(session.calls) == 1
 
 
+def test_best_effort_write_verification_does_not_open_account_circuit():
+    session = FakeSession(
+        FakeResponse({"code": "RISK", "msg": "captcha required"}),
+        FakeResponse({"code": "OK"}),
+    )
+    buyer = BuffBuyer(
+        "session=s; csrf_token=c",
+        session=session,
+        request_policy=no_wait_policy(),
+        account_id="default",
+    )
+
+    with pytest.raises(BuffWriteResultUnknown):
+        buyer._make_request(
+            "POST",
+            "https://buff.163.com/api/optional-write",
+            data="{}",
+            best_effort_write=True,
+        )
+
+    assert buyer._make_request("GET", "https://buff.163.com/api/read") == {
+        "code": "OK"
+    }
+    assert len(session.calls) == 2
+
+
+def test_best_effort_write_risk_control_still_opens_account_circuit():
+    session = FakeSession(FakeResponse({"code": "FAIL"}, status_code=403))
+    buyer = BuffBuyer(
+        "session=s; csrf_token=c",
+        session=session,
+        request_policy=no_wait_policy(),
+        account_id="default",
+    )
+
+    with pytest.raises(BuffWriteResultUnknown):
+        buyer._make_request(
+            "POST",
+            "https://buff.163.com/api/optional-write",
+            data="{}",
+            best_effort_write=True,
+        )
+
+    with pytest.raises(BuffRiskControlTriggered):
+        buyer._make_request("GET", "https://buff.163.com/api/read")
+    assert len(session.calls) == 1
+
+
 @pytest.mark.parametrize(
     "pay_response",
     [
@@ -1093,19 +1141,104 @@ def test_order_created_payment_lookup_failure_returns_created_pending(pay_respon
 
     result = buyer.lock_and_get_pay_url("csgo", 1, "sell-order", "10.00")
 
-    assert result == {
-        "success": False,
-        "code": "CREATED_WITHOUT_PAY_URL",
-        "created": True,
-        "pay_url": None,
-        "pay_type": "alipay",
-        "order_id": "order-created",
-    }
+    assert result["success"] is False
+    assert result["code"] == "CREATED_WITHOUT_PAY_URL"
+    assert result["created"] is True
+    assert result["pay_url"] is None
+    assert result["pay_type"] == "alipay"
+    assert result["order_id"] == "order-created"
+    assert isinstance(result["msg"], str) and result["msg"].strip()
     assert [(method, url) for method, url, _ in session.calls] == [
         ("GET", API_USER_INFO),
         ("GET", API_BUY_PREVIEW),
         ("POST", API_BUY),
         ("GET", API_PAGE_PAY),
+    ]
+
+
+def test_payment_lookup_verification_reason_survives_created_order():
+    verification_message = "captcha required; refresh current page"
+    session = FakeSession(
+        *checkout_responses(
+            FakeResponse({"code": "OK", "data": {"id": "order-created"}}),
+            FakeResponse({"code": "FAIL", "msg": verification_message}),
+        )
+    )
+    buyer = BuffBuyer(
+        "session=s; csrf_token=c",
+        session=session,
+        request_policy=no_wait_policy(),
+        account_id="default",
+    )
+
+    result = buyer.lock_and_get_pay_url("csgo", 1, "sell-order", "10.00")
+
+    assert result["code"] == "CREATED_WITHOUT_PAY_URL"
+    assert result["created"] is True
+    assert result["order_id"] == "order-created"
+    assert verification_message in result["msg"]
+
+
+def test_payment_lookup_uses_browser_headers_without_cashier_trace():
+    session = FakeSession(
+        user_info_response(),
+        FakeResponse(
+            {
+                "code": "OK",
+                "data": {
+                    "pay_methods": [
+                        {"value": PAY_METHOD_ALIPAY, "btn_clickable": True}
+                    ]
+                },
+            },
+            headers={"Buff-Cashier-Trace-ID": "server-payment-trace"},
+        ),
+        FakeResponse({"code": "OK", "data": {"id": "order-created"}}),
+        FakeResponse({"code": "OK", "data": {"url": "https://pay.example/1"}}),
+    )
+    buyer = BuffBuyer(
+        "session=s; csrf_token=c",
+        session=session,
+        request_policy=no_wait_policy(),
+        account_id="default",
+    )
+
+    result = buyer.lock_and_get_pay_url("csgo", 1, "sell-order", "10.00")
+
+    assert result["success"] is True
+    assert session.calls[2][2]["headers"]["Buff-Cashier-Trace-ID"] == "server-payment-trace"
+    assert "Buff-Cashier-Trace-ID" not in session.calls[3][2]["headers"]
+
+
+def test_payment_lookup_prefers_supplied_browser_fetcher():
+    session = FakeSession(
+        user_info_response(),
+        buy_preview_response(),
+        FakeResponse({"code": "OK", "data": {"id": "order-created"}}),
+    )
+    lookup_calls = []
+
+    def fetch_pay_url(game, order_id, pay_type):
+        lookup_calls.append((game, order_id, pay_type))
+        return "https://pay.example/browser"
+
+    buyer = BuffBuyer(
+        "session=s; csrf_token=c",
+        session=session,
+        request_policy=no_wait_policy(),
+        account_id="default",
+        pay_url_fetcher=fetch_pay_url,
+    )
+
+    result = buyer.lock_and_get_pay_url("csgo", 1, "sell-order", "10.00")
+
+    assert result["success"] is True
+    assert result["pay_url"] == "https://pay.example/browser"
+    assert lookup_calls == [("csgo", "order-created", "alipay")]
+    assert [(method, url) for method, url, _ in session.calls] == [
+        ("GET", API_USER_INFO),
+        ("GET", API_BUY_PREVIEW),
+        ("POST", API_BUY),
     ]
 
 

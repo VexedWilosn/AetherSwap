@@ -21,6 +21,7 @@ def _buyer_with_responses(monkeypatch, responses):
                 "method": method,
                 "url": url,
                 "payload": json.loads(kwargs["data"]),
+                "best_effort_write": kwargs.get("best_effort_write"),
             }
         )
         response = next(response_iter)
@@ -52,6 +53,7 @@ def test_all_bill_orders_are_sent_once_and_all_ok_is_success(monkeypatch):
     assert result is True
     assert len(calls) == 1
     assert calls[0]["method"] == "POST"
+    assert calls[0]["best_effort_write"] is True
     assert calls[0]["payload"] == {
         "bill_orders": ["bill-1", "bill-2", "bill-3"],
         "game": "csgo",

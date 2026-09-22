@@ -1077,6 +1077,7 @@ def test_single_created_without_pay_url_keeps_order_id_and_never_auto_resumes():
         )
 
     assert exc_info.value.order_id == "bill-created"
+    assert "verification required while reading payment link" in str(exc_info.value)
     assert purchases == []
 
 
@@ -1397,7 +1398,7 @@ def test_single_purchase_automatically_prompts_shipping_after_recording(monkeypa
     assert len(purchases) == 1
 
 
-def test_shipping_prompt_unknown_halts_after_recording(monkeypatch):
+def test_shipping_prompt_unknown_does_not_halt_after_recording(monkeypatch):
     class BuffClient:
         _pay_method = "alipay"
 
@@ -1424,22 +1425,21 @@ def test_shipping_prompt_unknown_halts_after_recording(monkeypatch):
         lambda *_args, **_kwargs: None,
     )
 
-    with pytest.raises(steps.PurchaseWriteResultUnknown) as exc_info:
-        steps.lock_and_confirm_payment(
-            BuffClient(),
-            _item([{"id": "sell-1", "price": "10.0"}]),
-            config,
-            **kwargs,
-        )
+    paid = steps.lock_and_confirm_payment(
+        BuffClient(),
+        _item([{"id": "sell-1", "price": "10.0"}]),
+        config,
+        **kwargs,
+    )
 
     from app.services.buff_checkout_guard import get_unresolved_checkout
 
+    assert paid == 10.0
     assert len(purchases) == 1
-    assert exc_info.value.committed_amount == 10.0
-    assert get_unresolved_checkout()["stage"] == "shipping_reminder_unknown"
+    assert get_unresolved_checkout() is None
 
 
-def test_batch_shipping_prompt_unknown_preserves_all_committed_items(monkeypatch):
+def test_batch_shipping_prompt_unknown_does_not_halt(monkeypatch):
     class BuffClient:
         _pay_method = "wechat"
 
@@ -1472,27 +1472,23 @@ def test_batch_shipping_prompt_unknown_preserves_all_committed_items(monkeypatch
         lambda *_args, **_kwargs: None,
     )
 
-    with pytest.raises(steps.PurchaseWriteResultUnknown) as exc_info:
-        steps.lock_and_confirm_payment(
-            BuffClient(),
-            _item(
-                [
-                    {"id": "sell-1", "price": "10.0"},
-                    {"id": "sell-2", "price": "10.0"},
-                ]
-            ),
-            config,
-            **kwargs,
-        )
+    paid = steps.lock_and_confirm_payment(
+        BuffClient(),
+        _item(
+            [
+                {"id": "sell-1", "price": "10.0"},
+                {"id": "sell-2", "price": "10.0"},
+            ]
+        ),
+        config,
+        **kwargs,
+    )
 
     from app.services.buff_checkout_guard import get_unresolved_checkout
 
+    assert paid == 20.0
     assert len(purchases) == 2
-    assert exc_info.value.committed_amount == 20.0
-    assert exc_info.value.committed_orders == 2
-    unresolved = get_unresolved_checkout()
-    assert unresolved["stage"] == "shipping_reminder_unknown"
-    assert unresolved["completed_order_ids"] == ["bill-1", "bill-2"]
+    assert get_unresolved_checkout() is None
 
 
 def test_alipay_batch_uses_advertised_payment_type_and_never_single_fallback(monkeypatch):
