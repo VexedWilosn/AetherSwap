@@ -113,7 +113,12 @@ async function refreshStatus() {
       showReloginModal("buff");
     }
     const raw = d.status || "idle";
-    const statusText = raw === "running" ? "运行中" : raw === "error" ? "错误" : raw === "stopped" ? "已停止" : "空闲中";
+    const statusText = raw === "running" ? "运行中" : d.sell_only_enabled ? "自动卖出中" : raw === "error" ? "错误" : raw === "stopped" ? "已停止" : "空闲中";
+    const sellButton = el("btn-sell-only");
+    if (sellButton) {
+      sellButton.disabled = !!d.sell_only_enabled;
+      sellButton.textContent = d.sell_only_enabled ? "自动卖出已启用" : "仅启动卖出";
+    }
     const top = el("status-text");
     if (top) top.textContent = statusText;
     const inline = el("status-text-inline");
@@ -526,6 +531,7 @@ function bindEvents() {
   });
   el("btn-start")?.addEventListener("click", startPipeline);
   el("btn-stop")?.addEventListener("click", stopPipeline);
+  el("btn-sell-only")?.addEventListener("click", startSellOnly);
   el("btn-paid")?.addEventListener("click", () => confirmPayment(true));
   el("btn-fail")?.addEventListener("click", () => confirmPayment(false));
   el("btn-copy-pay")?.addEventListener("click", copyPayLink);

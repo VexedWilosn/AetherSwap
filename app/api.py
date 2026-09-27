@@ -17,6 +17,7 @@ from app.services.workers import (
     holdings_report_worker,
     listing_check_worker,
     receive_worker,
+    sell_only_worker,
     sync_account_region_worker,
     session_keepalive_worker,
 )
@@ -35,6 +36,7 @@ def _start_background_workers() -> None:
     q.submit(sync_account_region_worker, name="sync_account_region", max_retries=3, retry_base_delay=10.0)
     for fn in (
         receive_worker,
+        sell_only_worker,
         listing_check_worker,
         exchange_rate_worker,
         holdings_report_worker,

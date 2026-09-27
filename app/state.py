@@ -48,6 +48,7 @@ class State:
         self._pending_payment = None
         self._user_confirmed = None
         self._stop_requested = False
+        self._sell_only_enabled = False
         self._plan = []
         self._inventory = []
         self._buff_auth_expired = False
@@ -100,6 +101,7 @@ class State:
             pct = (100 * self._progress_done / self._progress_total) if self._progress_total else 0
             return {
                 "status": self._status,
+                "sell_only_enabled": self._sell_only_enabled,
                 "step": self._step,
                 "buff_auth_expired": self._buff_auth_expired,
                 "buff_verification_required": self._buff_verification_required,
@@ -175,11 +177,16 @@ class State:
     def request_stop(self) -> None:
         with self._lock:
             self._stop_requested = True
+            self._sell_only_enabled = False
         with self._confirm:
             self._confirm.notify_all()
     def clear_stop(self) -> None:
         with self._lock:
             self._stop_requested = False
+    def enable_sell_only(self) -> None:
+        with self._lock:
+            self._stop_requested = False
+            self._sell_only_enabled = True
     def is_stop_requested(self) -> bool:
         with self._lock:
             return self._stop_requested

@@ -4,6 +4,23 @@ from pydantic import BaseModel
 from app.pipeline import get_pipeline_start_blocker, start_pipeline
 from app.state import request_stop, set_status, log
 router = APIRouter()
+
+@router.post("/api/pipeline/sell/start")
+def api_sell_start():
+    from app.config_loader import get_steam_credentials, load_app_config_validated
+    from app.strategy_engine import apply_strategy_to_config
+    from app.pipeline import start_sell_only
+
+    cfg = apply_strategy_to_config(load_app_config_validated(), "sell")
+    if int(cfg.get("pipeline", {}).get("sell_strategy", 1)) == 4:
+        return {"ok": False, "error": "当前策略暂停自动出售，请先选择出售策略"}
+    if not get_steam_credentials().get("cookies"):
+        return {"ok": False, "error": "请先登录 Steam"}
+    if not start_sell_only():
+        return {"ok": False, "error": "买入任务仍在运行或系统正在维护，请稍后重试"}
+    log("已启用独立卖出，后台将定时扫描库存并上架", category="steam")
+    return {"ok": True}
+
 class ConfigBody(BaseModel):
     config: dict
     acknowledge_buff_reconciliation: bool = False

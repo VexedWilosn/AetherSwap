@@ -595,6 +595,17 @@ def is_pipeline_running() -> bool:
         return _pipeline_thread is not None and _pipeline_thread.is_alive()
 
 
+def start_sell_only() -> bool:
+    """Enable inventory selling without starting or interrupting a buy run."""
+    with _pipeline_start_lock:
+        if _shutdown_pending or _pipeline_maintenance_reason:
+            return False
+        if _pipeline_thread is not None and _pipeline_thread.is_alive():
+            return False
+        get_state().enable_sell_only()
+        return True
+
+
 def _run_pipeline_guarded(config: dict) -> None:
     global _pipeline_thread
     try:

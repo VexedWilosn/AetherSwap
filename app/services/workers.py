@@ -400,6 +400,45 @@ def listing_check_worker() -> None:
             log(f"listing_check_worker 异常 {type(e).__name__}: {e}", "error", category="steam")
             _worker_alert("listing_check_worker", e)
             time.sleep(60)
+
+def run_sell_only_once() -> bool:
+    from app.state import get_state
+    from app.pipeline import is_shutdown_pending
+    from app.sell_pipeline import _run_sell_phase
+
+    state = get_state()
+    if (not state.get_status().get("sell_only_enabled")
+            or state.is_stop_requested() or is_shutdown_pending()
+            or not is_steam_background_allowed()):
+        return False
+    cfg = load_app_config_validated()
+    ok, items, err = scan_cs2_inventory()
+    if not ok:
+        log(f"[独立卖出] 库存扫描失败: {err}", "warn", category="steam")
+        return False
+    if state.is_stop_requested() or is_shutdown_pending():
+        return False
+    set_inventory(items)
+    _run_sell_phase(cfg, state, "sell-only", items=items)
+    return True
+
+
+def sell_only_worker() -> None:
+    next_run = 0.0
+    while True:
+        try:
+            if not get_status().get("sell_only_enabled"):
+                next_run = 0.0
+            elif time.monotonic() >= next_run:
+                cfg = load_app_config_validated()
+                interval = max(30, int((cfg.get("inventory") or {}).get("refresh_seconds", 600) or 600))
+                next_run = time.monotonic() + interval
+                run_sell_only_once()
+        except Exception as e:
+            log(f"[独立卖出] 后台任务异常: {e}", "error", category="steam")
+            next_run = time.monotonic() + 60
+        time.sleep(1)
+
 def _currency_code_from_price_text(text: str) -> str:
     s = text or ""
     if "¥" in s or "￥" in s or "CNY" in s or "RMB" in s:
