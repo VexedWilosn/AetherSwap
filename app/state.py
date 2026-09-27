@@ -49,6 +49,7 @@ class State:
         self._user_confirmed = None
         self._stop_requested = False
         self._sell_only_enabled = False
+        self._sell_stop_requested = True
         self._plan = []
         self._inventory = []
         self._buff_auth_expired = False
@@ -61,6 +62,9 @@ class State:
 
     def append_purchase(self, p: dict) -> None:
         db_append_purchase(p)
+        from app.runtime_tasks import CURRENT_TASK, runtime
+        if CURRENT_TASK.get() == "buy":
+            runtime.purchase(p.get("price", 0))
     def get_purchases(self) -> list:
         return db_get_purchases()
     def append_sale(self, s: dict) -> None:
@@ -96,12 +100,15 @@ class State:
             if progress_item is not None:
                 self._progress_item = progress_item or ""
             self._next_progress_item = next_progress_item or ""
+        from app.runtime_tasks import record_buy_status
+        record_buy_status(s, step, progress_total, progress_done, progress_item, next_progress_item)
     def get_status(self) -> dict:
         with self._lock:
             pct = (100 * self._progress_done / self._progress_total) if self._progress_total else 0
             return {
                 "status": self._status,
                 "sell_only_enabled": self._sell_only_enabled,
+                "sell_paused": self._sell_stop_requested,
                 "step": self._step,
                 "buff_auth_expired": self._buff_auth_expired,
                 "buff_verification_required": self._buff_verification_required,
@@ -130,6 +137,10 @@ class State:
             if value:
                 self._buff_auth_expired = False
     def log(self, msg: str, level: str = "info", category: str = "", flow_id: str = "") -> None:
+        from app.runtime_tasks import note
+        if level != "debug":
+            note(msg, None,
+                 **({"last_error": msg[:300]} if level == "error" else {}))
         with self._lock:
             self._log_seq += 1
             self._log.append({
@@ -178,6 +189,7 @@ class State:
         with self._lock:
             self._stop_requested = True
             self._sell_only_enabled = False
+            self._sell_stop_requested = True
         with self._confirm:
             self._confirm.notify_all()
     def clear_stop(self) -> None:
@@ -186,6 +198,23 @@ class State:
     def enable_sell_only(self) -> None:
         with self._lock:
             self._stop_requested = False
+            self._sell_only_enabled = True
+            self._sell_stop_requested = False
+    def request_buy_stop(self) -> None:
+        with self._lock:
+            self._stop_requested = True
+        with self._confirm:
+            self._confirm.notify_all()
+    def request_sell_stop(self) -> None:
+        with self._lock:
+            self._sell_stop_requested = True
+            self._sell_only_enabled = False
+    def is_sell_stop_requested(self) -> bool:
+        with self._lock:
+            return self._sell_stop_requested
+    def resume_selling(self) -> None:
+        with self._lock:
+            self._sell_stop_requested = False
             self._sell_only_enabled = True
     def is_stop_requested(self) -> bool:
         with self._lock:

@@ -407,14 +407,16 @@ async function stopPipeline() {
 }
 async function startSellOnly() {
   try {
-    await saveConfigFromForm();
-    const result = await fetchJson(API + "/pipeline/sell/start", { method: "POST" });
+    const resume = typeof RuntimePanel !== "undefined" && RuntimePanel.isBuying();
+    if (!resume) await saveConfigFromForm();
+    const result = await fetchJson(API + (resume ? "/pipeline/sell/resume" : "/pipeline/sell/start"), { method: "POST" });
     if (!result.ok) {
       toast("启动卖出失败", result.error || "请检查配置");
       return;
     }
     toast("自动卖出已启动", "后台持续扫描库存，关闭页面后仍会运行；停止运行可暂停上架");
     refreshStatus();
+    if (typeof RuntimePanel !== "undefined") RuntimePanel.refresh();
   } catch (e) {
     toast("启动卖出失败", e.message || "请检查后端日志");
   }

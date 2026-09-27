@@ -29,6 +29,21 @@ from utils.trend import calculate_trend_robust
 _sell_phase_lock = threading.Lock()
 _listing_cooldown = MarketCooldown()
 
+
+class SellContext(PipelineContext):
+    def log(self, msg: str, level: str = "info", category: str = "pipeline") -> None:
+        super().log(msg, level, category)
+        if level == "error":
+            from app.runtime_tasks import runtime
+            runtime.update("sell", "failed", msg)
+
+    def is_stop_requested(self) -> bool:
+        return self.state.is_sell_stop_requested()
+
+    def set_status(self, stage: str, msg: str, **kwargs) -> None:
+        from app.runtime_tasks import runtime
+        runtime.update("sell", stage, msg)
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -101,6 +116,17 @@ def _record_listing_success(ctx, aid: str, name: str, list_price: float, listing
                     ctx.state.update_purchase(i, {"listing": True})
                 break
     jittered_sleep(listing_delay)
+
+
+def _record_confirmation_state(ctx, aid, response):
+    pending = any(response.get(key) in (True, 1, "1") for key in
+                  ("needs_mobile_confirmation", "needs_email_confirmation"))
+    for p in ctx.state.get_purchases():
+        if str(p.get("assetid") or "") == aid and p.get("_db_id"):
+            ctx.state.update_purchase_by_id(p["_db_id"], {
+                "listing_status": "pending_confirmation" if pending else None,
+            })
+            break
 
 
 # ---------------------------------------------------------------------------
@@ -184,12 +210,15 @@ def _build_listing_plan(
     to_list = []
     seen_assetids: set = set()
 
-    for it in sellable:
+    for index, it in enumerate(sellable):
         if ctx.is_stop_requested():
             ctx.set_status("stopped", "已停止")
             return to_list
 
         name = it.get("name") or ""
+        from app.runtime_tasks import runtime
+        runtime.update("sell", "running", "检查库存与出售定价", item=name,
+                       done=index, total=len(sellable))
         market_hash_name = (it.get("market_hash_name") or name).strip()
         aid = str(it.get("assetid", "")).strip()
 
@@ -514,16 +543,22 @@ def _submit_listings(
         ctx.log(f"[出售] 上架接口冷却中，约 {remaining:.0f}s 后可重试，本批次未提交", "warn", category="steam")
         return 0
     listed = 0
-    for entry in to_list:
+    processed = 0
+    for index, entry in enumerate(to_list):
         if ctx.is_stop_requested():
             ctx.set_status("stopped", "已停止")
             return listed
+
+        processed = index + 1
 
         it = entry["it"]
         list_price = entry["list_price"]
         reason = entry["reason"]
         price_cents = entry["price_cents"]
         name = entry["name"]
+        from app.runtime_tasks import runtime
+        runtime.update("sell", "running", "正在提交上架", item=name,
+                       done=index, total=len(to_list), listed=listed)
         aid = entry["aid"]
 
         ctx.log(f"[出售] 上架请求 {name} assetid={aid} 价格={list_price:.2f} ({reason})", "info", category="steam")
@@ -558,6 +593,7 @@ def _submit_listings(
                 listed += 1
                 ctx.log(f"[出售] 已上架 assetid={aid} {name} 价格={list_price:.2f} ({reason})", "info", category="steam")
                 _record_listing_success(ctx, aid, name, list_price, listing_delay)
+                _record_confirmation_state(ctx, aid, data)
                 continue
 
             if "previous action completes" in msg_lower or "until your previous" in msg_lower:
@@ -579,6 +615,7 @@ def _submit_listings(
                         listed += 1
                         ctx.log(f"[出售] 已上架 assetid={aid} {name} 价格={list_price:.2f} ({reason}) [重试成功]", "info", category="steam")
                         _record_listing_success(ctx, aid, name, list_price, listing_delay)
+                        _record_confirmation_state(ctx, aid, data2)
                         continue
 
             response_preview = (
@@ -593,6 +630,11 @@ def _submit_listings(
 
         jittered_sleep(listing_delay)
 
+    from app.runtime_tasks import runtime
+    runtime.update("sell", "running" if listed == len(to_list) else "blocked",
+                   f"处理 {processed}/{len(to_list)} 件，成功提交 {listed} 件",
+                   done=processed, total=len(to_list), listed=listed,
+                   last_result=f"处理 {processed} 件，成功提交 {listed} 件")
     return listed
 
 
@@ -628,7 +670,7 @@ def _run_sell_phase_impl(cfg: dict, state, flow_id: str, items: Optional[list] =
     cfg = apply_strategy_to_config(cfg, "sell")
     pipeline_cfg = cfg.get("pipeline", {})
     verbose = bool(pipeline_cfg.get("verbose_debug", False))
-    ctx = PipelineContext(state, flow_id, verbose=verbose)
+    ctx = SellContext(state, flow_id, verbose=verbose)
     sell_strategy = int(pipeline_cfg.get("sell_strategy", 1))
 
     if sell_strategy == 4:
@@ -734,12 +776,20 @@ def _run_sell_phase_impl(cfg: dict, state, flow_id: str, items: Optional[list] =
 
 
 def _run_sell_phase(cfg: dict, state, flow_id: str, items: Optional[list] = None) -> None:
+    if state.is_sell_stop_requested():
+        return
     if not _sell_phase_lock.acquire(blocking=False):
         state.log("[出售] 已有出售任务在执行，本次跳过", "info", category="steam", flow_id=flow_id)
         return
     try:
-        _run_sell_phase_impl(cfg, state, flow_id, items)
+        from app.runtime_tasks import task_scope, runtime
+        with task_scope("sell"):
+            runtime.update("sell", done=0, total=0, listed=0, item="")
+            _run_sell_phase_impl(cfg, state, flow_id, items)
     finally:
+        if state.is_sell_stop_requested():
+            from app.runtime_tasks import runtime
+            runtime.update("sell", "stopped", "出售已停止", next_run_at=None)
         _sell_phase_lock.release()
 
 

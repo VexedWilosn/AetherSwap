@@ -112,7 +112,9 @@ class TaskQueue:
             info.status = TaskStatus.RUNNING
             info.started_at = time.time()
             try:
-                result = fn(*args, **kwargs)
+                from app.runtime_tasks import task_scope
+                with task_scope(info.name):
+                    result = fn(*args, **kwargs)
                 info.status = TaskStatus.SUCCESS
                 info.result = result
                 info.finished_at = time.time()

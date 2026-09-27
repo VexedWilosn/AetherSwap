@@ -8,6 +8,12 @@ from app.services import buff_checkout_guard as guard
 
 
 class _State:
+    def enable_sell_only(self):
+        self.status["sell_only_enabled"] = True
+
+    def is_stop_requested(self):
+        return False
+
     def __init__(self, **overrides):
         self.status = {
             "status": "idle",

@@ -5,6 +5,7 @@ and account region sync workers.
 """
 import json
 import time
+from app.runtime_tasks import note, worker_sleep, runtime
 from pathlib import Path
 from typing import Optional
 from app.state import (
@@ -32,8 +33,12 @@ _HOLDINGS_REPORT_WAIT_INTERVAL = 60
 _HOLDINGS_REPORT_WAIT_MAX = 30 * 60
 _worker_alert_last: dict = {}  
 _WORKER_ALERT_COOLDOWN = 3600  
+def _sleep(seconds):
+    worker_sleep(seconds, sleep_fn=time.sleep)
+
 def _worker_alert(worker_name: str, error: Exception) -> None:
     """发送 PushPlus 告警，每个 worker 每小时至多发一次。"""
+    runtime.update(worker_name, "failed", "后台执行异常，等待重试", last_error=type(error).__name__)
     now = time.time()
     last = _worker_alert_last.get(worker_name, 0.0)
     if now - last < _WORKER_ALERT_COOLDOWN:
@@ -149,18 +154,21 @@ def holdings_report_worker() -> None:
             interval_h = int(n.get("holdings_report_interval_hours", 0) or 0)
             if interval_h <= 0:
                 first_run = True
-                time.sleep(3600)
+                note("定时持仓报告未启用", "disabled")
+                _sleep(3600)
                 continue
             if first_run:
                 first_run = False
-                time.sleep(60)
+                _sleep(60)
             else:
-                time.sleep(interval_h * 3600)
+                _sleep(interval_h * 3600)
             while not is_steam_background_allowed():
-                time.sleep(60)
+                note("等待购买步骤释放 Steam 请求", "blocked")
+                _sleep(60)
             run_holdings_report_once(force=True)
-        except Exception:
-            time.sleep(60)
+        except Exception as exc:
+            note("持仓报告执行失败", "failed", last_error=type(exc).__name__)
+            _sleep(60)
 _EXCHANGE_RATE_FILE = Path(__file__).resolve().parent.parent.parent / "config" / "exchange_rate.json"
 def _fetch_exchange_rates(base: str = "CNY", targets: Optional[list] = None) -> Optional[dict]:
     try:
@@ -210,8 +218,9 @@ def exchange_rate_worker() -> None:
             sys_cfg = cfg.get("system") or {}
             interval_h = float(sys_cfg.get("exchange_rate_refresh_hours") or 0)
             if interval_h <= 0:
+                note("自动更新汇率未启用", "disabled")
                 log("exchange_rate: 已关闭, system.exchange_rate_refresh_hours<=0", "debug", category="exchange_rate")
-                time.sleep(3600)
+                _sleep(3600)
                 continue
             targets = [
                 "USD", "INR", "RUB", "HKD", "EUR",
@@ -222,14 +231,17 @@ def exchange_rate_worker() -> None:
             rates = _fetch_exchange_rates("CNY", targets)
             if rates is not None:
                 _save_exchange_rates(rates, "CNY")
+                note(f"已更新 {len(rates)} 个币种的汇率")
                 preview = ", ".join(f"{k}={v:.4f}" for k, v in rates.items())
                 log(f"exchange_rate: 已更新 {len(rates)} 个币种: {preview}", "debug", category="exchange_rate")
             else:
+                note("汇率获取失败", "failed")
                 log("exchange_rate: 获取失败或无有效结果", "error", category="exchange_rate")
-            time.sleep(max(1, int(interval_h * 3600)))
+            _sleep(max(1, int(interval_h * 3600)))
         except Exception as e:
+            note("汇率更新异常，稍后重试", "failed", last_error=type(e).__name__)
             log(f"exchange_rate: worker 异常 {type(e).__name__}: {e}, 5 分钟后重试", "error", category="exchange_rate")
-            time.sleep(300)
+            _sleep(300)
 _BUFF_RECONCILIATION_REQUIRED_STEPS = frozenset(
     {
         "BUFF_WRITE_RESULT_UNKNOWN",
@@ -275,8 +287,9 @@ def receive_worker() -> None:
         try:
             cfg = load_app_config_validated()
             interval = max(10, int(cfg.get("pipeline", {}).get("receive_poll_interval_seconds", 30) or 30))
-            time.sleep(interval)
+            _sleep(interval)
             if not is_steam_background_allowed() or not _buff_background_request_is_safe():
+                note("等待买入结束、登录验证或 BUFF 订单对账", "blocked")
                 continue
             # Hold the complete receive transaction (BUFF task lookup, Steam
             # offer acceptance and DB update) outside pipeline start/import/
@@ -293,15 +306,18 @@ def receive_worker() -> None:
                         p.get("pending_receipt") and not p.get("assetid")
                         for p in purchases
                     ):
+                        note("没有待收货订单")
                         continue
                     credentials = get_buff_credentials() or {}
                     if not credentials.get("cookies"):
+                        note("等待登录 BUFF", "blocked")
                         continue
                     if buff_client is None:
                         buff_client = create_buff_client_from_config(
                             credentials,
                             cfg,
                         )
+                    note("查询待收货订单并接受交易报价", "running")
                     n = try_receive_once(
                         get_purchases,
                         update_purchase,
@@ -314,49 +330,59 @@ def receive_worker() -> None:
                 log(f"receive_worker: 本轮收取到 {n} 件物品", "info", category="receive")
         except BuffRateLimited as e:
             log(f"receive_worker: Buff 请求处于限流冷却: {e}", "warn", category="receive")
-            time.sleep(min(60, max(1, int(e.retry_after))))
+            _sleep(min(60, max(1, int(e.retry_after))))
         except BuffVerificationRequired as e:
             set_buff_verification_required(True, str(e))
             log(f"receive_worker: Buff 需要安全验证: {e}", "warn", category="receive")
-            time.sleep(60)
+            _sleep(60)
         except BuffAuthExpired:
             set_buff_auth_expired(True)
             log("receive_worker: Buff 登录已失效，暂停待收货查询", "warn", category="receive")
-            time.sleep(60)
+            _sleep(60)
         except BuffRequestBlocked as e:
             log(f"receive_worker: Buff 请求策略已阻止后台查询: {e}", "warn", category="receive")
-            time.sleep(60)
+            _sleep(60)
         except Exception as e:
             log(f"receive_worker 异常 {type(e).__name__}: {e}", "error", category="receive")
             _worker_alert("receive_worker", e)
-            time.sleep(60)
+            _sleep(60)
 def listing_check_worker() -> None:
     from app.steam_listings import fetch_my_listings, fetch_my_history_sold
     while True:
         try:
             cfg = load_app_config_validated()
             interval = max(60, int(cfg.get("pipeline", {}).get("listing_check_interval_seconds", 600) or 600))
-            time.sleep(interval)
+            _sleep(interval)
             if not is_steam_background_allowed():
+                note("等待购买步骤释放 Steam 请求", "blocked")
                 continue
             purchases = get_purchases()
             listing_idx = [(i, p) for i, p in enumerate(purchases) if p.get("listing") and p.get("assetid")]
             if not listing_idx:
+                note("没有待跟踪的在售物品")
                 continue
             cred = get_steam_credentials()
             cookies = cred.get("cookies") or ""
             if not cookies:
+                note("等待登录 Steam", "blocked")
                 continue
             pipeline_cfg = cfg.get("pipeline") or {}
             steam_debug = bool(pipeline_cfg.get("steam_listings_debug") or pipeline_cfg.get("verbose_debug"))
             debug_fn = (lambda m: log(m, "debug", category="steam")) if steam_debug else None
+            note(f"查询 {len(listing_idx)} 件物品的上架与成交状态", "running")
             ok, active_ids, err, _ = fetch_my_listings(cookies, debug_fn=debug_fn)
             if not ok:
+                note("在售列表查询失败", "failed", last_error=str(err))
                 continue
+            for _, purchase in listing_idx:
+                if str(purchase.get("assetid")) in active_ids and purchase.get("listing_status") == "pending_confirmation":
+                    if purchase.get("_db_id"):
+                        update_purchase_by_id(purchase["_db_id"], {"listing_status": None})
             not_in_active = [(i, p) for i, p in listing_idx if str(p.get("assetid") or "") and str(p.get("assetid") or "") not in active_ids]
             if steam_debug and not_in_active:
                 log(f"[listing_check] 本地 {len(listing_idx)} 条在售, Steam 活跃 {len(active_ids)}, 可能已售 {len(not_in_active)} 条", "debug", category="steam")
             if not not_in_active:
+                note(f"已检查 {len(listing_idx)} 件，仍在售")
                 continue
             ok2, sold_map, _ = fetch_my_history_sold(cookies, debug_fn=debug_fn)
             seen_aids = set()
@@ -366,6 +392,8 @@ def listing_check_worker() -> None:
                 if not aid or aid in seen_aids:
                     continue
                 seen_aids.add(aid)
+                if p.get("listing_status") == "pending_confirmation" and not (ok2 and aid in sold_map):
+                    continue
                 db_id = p.get("_db_id")
                 sale_price_rounded = round(sold_map[aid], 2) if (ok2 and aid in sold_map) else None
                 if db_id:
@@ -387,6 +415,7 @@ def listing_check_worker() -> None:
                     else:
                         for idx in matched:
                             update_purchase(idx, {"listing": False, "listing_status": "error"})
+            note(f"本轮检查完成，确认售出 {sold_updates} 件")
             if sold_updates > 0:
                 log(f"[listing_check] 确认售出 {sold_updates} 件，刷新库存并触发自动补挂", "info", category="steam")
                 ok_inv, inv_items, inv_err = scan_cs2_inventory()
@@ -399,7 +428,7 @@ def listing_check_worker() -> None:
         except Exception as e:
             log(f"listing_check_worker 异常 {type(e).__name__}: {e}", "error", category="steam")
             _worker_alert("listing_check_worker", e)
-            time.sleep(60)
+            _sleep(60)
 
 def run_sell_only_once() -> bool:
     from app.state import get_state
@@ -408,18 +437,22 @@ def run_sell_only_once() -> bool:
 
     state = get_state()
     if (not state.get_status().get("sell_only_enabled")
-            or state.is_stop_requested() or is_shutdown_pending()
+            or state.is_sell_stop_requested() or is_shutdown_pending()
             or not is_steam_background_allowed()):
+        note("等待出售启用或购买步骤释放 Steam 请求", "blocked")
         return False
     cfg = load_app_config_validated()
+    note("正在扫描 Steam 库存", "running")
     ok, items, err = scan_cs2_inventory()
     if not ok:
+        note("库存扫描失败", "failed", last_error=str(err))
         log(f"[独立卖出] 库存扫描失败: {err}", "warn", category="steam")
         return False
-    if state.is_stop_requested() or is_shutdown_pending():
+    if state.is_sell_stop_requested() or is_shutdown_pending():
         return False
     set_inventory(items)
     _run_sell_phase(cfg, state, "sell-only", items=items)
+    note(f"本轮扫描 {len(items)} 件库存，已检查出售条件")
     return True
 
 
@@ -429,14 +462,23 @@ def sell_only_worker() -> None:
         try:
             if not get_status().get("sell_only_enabled"):
                 next_run = 0.0
+                runtime.update("sell_only_worker", "disabled", "自动上架未启用", next_run_at=None)
             elif time.monotonic() >= next_run:
                 cfg = load_app_config_validated()
                 interval = max(30, int((cfg.get("inventory") or {}).get("refresh_seconds", 600) or 600))
-                next_run = time.monotonic() + interval
                 run_sell_only_once()
+                next_run = time.monotonic() + interval
+                with runtime.lock:
+                    task = runtime.tasks.get("sell_only_worker", {})
+                    status = task.get("status")
+                    result = task.get("detail", "本轮扫描结束")
+                runtime.update("sell_only_worker", status if status in {"failed", "blocked"} else "waiting",
+                               result if status in {"failed", "blocked"} else "等待下次库存扫描",
+                               last_result=result, next_run_at=time.time() + interval, finished_at=time.time())
         except Exception as e:
             log(f"[独立卖出] 后台任务异常: {e}", "error", category="steam")
             next_run = time.monotonic() + 60
+            runtime.update("sell_only_worker", "failed", "扫描异常，稍后重试", next_run_at=time.time()+60)
         time.sleep(1)
 
 def _currency_code_from_price_text(text: str) -> str:
@@ -593,8 +635,9 @@ def session_keepalive_worker() -> None:
         try:
             cfg = load_app_config_validated()
             if not _session_keepalive_enabled(cfg):
+                note("会话保活未启用", "disabled")
                 # Poll the opt-in switch without touching either remote service.
-                time.sleep(60)
+                _sleep(60)
                 continue
 
             sys_cfg = cfg.get("system") or {}
@@ -605,19 +648,20 @@ def session_keepalive_worker() -> None:
                     "debug",
                     category="keepalive",
                 )
-                time.sleep(60)
+                _sleep(60)
                 continue
 
             # The first request waits the complete configured interval; startup
             # no longer forces a browser visit after five minutes.
-            time.sleep(interval_h * 3600)
+            _sleep(interval_h * 3600)
 
             cfg = load_app_config_validated()
             if not _session_keepalive_enabled(cfg):
                 continue
             while not _session_keepalive_is_safe():
+                note("等待买入结束或 BUFF 订单对账", "blocked")
                 log("keepalive: 流水线或结账正在进行，延后会话保活", "debug", category="keepalive")
-                time.sleep(60)
+                _sleep(60)
                 cfg = load_app_config_validated()
                 if not _session_keepalive_enabled(cfg):
                     break
@@ -636,5 +680,6 @@ def session_keepalive_worker() -> None:
                 log(f"keepalive: Buff 保活成功: {buff_msg}", "info", category="keepalive")
             log("keepalive: 本轮 Buff 后台会话保活已完成", "info", category="keepalive")
         except Exception as e:
+            note("会话保活异常，稍后重试", "failed", last_error=type(e).__name__)
             log(f"keepalive: worker 异常 {e}, 15 分钟后重试", "error", category="keepalive")
-            time.sleep(900)
+            _sleep(900)

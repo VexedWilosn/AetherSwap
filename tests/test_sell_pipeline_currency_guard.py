@@ -153,7 +153,7 @@ def test_missing_currency_code_aborts_sell_phase():
          patch("app.sell_pipeline.refresh_account_region_currency", return_value={"ok": False, "error": "Mock no network"}), \
          patch("app.sell_pipeline.get_current_account", return_value=account), \
          patch("app.sell_pipeline._build_listing_plan") as mock_plan, \
-         patch("app.sell_pipeline.PipelineContext") as mock_ctx_cls:
+         patch("app.sell_pipeline.SellContext") as mock_ctx_cls:
         ctx_inst = MagicMock()
         ctx_inst.state = state
         ctx_inst.is_stop_requested.return_value = False
@@ -181,7 +181,7 @@ def test_sell_phase_uses_realtime_currency_instead_of_stale_cache():
          patch("app.sell_pipeline.refresh_account_region_currency", return_value={"ok": True, "currency_code": "CNY", "region_code": "CN"}), \
          patch("app.sell_pipeline.get_current_account", return_value=account), \
          patch("app.sell_pipeline._build_listing_plan", return_value=[]) as mock_plan, \
-         patch("app.sell_pipeline.PipelineContext") as mock_ctx_cls:
+         patch("app.sell_pipeline.SellContext") as mock_ctx_cls:
         ctx_inst = MagicMock()
         ctx_inst.state = state
         ctx_inst.is_stop_requested.return_value = False
@@ -208,7 +208,7 @@ def test_sell_phase_does_not_require_region_when_currency_is_confirmed():
          patch("app.sell_pipeline.refresh_account_region_currency", return_value={"ok": True, "currency_code": "CNY", "region_code": ""}), \
          patch("app.sell_pipeline.get_current_account", return_value=account), \
          patch("app.sell_pipeline._build_listing_plan", return_value=[]) as mock_plan, \
-         patch("app.sell_pipeline.PipelineContext") as mock_ctx_cls:
+         patch("app.sell_pipeline.SellContext") as mock_ctx_cls:
         ctx_inst = MagicMock()
         ctx_inst.state = state
         ctx_inst.is_stop_requested.return_value = False
