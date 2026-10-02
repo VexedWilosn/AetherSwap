@@ -19,6 +19,32 @@ from utils.time import (
     timestamp_in_configured_timezone,
 )
 router = APIRouter()
+
+@router.get("/api/runtime-panel")
+def api_runtime_panel():
+    from app.runtime_tasks import runtime, holding_progress, LABELS
+    from app.state import get_state
+    from app.pipeline import is_pipeline_running, get_pipeline_start_blocker
+    from app.services.task_queue import get_task_queue
+    state = get_state()
+    out = runtime.snapshot()
+    out["controls"] = {"buy_running": is_pipeline_running(),
+                       "sell_enabled": state.get_status().get("sell_only_enabled", False),
+                       "sell_paused": state.is_sell_stop_requested()}
+    if not out["controls"]["buy_running"] and not out["controls"]["sell_enabled"]:
+        if not any(t["id"] == "sell" and t["status"] in {"running", "stopping"} for t in out["tasks"]):
+            if out["session"].get("started_at"):
+                out["session"]["finished_at"] = max(
+                    [out["session"]["started_at"]] +
+                    [t["finished_at"] for t in out["tasks"]
+                     if t["id"] in {"buy", "sell"} and t.get("finished_at")]
+                )
+    out["holdings"] = holding_progress(state.get_purchases(), state.get_inventory())
+    out["buy_blocker"] = get_pipeline_start_blocker()
+    out["queue"] = [{"name": LABELS.get(t["name"], t["name"]), "status": t["status"],
+                     "created_at": t["created_at"]} for t in get_task_queue().list_tasks()
+                    if t["status"] in {"pending", "retrying", "failed"}]
+    return out
 class ConfirmBody(BaseModel):
     ok: bool
 @router.get("/api/status")

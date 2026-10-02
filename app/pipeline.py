@@ -282,7 +282,6 @@ def _process_deals_for_target(
 
 def _run_pipeline(config: dict) -> None:
     state = get_state()
-    state.clear_stop()
     supplied_config = config if isinstance(config, dict) else {}
     cfg = apply_strategy_to_config(
         _validate_ranges(validate_and_fill(merge(DEFAULTS, supplied_config))),
@@ -293,6 +292,9 @@ def _run_pipeline(config: dict) -> None:
     ctx = PipelineContext(state, str(uuid.uuid4())[:8], verbose=verbose)
 
     target = float(pipeline_cfg.get("target_balance", 100))
+    from app.runtime_tasks import runtime
+    with runtime.lock:
+        runtime.session["target"] = target
     exclude = pipeline_cfg.get("exclude_keywords", [])
     cred_buff = get_buff_credentials()
     cookies_buff = cred_buff.get("cookies", "")
@@ -595,10 +597,28 @@ def is_pipeline_running() -> bool:
         return _pipeline_thread is not None and _pipeline_thread.is_alive()
 
 
+def start_sell_only() -> bool:
+    """Enable inventory selling without starting or interrupting a buy run."""
+    with _pipeline_start_lock:
+        if _shutdown_pending or _pipeline_maintenance_reason:
+            return False
+        if _pipeline_thread is not None and _pipeline_thread.is_alive():
+            return False
+        if get_state().get_status().get("sell_only_enabled"):
+            return True
+        get_state().enable_sell_only()
+        from app.runtime_tasks import runtime
+        runtime.begin("sell")
+        runtime.update("sell_only_worker", "pending", "等待后台扫描库存", next_run_at=None)
+        return True
+
+
 def _run_pipeline_guarded(config: dict) -> None:
     global _pipeline_thread
     try:
-        _run_pipeline(config)
+        from app.runtime_tasks import task_scope
+        with task_scope("buy"):
+            _run_pipeline(config)
     except Exception as exc:
         state = get_state()
         state.set_pending_payment(None)
@@ -620,6 +640,12 @@ def _run_pipeline_guarded(config: dict) -> None:
         status = get_status() if callable(get_status) else {}
         if status.get("status") == "running" and status.get("step") == "STARTING":
             state.set_status("idle", "")
+        from app.runtime_tasks import runtime
+        if state.is_stop_requested():
+            runtime.update("buy", "stopped", "买入已停止", next_run_at=None)
+        elif status.get("status") == "error":
+            from app.runtime_tasks import STEPS
+            runtime.update("buy", "failed", STEPS.get(status.get("step"), status.get("step") or "买入异常"), next_run_at=None)
         with _pipeline_start_lock:
             _pipeline_thread = None
 
@@ -721,6 +747,9 @@ def start_pipeline(
                 # Mark activity while holding the same auth/activity slots used
                 # by login and background reads. No request can slip through
                 # the acknowledgement -> STARTING transition.
+                from app.runtime_tasks import runtime
+                get_state().enable_sell_only()
+                runtime.begin("full", float((config.get("pipeline") or {}).get("target_balance", 100)))
                 get_state().set_status("running", "STARTING")
                 t = threading.Thread(
                     target=_run_pipeline_guarded,

@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/css/layout.css?v=2" />
   <link rel="stylesheet" href="/css/components.css" />
   <link rel="stylesheet" href="/css/animations.css" />
+  <link rel="stylesheet" href="/css/runtime-panel.css" />
   <style>
     /* Nav badge */
     .nav-badge {
@@ -421,55 +422,13 @@
       </header>
 
       <section id="panel-auto" class="panel active">
-        <div class="stats-grid">
-          <div class="stat-card primary">
-            <div class="stat-label">总出售金额</div>
-            <div class="stat-value" id="stat-total-sold">0.00</div>
-            <div class="stat-trend positive">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
-                <polyline points="17 6 23 6 23 12"></polyline>
-              </svg>
-              <span>营收</span>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">已购买投入</div>
-            <div class="stat-value" id="stat-total-purchased">0.00</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">总收益</div>
-            <div class="stat-value" id="stat-diff">0.00</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">实际折扣比率</div>
-            <div class="stat-value" id="stat-ratio">0.0000</div>
-          </div>
-        </div>
-
-        <div class="control-bar">
-          <div class="control-info">
-            <div class="lyric-scroll-viewport" id="step-scroll-viewport">
-              <div class="lyric-scroll-track" id="step-scroll-track">
-                <div class="lyric-line" style="opacity:1">等待系统初始化</div>
-              </div>
-            </div>
-          </div>
-          <div class="control-actions">
-            <button id="btn-quit" class="btn btn-danger-outline" style="margin-right: 12px;">退出程序</button>
-            <button id="btn-stop" class="btn btn-secondary">停止运行</button>
-            <span class="btn-hover-anchor">
-              <button id="btn-start" class="btn btn-primary">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                </svg>
-                启动任务
-              </button>
-            </span>
-          </div>
-        </div>
-
-        <div id="pending-payment" class="payment-alert hidden">
+        <section class="finance-strip" aria-label="收益概览">
+          <div class="finance-metric finance-profit"><span>总收益</span><strong id="stat-diff">0.00</strong></div>
+          <div class="finance-metric"><span>总出售金额</span><strong id="stat-total-sold">0.00</strong></div>
+          <div class="finance-metric"><span>已售商品成本</span><strong id="stat-total-purchased">0.00</strong></div>
+          <div class="finance-metric"><span>实际折扣比率</span><strong id="stat-ratio">0.0000</strong></div>
+        </section>
+        <div id="pending-payment" class="payment-alert hidden" role="status" aria-label="待付款订单">
           <div class="payment-content">
             <div class="payment-icon">
               <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none">
@@ -478,7 +437,7 @@
               </svg>
             </div>
             <div class="payment-text">
-              <h3>等待支付</h3>
+              <h3>待付款 · 需要你处理</h3>
               <p id="pay-type">订单待处理</p>
               <div id="pay-qrcode-wrap" class="hidden" style="margin-top:10px;">
                 <div id="pay-qrcode"></div>
@@ -486,13 +445,41 @@
             </div>
           </div>
           <div class="payment-actions">
-            <a id="pay-link" href="#" target="_blank" class="link-btn">打开链接</a>
+            <a id="pay-link" href="#" target="_blank" class="btn btn-primary">打开支付链接</a>
             <button id="btn-copy-pay" class="link-btn">复制</button>
             <div class="divider-v"></div>
             <button id="btn-fail" class="btn btn-sm btn-ghost">放弃</button>
             <button id="btn-paid" class="btn btn-sm btn-primary">已完成支付</button>
           </div>
         </div>
+        <section class="run-panel" aria-label="运行控制中心">
+          <div class="run-header">
+            <div><span class="run-eyebrow">运行控制中心</span><h2 id="run-mode">尚未启动</h2><p id="run-summary">连接后端，读取任务状态…</p></div>
+            <div class="run-clock"><span id="run-connection" role="status">连接中</span><strong id="run-elapsed">—</strong><small id="run-started">本次运行耗时</small></div>
+          </div>
+          <div class="run-actions">
+            <button id="btn-start" class="btn btn-primary">启动完整流程</button>
+            <button id="btn-sell-only" class="btn btn-secondary">仅启动出售</button>
+            <button id="btn-stop-buy" class="btn btn-secondary">停止买入</button>
+            <button id="btn-stop-sell" class="btn btn-secondary">停止上架</button>
+            <button id="btn-stop" class="btn btn-danger-outline">停止买入与上架</button>
+            <button id="btn-quit" class="btn btn-ghost">退出程序</button>
+          </div>
+          <p class="run-hint">完整流程：买入 → 收货 → 冷却 → 上架 → 成交跟踪。买到预算即停止买入；收货和成交检查独立运行。</p>
+          <div id="run-alert" class="run-alert hidden" role="status"></div>
+          <div class="run-columns">
+            <article class="run-card"><div class="run-card-title"><h3>正在执行</h3><span id="run-active-count" class="run-tag">0 项</span></div><div id="run-active"><p class="run-empty">等待任务状态</p></div></article>
+            <article class="run-card"><div class="run-card-title"><h3>排队与等待</h3><span class="run-caption">定时 · 条件 · 资源</span></div><div id="run-waiting"></div></article>
+          </div>
+          <div class="run-columns">
+            <article class="run-card"><div class="run-card-title"><h3>本次购买</h3><span id="run-buy-state" class="run-tag">未启动</span></div><div class="run-budget"><strong id="run-spent">¥0.00</strong><span id="run-target">/ ¥0.00 预算</span></div><progress id="run-buy-progress" max="100" value="0" aria-label="购买预算进度"></progress><p id="run-buy-detail" class="run-caption">尚未开始购买</p><p id="run-buy-time" class="run-caption"></p></article>
+            <article class="run-card"><div class="run-card-title"><h3>出售进度</h3><span class="run-caption">全部本地购买记录</span></div><div id="run-holdings" class="run-holdings"></div><p id="run-sale-detail" class="run-caption">等待库存状态</p></article>
+          </div>
+          <article class="run-card"><div class="run-card-title"><h3>常驻后台服务</h3><span class="run-caption">启用不代表正在请求</span></div><div id="run-services" class="run-services"></div></article>
+          <article class="run-card"><div class="run-card-title"><h3>最近活动</h3><span class="run-caption">当前后端会话 · 展开查看任务记录</span></div><div id="run-events"></div><button id="run-open-logs" class="btn btn-ghost">查看完整运行日志</button></article>
+        </section>
+
+
       </section>
 
       <section id="panel-purchases" class="panel">
@@ -652,7 +639,7 @@
           <div class="agu-steps">
             <div class="agu-step"><span class="agu-num">1</span> 点击「<strong>添加</strong>」填写 Steam 用户名/密码</div>
             <div class="agu-step"><span class="agu-num">2</span> 点击账号卡片上的「<strong>验证</strong>」自动登录获取 Cookie</div>
-            <div class="agu-step"><span class="agu-num">3</span> 返回仪表盘点击「<strong>启动任务</strong>」开始运行</div>
+            <div class="agu-step"><span class="agu-num">3</span> 返回仪表盘点击「<strong>启动完整流程</strong>」开始运行</div>
           </div>
           <button class="agu-close" id="btn-agu-close" title="关闭">✕</button>
         </div>
@@ -1787,7 +1774,8 @@
   <script src="/js/settings.js?v=2"></script>
   <script src="/js/proxy.js"></script>
   <script src="/js/strategies.js"></script>
-  <script src="/js/main.js?v=4"></script>
+  <script src="/js/runtime-panel.js"></script>
+  <script src="/js/main.js?v=5"></script>
   <script src="/js/gift.js"></script>
   <script src="/js/steamDeals.js"></script>
   <script>

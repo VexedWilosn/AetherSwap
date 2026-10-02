@@ -113,9 +113,9 @@ async function refreshStatus() {
       showReloginModal("buff");
     }
     const raw = d.status || "idle";
-    const statusText = raw === "running" ? "运行中" : raw === "error" ? "错误" : raw === "stopped" ? "已停止" : "空闲中";
+    const statusText = raw === "running" ? "运行中" : d.sell_only_enabled ? "自动卖出中" : raw === "error" ? "错误" : raw === "stopped" ? "已停止" : "空闲中";
     const top = el("status-text");
-    if (top) top.textContent = statusText;
+    if (top && typeof RuntimePanel === "undefined") top.textContent = statusText;
     const inline = el("status-text-inline");
     if (inline) inline.textContent = statusText;
     const stepDesc = d.step || "";
@@ -125,7 +125,7 @@ async function refreshStatus() {
     const subText = stepDesc && nextItem ? `${stepDesc}：${nextItem}` : nextItem;
     pushLyricLine(newText, subText);
     const pill = el("status-pill");
-    if (pill) {
+    if (pill && typeof RuntimePanel === "undefined") {
       pill.classList.remove("status-idle", "status-running", "status-stopped", "status-error");
       pill.classList.add(raw === "running" ? "status-running" : raw === "error" ? "status-error" : raw === "stopped" ? "status-stopped" : "status-idle");
     }
@@ -138,7 +138,7 @@ async function refreshStatus() {
     if (lu) lu.textContent = formatTimeHHMM();
     if (raw !== lastStatus) {
       if (raw === "running") toast("已开始运行");
-      if (raw === "stopped") toast("已停止");
+      if (raw === "stopped") toast("买入已停止", "出售及后台服务的状态请查看运行面板");
       if (raw === "error") toast("发生错误", d.step || "请看调试日志");
       lastStatus = raw;
     }
@@ -526,6 +526,7 @@ function bindEvents() {
   });
   el("btn-start")?.addEventListener("click", startPipeline);
   el("btn-stop")?.addEventListener("click", stopPipeline);
+  el("btn-sell-only")?.addEventListener("click", startSellOnly);
   el("btn-paid")?.addEventListener("click", () => confirmPayment(true));
   el("btn-fail")?.addEventListener("click", () => confirmPayment(false));
   el("btn-copy-pay")?.addEventListener("click", copyPayLink);

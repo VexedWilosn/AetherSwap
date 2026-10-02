@@ -25,6 +25,8 @@ class PipelineContext:
             self.set_status("stopped", "已停止")
             return True
         self.set_status("running", "WAITING_RETRY", progress_item=f"Retry in {secs}s")
+        from app.runtime_tasks import runtime
+        runtime.update("buy", next_run_at=time.time() + secs)
         for _ in range(secs):
             if self.is_stop_requested():
                 self.set_status("stopped", "已停止")

@@ -48,7 +48,7 @@ def test_versioned_settings_assets_and_uncached_api_fetches():
     )
 
     assert '<script src="/js/settings.js?v=2"></script>' in index_html
-    assert '<script src="/js/main.js?v=4"></script>' in index_html
+    assert '<script src="/js/main.js?v=5"></script>' in index_html
     assert 'cache: opts.cache ?? "no-store"' in utils_js
     save_start = settings_js.index("async function saveConfigFromForm()")
     save_end = settings_js.index("async function startPipeline()", save_start)
