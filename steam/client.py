@@ -15,6 +15,10 @@ DEFAULT_HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
     "Referer": "https://steamcommunity.com/market/",
 }
+HISTORY_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
+)
 _LISTING_URL_RE = re.compile(
     r"https?://steamcommunity\.com/market/listings/[^\s\])]+",
     re.I,
@@ -303,7 +307,7 @@ def fetch_history(
 ) -> Union[Optional[list], Optional[dict]]:
     encoded = quote(market_hash_name, safe="")
     url = f"https://steamcommunity.com/market/pricehistory/?appid={app_id}&market_hash_name={encoded}"
-    h = {**DEFAULT_HEADERS, **(headers or {})}
+    h = {**DEFAULT_HEADERS, "User-Agent": HISTORY_USER_AGENT, **(headers or {})}
     if proxies is None:
         px = {}
         if os.environ.get("HTTP_PROXY"):
