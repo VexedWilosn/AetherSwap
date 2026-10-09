@@ -303,7 +303,16 @@ def fetch_history(
 ) -> Union[Optional[list], Optional[dict]]:
     encoded = quote(market_hash_name, safe="")
     url = f"https://steamcommunity.com/market/pricehistory/?appid={app_id}&market_hash_name={encoded}"
-    h = {**DEFAULT_HEADERS, **(headers or {})}
+    # Steam pricehistory 返回 JSON，使用接口专用请求头。
+    h = {
+        **DEFAULT_HEADERS,
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        **(headers or {}),
+    }
+    # 仅当调用方未显式指定语言时，不继承页面请求的语言设置。
+    if headers is None or "Accept-Language" not in headers:
+        h.pop("Accept-Language", None)
+
     if proxies is None:
         px = {}
         if os.environ.get("HTTP_PROXY"):
