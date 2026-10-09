@@ -854,22 +854,53 @@ def pick_stable_item(
                     jittered_sleep(failure_delay)
                 continue
 
-            # 3. 计算智能价和预估比例
+            # 3A. 使用原始 Steam 参考价进行提前折扣预检
+            # 此步骤不请求 Steam 历史数据
             smart_price = steam_sell_data.get("smart_price")
+
+            if (
+                max_discount is not None
+                and smart_price is not None
+                and smart_price > 0
+                and plan_price is not None
+                and plan_price > 0
+            ):
+                raw_ratio = (plan_price / smart_price) * STEAM_FEE_FACTOR
+
+                if raw_ratio >= float(max_discount):
+                    if item_log:
+                        item_log(
+                            f"[稳定性] 原始折扣预检未通过: "
+                            f"成本率={raw_ratio:.4f}, "
+                            f"阈值={max_discount}，跳过历史价格请求",
+                            "info",
+                        )
+
+                    if gid:
+                        stability_failed.add(gid)
+
+                    if failure_delay > 0:
+                        jittered_sleep(failure_delay)
+
+                    continue
+
+            # 3B. 仅对可能符合折扣要求的商品获取历史价格
             if smart_price is not None and smart_price > 0 and plan_price and plan_price > 0:
                 ref_price_est = _adjust_ref_price_for_daily_high(
                     market_hash_name, smart_price, config, log_fn, app_id=730
                 )
                 est_ratio = (plan_price / ref_price_est) * STEAM_FEE_FACTOR
 
-            # 4. 最高折扣检测
+            # 4. 保留原有最高折扣检测
             if not _check_max_discount_precheck(
                 item, gid, smart_price, est_ratio, ref_price_est, plan_price, max_discount, item_log
             ):
                 if gid:
                     stability_failed.add(gid)
+
                 if failure_delay > 0:
                     jittered_sleep(failure_delay)
+
                 continue
 
         if not history_analysis_enabled:
